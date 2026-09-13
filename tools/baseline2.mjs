@@ -48,7 +48,7 @@ const keys = Object.keys(PV);
 function runOn(c, f, t) {
   vm.runInContext(`Object.assign(state,{from:${JSON.stringify(f)},to:${JSON.stringify(t)},
     qty:1000,hours:1,pGen:${PV[f].clear},pDst:${PV[t].clear},pNet:${PV[t].net},fund:${PV[t].fund},
-    lossBearer:1,K:6,maxHops:3,maxDetour:2,includeRegion:true});`, c);
+    lossBearer:1,K:6,maxHops:3,maxDetour:2,includeRegion:true,showBad:true,sortBy:"A",showAll:true});`, c);
   return vm.runInContext('solve()', c);
 }
 
@@ -67,7 +67,9 @@ for (const f of keys) for (const t of keys) {
     from: f, to: t,
     inputs: { pGen: PV[f].clear, pDst: PV[t].clear, pNet: PV[t].net, fund: PV[t].fund,
       qty: 1000, hours: 1, lossBearer: 1, maxHops: 3, maxDetour: 2, includeRegion: true },
-    routes: R.rows.map(pack),
+    routes: R.rows.slice(0, 25).map(pack),
+    routeTotal: R.rows.length,
+    feasibleCount: R.feasibleCount,
     best: { landed: R.byA[0].nodes, channelOnly: R.byB[0].nodes, senderNet: R.byC[0].nodes },
   });
 }
@@ -113,10 +115,11 @@ probs.slice(0, 8).forEach((p) => console.log('   · ' + p));
 console.log('\n=== 渲染冒烟测试 ===');
 const c3 = makeCtx();
 const checks = [
-  ['renderCalc() 测算页', 'state._res=solve();renderCalc();', 'v-calc',
-    ['元/MWh 落地', '口径对比', '完整明细', '路径构成', '电量与损耗', '费用拆解', '逐段明细', '断面校验', '数据溯源', '口径位置',
-     '送端发电量', '网损电量', '综合线损率', '段入口功率', '段损耗电量', '段输电费', '通道占用率', '调价历史', '原文摘录', '换流/变电站']],
-  ['renderLib() 通道页', "libTab='ch';renderLib();", 'v-lib', ['发改委核定', '国网披露', 'onchange="setCh(']],
+  ['renderCalc() 测算页', 'state.from="SC";state.to="SH";state.sel=0;state._res=solve();renderCalc();', 'v-calc',
+    ['出发地', '目的地', '可选路线', '落地成本', '途经节点与线路', '完整明细', '逐段溯源', '口径位置',
+     '条候选', '送端收益', '展开全部', 'tl-seg-card', 'rc-price', '在网架图上查看', '原文摘录', '调价历史']],
+  ['方案切换 sel=1', 'state.sel=1;renderCalc();', 'v-calc', ['方案 #2', '途经节点与线路', '段入口功率', '段损耗电量']],
+  ['renderLib() 通道页', "libTab='ch';renderLib();", 'v-lib', ['发改委核定', '国网披露']],
   ['renderLib() 省级页', "libTab='pv';renderLib();", 'v-lib', ['输配电价', '待补']],
   ['renderLib() 断面页', "libTab='sec';renderLib();", 'v-lib', ['川渝断面', 'GSDF']],
   ['renderMap() 腾讯底图', "state.mapProvider='qq';renderMap();", 'v-map', ['腾讯地图', '天地图', 'map-view']],
