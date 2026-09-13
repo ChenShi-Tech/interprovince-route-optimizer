@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#ffffff">
+<title>省间路径优选测算 v2</title>
+<script type="text/javascript">
+window._TMapSecurityConfig = {
+  serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
+};
+</script>
+<script src="https://map.qq.com/api/gljs?v=1.exp"></script>
+<style>
+:root{
+  --ink:#1F2328; --ink2:#5F5E5A; --ink3:#8A8A85;
+  --line:rgba(0,0,0,.10); --line2:rgba(0,0,0,.06);
+  --bg:#F4F5F7; --card:#FFFFFF;
+  --blue:#185FA5; --blue-bg:#E6F1FB; --blue-ink:#0C447C;
+  --teal:#0F6E56; --teal-bg:#E1F5EE;
+  --amber:#854F0B; --amber-bg:#FAEEDA;
+  --coral:#993C1D; --coral-bg:#FAECE7;
+  --gray:#5F5E5A; --gray-bg:#F1EFE8;
+  --red:#A32D2D; --red-bg:#FCEBEB;
+  --r:12px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--bg)}
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(12px);border-bottom:.5px solid var(--line);padding:12px 16px 10px}
+.hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
+.badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
+main{flex:1;padding:14px 16px 96px;overflow-x:hidden}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
+nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+nav button.on{color:var(--blue)}
+nav .ic{width:20px;height:20px;display:block}
+nav button.on .ic path,nav button.on .ic circle,nav button.on .ic rect{stroke:var(--blue)}
+.card{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card.tight{padding:12px}
+.sec-title{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sec-title .hint{font-size:11px;font-weight:400;color:var(--ink3)}
+label.f{display:block;margin-bottom:11px}
+label.f:last-child{margin-bottom:0}
+label.f span{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px}
+input,select{width:100%;font-family:inherit;font-size:14px;color:var(--ink);background:#fff;border:.5px solid rgba(0,0,0,.16);border-radius:9px;padding:9px 10px;appearance:none;outline:none}
+input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(24,95,165,.10)}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+input[type=number]{font-variant-numeric:tabular-nums}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.btn{width:100%;font-family:inherit;font-size:15px;font-weight:600;color:#fff;background:var(--blue);border:0;border-radius:10px;padding:13px;cursor:pointer;letter-spacing:.2px}
+.btn:active{opacity:.85}
+.btn.ghost{background:#fff;color:var(--blue);border:.5px solid rgba(24,95,165,.35);font-weight:500;font-size:13px;padding:9px}
+details.adv{border-top:.5px solid var(--line2);margin-top:12px;padding-top:11px}
+details.adv summary{font-size:12px;color:var(--blue);cursor:pointer;list-style:none;font-weight:500}
+details.adv summary::-webkit-details-marker{display:none}
+details.adv summary::before{content:"+ ";font-weight:600}
+details.adv[open] summary::before{content:"− "}
+details.adv .inner{padding-top:11px}
+.note{font-size:11.5px;color:var(--ink3);line-height:1.6;margin:8px 0 0}
+.warn{background:var(--amber-bg);color:var(--amber);font-size:11.5px;padding:9px 11px;border-radius:9px;line-height:1.55;margin-bottom:12px}
+.warn.ok{background:var(--teal-bg);color:var(--teal)}
+.warn.bad{background:var(--red-bg);color:var(--red)}
+.route-head{font-size:15px;font-weight:600;color:var(--blue-ink);word-break:break-all;line-height:1.4}
+.route-head .arw{color:var(--ink3);font-weight:400;margin:0 3px}
+.big{font-size:26px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.15}
+.big .u{font-size:12px;font-weight:500;color:var(--ink3);margin-left:3px;letter-spacing:0}
+.rank{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
+.rank.g{background:var(--gray-bg);color:var(--gray)}
+.bar{display:flex;height:26px;border-radius:6px;overflow:hidden;margin:12px 0 9px;border:.5px solid var(--line2)}
+.bar div{height:100%}
+.lg{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:var(--ink2)}
+.lg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.kv{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:.5px solid var(--line2);gap:10px}
+.kv:last-child{border-bottom:0}
+.kv b{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.kv .m{color:var(--ink2);flex-shrink:0}
+.kv.tot{border-top:.5px solid var(--line);border-bottom:0;margin-top:4px;padding-top:8px;font-size:13.5px}
+.kv.tot b{color:var(--blue-ink);font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.chip{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--gray-bg);color:var(--gray);font-weight:500}
+.chip.ok{background:var(--teal-bg);color:var(--teal)}
+.chip.bad{background:var(--red-bg);color:var(--red)}
+.chip.info{background:var(--blue-bg);color:var(--blue-ink)}
+.chip.warn{background:var(--amber-bg);color:var(--amber)}
+table{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+th,td{padding:6px 4px;text-align:right;border-bottom:.5px solid var(--line2);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--ink3);font-weight:500;font-size:11px}
+td b{font-weight:600}
+.tier{display:inline-block;font-size:9.5px;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;margin-left:4px;white-space:nowrap}
+.tier.gov{background:var(--teal-bg);color:var(--teal)}
+.tier.grid{background:var(--blue-bg);color:var(--blue-ink)}
+.tier.region{background:var(--amber-bg);color:var(--amber)}
+.tier.est{background:var(--gray-bg);color:var(--ink3)}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.7;word-break:break-all}
+.formula{background:var(--gray-bg);border-radius:9px;padding:10px 11px;margin-top:4px}
+.formula .mono{color:var(--ink)}
+.formula .txt{font-size:11px;color:var(--ink2);margin-top:5px;line-height:1.6}
+.lib-row{border-bottom:.5px solid var(--line2);padding:9px 0}
+.lib-row:last-child{border-bottom:0}
+.lib-nm{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.lib-nm em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:999px;white-space:nowrap}
+.lib-io{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:7px}
+.lib-io label{font-size:10.5px;color:var(--ink3);display:block;margin-bottom:3px}
+.lib-io input{padding:6px 8px;font-size:12.5px;border-radius:7px}
+.lib-src{font-size:10.5px;color:var(--ink3);margin-top:6px;line-height:1.5}
+.prow{display:grid;grid-template-columns:58px 1fr 1fr 1fr 44px;gap:6px;align-items:center;padding:5px 0;border-bottom:.5px solid var(--line2)}
+.prow:first-of-type{font-size:10.5px;color:var(--ink3)}
+.prow .pn{font-size:12px;font-weight:500}
+.prow input{padding:5px 6px;font-size:12px;border-radius:6px}
+#map-view,#fallback{width:100%;height:calc(100vh - 290px);min-height:320px;border-radius:var(--r);overflow:hidden;background:#EDEFEF;border:.5px solid var(--line)}
+#fallback{display:none;padding:16px;font-size:12px;color:var(--ink2);overflow:auto}
+.empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
+.mc{background:var(--gray-bg);border-radius:9px;padding:8px 10px}
+.mc .l{font-size:10.5px;color:var(--ink3);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc .v{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.mc .v small{font-size:10px;font-weight:500;color:var(--ink3);margin-left:2px}
+.sub{font-size:11.5px;font-weight:600;color:var(--ink2);margin:15px 0 8px;padding-bottom:5px;border-bottom:.5px solid var(--line2);display:flex;justify-content:space-between;gap:8px}
+.sub:first-child{margin-top:0}
+.sub em{font-style:normal;font-weight:400;color:var(--ink3);font-size:10.5px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.segblk{border:.5px solid var(--line2);border-radius:9px;padding:10px;margin-bottom:8px;background:#fff}
+.segblk .hd{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
+.segblk .hd em{font-style:normal;font-size:10.5px;color:var(--ink3);font-weight:500}
+.segblk .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:8px 0 0}
+.segblk .grid div{font-size:10.5px;color:var(--ink3);line-height:1.4}
+.segblk .grid b{display:block;font-size:12.5px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.src{font-size:10.5px;color:var(--ink3);line-height:1.6;margin-top:8px;padding-top:7px;border-top:.5px solid var(--line2)}
+.src q{display:block;font-style:normal;color:var(--ink2);background:var(--gray-bg);border-radius:6px;padding:6px 8px;margin-top:5px;line-height:1.6;word-break:break-all}
+.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--blue-bg);color:var(--blue-ink);font-weight:600;margin-right:4px;white-space:nowrap}
+.pill.g{background:var(--gray-bg);color:var(--ink3)}
+.pill.a{background:var(--amber-bg);color:var(--amber)}
+.meter{height:5px;border-radius:3px;background:var(--gray-bg);overflow:hidden;margin-top:4px}
+.meter i{display:block;height:100%;background:var(--blue)}
+.meter i.hi{background:var(--amber)}
+.meter i.over{background:var(--red)}
+.seg{display:flex;gap:6px;margin-bottom:12px}
+.seg button{flex:1;font-family:inherit;font-size:12px;padding:8px;border:.5px solid var(--line);background:#fff;color:var(--ink2);border-radius:9px;cursor:pointer}
+.seg button.on{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-ink);font-weight:600}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="hd-top">
+      <h1>省间路径优选测算</h1>
+      <span class="badge" id="verBadge">真实数据 · 2026 第四监管周期</span>
+    </div>
+  </header>
+  <main>
+    <section id="v-calc"></section>
+    <section id="v-map" hidden></section>
+    <section id="v-lib" hidden></section>
+  </main>
+  <nav>
+    <button id="t-calc" class="on" onclick="go('calc')">
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
+    <button id="t-map" onclick="go('map')">
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5l4.5-2 5 2 4.5-2v11l-4.5 2-5-2-4.5 2z"/><path d="M7.5 3.5v11M12.5 5.5v11"/></svg>网架图</button>
+    <button id="t-lib" onclick="go('lib')">
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>费率库</button>
+  </nav>
+</div>
+<script>
+'use strict';
+/*__DATA__*/
+const BUILD_TIME='__BUILD_TIME__';
+
+const PV=DATA.PV, ST=DATA.ST, SEC=DATA.SEC, RG=DATA.RG;
+let CH=DATA.CH.map(c=>({...c}));
+
+const REGION_OF={BJ:'华北',TJ:'华北',HE:'华北',SX:'华北',SD:'华北',NM:'华北',
+ SH:'华东',JS:'华东',ZJ:'华东',AH:'华东',FJ:'华东',
+ HB:'华中',HN:'华中',HA:'华中',JX:'华中',CQ:'华中',SC:'华中',XZ:'华中',
+ LN:'东北',JL:'东北',HL:'东北',
+ SN:'西北',GS:'西北',QH:'西北',NX:'西北',XJ:'西北',
+ GD:'南方',GX:'南方',YN:'南方',GZ:'南方'};
+
+const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
+
+let state={
+  from:'SC', to:'JS', qty:1000, hours:1,
+  pGen:320, pDst:450, pNet:112, fund:26.6,
+  lossBearer:1, K:6, maxHops:3, maxDetour:2.0,
+  includeRegion:true,
+  mapProvider:'qq', tiandituKey:''
+};
+let stored=null;
+
+const N=k=>PV[k]?PV[k].n:k;
+const fmt=(v,d=1)=>(v===null||v===undefined||isNaN(v))?'—':Number(v).toFixed(d);
+const num=v=>(v===null||v===undefined||isNaN(v))?'—':Math.round(v).toLocaleString('zh-CN');
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const TIER={gov:'发改委核定',grid:'国网披露',region:'区域/送出省口径',est:'待补'};
+const tierTag=t=>`<span class="tier ${t}">${TIER[t]||t}</span>`;
+
+function stName(id){ return id&&ST[id]?ST[id].n:null; }
+function stAddr(id){ return id&&ST[id]?ST[id].a:null; }
+function stLngLat(id){ return id&&ST[id]?[ST[id].lng,ST[id].lat]:null; }
+function provLngLat(p){ return PV[p]?[PV[p].lng,PV[p].lat]:null; }
+function lngLatOf(ch,side){
+  const s = side==='from'?ch.stFrom:ch.stTo;
+  const c = side==='from'?ch.from:ch.to;
+  return (s&&ST[s]) ? [ST[s].lng,ST[s].lat] : provLngLat(c);
+}
+function regionFee(ch){
+  if(!state.includeRegion) return 0;
+  const rf=REGION_OF[ch.from], rt=REGION_OF[ch.to];
+  if(!rf||!rt||rf===rt) return 0;
+  return (RG[rt]||0)*1000;   // 元/kWh → 元/MWh
+}
+
+/* ================= 算法 ================= */
+function buildAdj(edges){
+  const adj={};
+  edges.forEach(e=>{ (adj[e.from]||(adj[e.from]=[])).push({to:e.to,e}); (adj[e.to]||(adj[e.to]=[])).push({to:e.from,e}); });
+  return adj;
+}
+function approxW(e){ return e.t+(e.loss||0)/100*state.pGen+regionFee(e); }
+function dijkstra(adj,src,dst,bannedE,bannedN){
+  if(src===dst) return {edges:[],nodes:[src],cost:0};
+  const dist={src:0}, prev={}, seen={}, Q=[src];
+  while(Q.length){
+    let bi=0; for(let i=1;i<Q.length;i++) if(dist[Q[i]]<dist[Q[bi]]) bi=i;
+    const u=Q.splice(bi,1)[0]; if(seen[u]) continue; seen[u]=true;
+    if(u===dst) break;
+    for(const {to,e} of (adj[u]||[])){
+      if(seen[to]||bannedE.has(e.id)||bannedN.has(to)) continue;
+      const nd=dist[u]+approxW(e);
+      if(dist[to]===undefined||nd<dist[to]){ dist[to]=nd; prev[to]={u,e}; Q.push(to); }
+    }
+  }
+  if(dist[dst]===undefined) return null;
+  const edges=[],nodes=[dst]; let cur=dst;
+  while(cur!==src){ const p=prev[cur]; if(!p) return null; edges.unshift(p.e); nodes.unshift(p.u); cur=p.u; }
+  return {edges,nodes,cost:dist[dst]};
+}
+function keyOf(nodes){ return nodes.join('>'); }
+function yenK(adj,src,dst,K){
+  const first=dijkstra(adj,src,dst,new Set(),new Set());
+  if(!first) return [];
+  const A=[first],B=[],seen=new Set([keyOf(first.nodes)]);
+  while(A.length<K){
+    const prev=A[A.length-1];
+    for(let i=0;i<prev.edges.length;i++){
+      const spurNode=prev.nodes[i], rootE=prev.edges.slice(0,i), rootN=prev.nodes.slice(0,i+1);
+      const bannedE=new Set(), bannedN=new Set();
+      for(const p of A) if(p.edges.length>i && p.nodes.slice(0,i+1).join()===rootN.join()) bannedE.add(p.edges[i].id);
+      for(let j=0;j<rootN.length-1;j++) bannedN.add(rootN[j]);
+      const spur=dijkstra(adj,spurNode,dst,bannedE,bannedN);
+      if(!spur) continue;
+      const tot={edges:rootE.concat(spur.edges),nodes:rootN.concat(spur.nodes.slice(1)),
+        cost:rootE.reduce((s,e)=>s+approxW(e),0)+spur.cost};
+      const kk=keyOf(tot.nodes);
+      if(seen.has(kk)||B.some(b=>keyOf(b.nodes)===kk)) continue;
+      B.push(tot);
+    }
+    if(!B.length) break;
+    B.sort((a,b)=>a.cost-b.cost);
+    const nx=B.shift(); seen.add(keyOf(nx.nodes)); A.push(nx);
+  }
+  return A;
+}
+function distDeg(a,b){
+  const dx=(a[0]-b[0])*Math.cos((a[1]+b[1])/2*Math.PI/180), dy=a[1]-b[1];
+  return Math.sqrt(dx*dx+dy*dy);
+}
+function detourOf(nodes,edges){
+  if(nodes.length<3) return 1;
+  let d=0;
+  for(let i=0;i<edges.length;i++){
+    const a=lngLatOf(edges[i],'from'), b=lngLatOf(edges[i],'to');
+    if(a&&b) d+=distDeg(a,b);
+  }
+  const s=distDeg(lngLatOf(edges[0],'from')||provLngLat(nodes[0]), provLngLat(nodes[nodes.length-1]));
+  return s<1e-6?1:d/s;
+}
+function havKm(a,b){
+  if(!a||!b) return 0;
+  const R=6371, r=Math.PI/180;
+  const dp=(b[1]-a[1])*r, dl=(b[0]-a[0])*r;
+  const s=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(a[1]*r)*Math.cos(b[1]*r)*Math.sin(dl/2)*Math.sin(dl/2);
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+}
+function evalPath(path,ctx){
+  const edges=path.edges, nodes=path.nodes, n=edges.length;
+  const suf=new Array(n+1); suf[n]=1;
+  for(let i=n-1;i>=0;i--) suf[i]=suf[i+1]*(1-(edges[i].loss||0)/100);
+  const D=suf[0], genQty=1/D, lossQty=genQty-1;
+  const qty=ctx.qty, h=Math.max(ctx.hours,0.25);
+  const toMW=q=>qty/h*q;
+  const toMWh=q=>qty*q;
+
+  let trans=0, regFee=0, dist=0, segLossMwh=0, vsCount=0;
+  const vset=new Set(), tset=new Set(), rset=new Set(), stset=new Set();
+  const segs=edges.map((e,i)=>{
+    const q=1/suf[i], qOut=1/suf[i+1];
+    const fee=e.t*q, rg=regionFee(e)*q;
+    trans+=fee; regFee+=rg;
+    const a=lngLatOf(e,'from'), b=lngLatOf(e,'to');
+    const crow=havKm(a,b);
+    const km=e.lenKm||crow;
+    const lossMwh=toMWh(q-qOut);
+    segLossMwh+=lossMwh; dist+=km;
+    vset.add(e.kv); tset.add(e.type); rset.add(REGION_OF[e.to]);
+    if(e.stFrom) stset.add(e.stFrom); if(e.stTo) stset.add(e.stTo);
+    if(e.type==='DC') vsCount++;
+    return {
+      e,q,qOut,fee,rg,a:nodes[i],b:nodes[i+1],
+      km, crow, kmEst:!e.lenKm,
+      inMW:toMW(q), outMW:toMW(qOut), lossMW:toMW(q-qOut),
+      inMWh:toMWh(q), outMWh:toMWh(qOut), lossMwh,
+      lossCost:lossMwh*ctx.pGen,
+      feeYuan:qty*fee, rgYuan:qty*rg,
+      util:e.cap? toMW(q)/e.cap : null,
+      headroom:e.cap? e.cap-toMW(q) : null,
+    };
+  });
+  const g=ctx.lossBearer;
+  const cGen=ctx.pGen, cLossBuyer=cGen*g*lossQty, cTrans=trans, cReg=regFee, cNet=ctx.pNet, cFund=ctx.fund;
+  const landed=cGen+cLossBuyer+cTrans+cReg+cNet+cFund;
+  const netLossTotal=cGen*lossQty;
+  const channelOnly=trans;
+  const senderNet=ctx.pDst*D-(cTrans+cReg)*D-netLossTotal*(1-g)*D;
+  const deliverMW=qty/h;
+  const segLd=segs.map(s=>({name:s.e.n,mw:s.inMW,cap:s.e.cap,over:s.e.cap? s.inMW>s.e.cap : false}));
+  const maxLoad=Math.max(...segLd.map(s=>s.cap?s.mw/s.cap:0));
+  const overSeg=segLd.filter(s=>s.over);
+  // 断面校验（段入口功率之和，与断面限额比对）
+  const secHits=[];
+  for(const sec of SEC){
+    if(!sec.edges||!sec.edges.length) continue;
+    const inSec=segs.filter(s=>sec.edges.some(k=>s.e.n.includes(k)||s.e.fn.includes(k)));
+    if(!inSec.length) continue;
+    const tot=inSec.reduce((a,s)=>a+s.inMW,0);
+    secHits.push({sec, mw:tot, over:tot>sec.limit, util:tot/sec.limit,
+      members:inSec.map(s=>s.e.n)});
+  }
+  const secOver=secHits.filter(h=>h.over);
+  const feasible=!overSeg.length && !secOver.length;
+
+  const genMWh=toMWh(genQty), lossMwh=toMWh(lossQty);
+  const straight=havKm(lngLatOf(edges[0],'from'), lngLatOf(edges[n-1],'to'));
+  const yuan={
+    gen:ctx.pGen*qty,
+    trans:qty*trans,
+    reg:qty*regFee,
+    loss:ctx.pGen*lossMwh*g,
+    net:ctx.pNet*qty,
+    fund:ctx.fund*qty,
+  };
+  yuan.total=yuan.gen+yuan.trans+yuan.reg+yuan.loss+yuan.net+yuan.fund;
+  const tiers={gov:0,grid:0,region:0,est:0};
+  edges.forEach(e=>{tiers[e.tier]=(tiers[e.tier]||0)+1;});
+  const unverified=edges.filter(e=>e.tier!=='gov').length;
+
+  return {nodes,edges,hops:n,D,genQty,lossQty,trans,regFee,segs,segLd,overSeg,maxLoad,secHits,secOver,feasible,
+    detour:detourOf(nodes,edges), landed, channelOnly, senderNet, yuan,
+    qty, h, deliverMW, genMWh, lossMwh, segLossMwh,
+    dist, straight, dcCount:vsCount, acCount:n-vsCount,
+    kvList:[...vset].filter(Boolean), typeList:[...tset], regionList:[...rset].filter(Boolean),
+    stationList:[...stset], tiers, unverified,
+    comp:{gen:cGen,loss:cLossBuyer,trans:cTrans,reg:cReg,net:cNet,fund:cFund}};
+}
+function solve(){
+  const ctx={pGen:state.pGen,pDst:state.pDst,pNet:state.pNet,fund:state.fund,
+    lossBearer:state.lossBearer,qty:state.qty,hours:state.hours};
+  const adj=buildAdj(CH);
+  if(!PV[state.from]||!PV[state.to]) return {err:'省份代码无效'};
+  if(state.from===state.to) return {err:'送端与受端不能相同'};
+  if(!adj[state.from]) return {err:N(state.from)+' 暂无接入的跨省通道'};
+  const raw=yenK(adj,state.from,state.to,Math.max(state.K*4,20));
+  const inHops=raw.filter(p=>p.edges.length<=state.maxHops);
+  const cands=inHops.filter(p=>detourOf(p.nodes,p.edges)<=state.maxDetour).slice(0,state.K);
+  if(!cands.length){
+    return {err: raw.length===0 ? '未找到 '+N(state.from)+' 至 '+N(state.to)+' 的连通路径'
+      : (inHops.length===0 ? '在 '+state.maxHops+' 跳以内无可行路径（最短需 '+raw[0].edges.length+' 跳），请放宽跳数'
+      : '当前绕行度上限把所有候选都筛掉了，请放宽')};
+  }
+  const rows=cands.map(p=>evalPath(p,ctx));
+  const byA=[...rows].sort((a,b)=>a.landed-b.landed);
+  const byB=[...rows].sort((a,b)=>a.channelOnly-b.channelOnly);
+  const byC=[...rows].sort((a,b)=>b.senderNet-a.senderNet);
+  rows.forEach(r=>{r.rankA=byA.indexOf(r)+1;r.rankB=byB.indexOf(r)+1;r.rankC=byC.indexOf(r)+1;});
+  rows.sort((a,b)=>a.rankA-b.rankA);
+  return {rows,byA,byB,byC,n:rows.length};
+}
+function pathLabel(p){ return p.nodes.map(N).join(' → '); }
+function routeStr(nodes){ return nodes.map((k,i)=> i===0?'<b>'+esc(N(k))+'</b>':'<span class="arw">→</span>'+esc(N(k))).join(''); }
+
+/* ================= 存储 ================= */
+function loadStored(){
+  try{
+    const a=localStorage.getItem(LS_LIB);
+    if(a){ const s=JSON.parse(a); if(s.ch&&s.ch.length===CH.length) CH=s.ch; }
+    const b=localStorage.getItem(LS_LAST); if(b) Object.assign(state,JSON.parse(b));
+    const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
+  }catch(e){}
+}
+function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,at:BUILD_TIME}));}catch(e){} }
+function saveLast(){ try{localStorage.setItem(LS_LAST,JSON.stringify(state));}catch(e){} }
+function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){} }
+
+/* ================= 测算页 ================= */
+function renderCalc(){
+  const res=state._res;
+  const opt=sel=>Object.keys(PV).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${PV[k].n}</option>`).join('');
+  let out=`
+  <div class="card">
+    <div class="sec-title">交易参数</div>
+    <div class="row2">
+      <label class="f"><span>送端省</span><select id="i-from">${opt(state.from)}</select></label>
+      <label class="f"><span>受端省</span><select id="i-to">${opt(state.to)}</select></label>
+    </div>
+    <div class="row3">
+      <label class="f"><span>上网电量 MWh</span><input id="i-qty" type="number" value="${state.qty}" step="100" min="1"></label>
+      <label class="f"><span>时段长度 h</span><input id="i-hours" type="number" value="${state.hours}" step="0.25" min="0.25"></label>
+      <label class="f"><span>候选路径数</span><input id="i-k" type="number" value="${state.K}" step="1" min="1" max="10"></label>
+    </div>
+    <div class="row2">
+      <label class="f"><span>最大跳数</span><select id="i-hops">
+        ${[1,2,3,4,6].map(v=>`<option value="${v}" ${state.maxHops==v?'selected':''}>${v===6?'不限':v+' 跳'}</option>`).join('')}
+      </select></label>
+      <label class="f"><span>最大绕行度</span><select id="i-detour">
+        ${[[1.5,'1.5 倍'],[2,'2.0 倍'],[2.5,'2.5 倍'],[9,'不限']].map(([v,t])=>`<option value="${v}" ${state.maxDetour==v?'selected':''}>${t}</option>`).join('')}
+      </select></label>
+    </div>
+    <details class="adv">
+      <summary>价格与口径</summary>
+      <div class="inner">
+        <div class="row2">
+          <label class="f"><span>送端出清价 元/MWh</span><input id="i-pgen" type="number" value="${state.pGen}" step="5"></label>
+          <label class="f"><span>受端结算价 元/MWh</span><input id="i-pdst" type="number" value="${state.pDst}" step="5"></label>
+        </div>
+        <div class="row2">
+          <label class="f"><span>受端省网输配电价</span><input id="i-pnet" type="number" value="${state.pNet}" step="1"></label>
+          <label class="f"><span>基金及附加</span><input id="i-fund" type="number" value="${state.fund}" step="1"></label>
+        </div>
+        <label class="f"><span>网损承担方</span><select id="i-bearer">
+          <option value="1" ${state.lossBearer==1?'selected':''}>受端承担</option>
+          <option value="0.5" ${state.lossBearer==0.5?'selected':''}>两端各半</option>
+          <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
+        </select></label>
+        <label class="f"><span>区域电网输电价格</span><select id="i-region">
+          <option value="1" ${state.includeRegion?'selected':''}>计入（跨区交易按到达区电量电价）</option>
+          <option value="0" ${!state.includeRegion?'selected':''}>不计入</option>
+        </select></label>
+        <p class="note">切换送端省会自动带出该省第四监管周期的参数。受端省网输配电价取 220kV 及以上两部制电量电价。</p>
+      </div>
+    </details>
+    <p class="note">跳数与绕行度用于剔除现实中不会采用的绕行串联。实际交易中可用路径须在电力交易中心公布的路径集合内。</p>
+    <div style="margin-top:14px"><button class="btn" onclick="doSolve()">开始测算</button></div>
+  </div>`;
+
+  if(res&&res.err){ out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`; }
+  else if(res&&res.rows){ out+=renderResults(res); }
+  else { out+=`<div class="card"><div class="empty">选择送受端省份后点击「开始测算」</div></div>`; }
+  document.getElementById('v-calc').innerHTML=out;
+}
+
+function renderResults(res){
+  const rows=res.rows, topA=res.byA[0], topB=res.byB[0], topC=res.byC[0];  const sA=keyOf(topA.nodes),sB=keyOf(topB.nodes),sC=keyOf(topC.nodes);
+  const diverge=!(sA===sB&&sB===sC);
+  const tierMix=new Set(topA.edges.map(e=>e.tier));
+  let out='';
+
+  out+=`<div class="card tight"><div class="sec-title">口径对比<span class="hint">共 ${res.n} 条候选</span></div>`;
+  out+=`<div class="kv"><span class="m">口径一 · 落地成本</span><b>${esc(pathLabel(topA))}</b></div>`;
+  out+=`<div class="kv"><span class="m">口径二 · 过网费</span><b>${esc(pathLabel(topB))}</b></div>`;
+  out+=`<div class="kv"><span class="m">口径三 · 送端收益</span><b>${esc(pathLabel(topC))}</b></div>`;
+  if(diverge) out+=`<div class="warn">三种口径最优路径不一致。口径二只看通道费率、不计网损，最易与口径一相反。</div>`;
+  else if(res.byB[0].rankA>1) out+=`<div class="warn">口径二过网费最低的是 <b>${esc(pathLabel(res.byB[0]))}</b>，但落地成本比最优路径高 ${fmt(res.byB[0].landed-topA.landed)} 元/MWh，<b>差额被网损吃掉</b>。</div>`;
+  else out+=`<div class="warn ok">三种口径指向同一条路径，结论稳健。</div>`;
+  if(tierMix.has('region')||tierMix.has('est')) out+=`<div class="warn">本条路径含<b>非发改委核定</b>的费率段（区域/送出省口径或待补值），结论仅供比选参考。</div>`;
+  out+=`</div>`;
+
+  rows.forEach((r,i)=>{
+    const colors=['#85B7EB','#EF9F27','#F0997B','#5DCAA5','#B4B2A9','#AFA9EC'];
+    const comp=[['送端出清价',r.comp.gen],['跨省专项工程输电费',r.comp.trans],['区域电网输电费',r.comp.reg],
+      ['网损折价',r.comp.loss],['受端输配电价',r.comp.net],['基金及附加',r.comp.fund]].filter(c=>c[1]>0);
+    const tot=comp.reduce((s,c)=>s+c[1],0);
+    out+=`<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px">
+        <div class="route-head">${routeStr(r.nodes)}</div>
+        <span class="rank ${i===0?'':'g'}">口径一 ${r.rankA}/${res.n}</span>
+      </div>
+      <div class="big">${fmt(r.landed)}<span class="u">元/MWh 落地</span></div>
+      <div class="bar">${comp.map((c,j)=>`<div style="width:${(c[1]/tot*100).toFixed(2)}%;background:${colors[j%6]}"></div>`).join('')}</div>
+      <div class="lg">${comp.map((c,j)=>`<span><i style="background:${colors[j%6]}"></i>${c[0]} ${fmt(c[1])}</span>`).join('')}</div>
+      <div class="chips">
+        <span class="chip info">过网费 ${fmt(r.channelOnly)}</span>
+        <span class="chip info">送端净收益 ${fmt(r.senderNet)}</span>
+        <span class="chip ${r.feasible?'ok':'bad'}">${r.feasible?'容量与断面均通过':'越限'}</span>
+        <span class="chip">${r.hops} 跳</span>
+        <span class="chip">绕行 ${fmt(r.detour,2)}x</span>
+        <span class="chip">网损 ${fmt((1-r.D)*100,2)}%</span>
+      </div>
+      ${r.overSeg.length?`<div class="warn bad" style="margin:11px 0 0">通道超容：${r.overSeg.map(s=>esc(s.name)+' '+fmt(s.mw,0)+'/'+s.cap+' MW').join('；')}</div>`:''}
+      ${r.secOver.length?`<div class="warn bad" style="margin:11px 0 0">断面越限：${r.secOver.map(h=>esc(h.sec.n)+' '+fmt(h.mw,0)+'/'+h.sec.limit+' MW').join('；')}</div>`:''}
+      <div style="margin-top:12px">
+        ${comp.map(c=>`<div class="kv"><span class="m">${c[0]}</span><b>${fmt(c[1])}</b></div>`).join('')}
+        <div class="kv tot"><span>受端落地成本</span><b>${fmt(tot)}</b></div>
+      </div>
+      <details class="adv" style="margin-top:12px" ${i===0?'open':''}>
+        <summary>完整明细：路径 · 电量 · 逐段 · 断面 · 溯源</summary>
+        <div class="inner">
+
+          <div class="sub">路径构成<em>${r.hops} 段通道 · ${r.nodes.length} 个节点</em></div>
+          <div class="g3">
+            <div class="mc"><div class="l">路径长度</div><div class="v">${fmt(r.dist,0)}<small>km${r.segs.some(s=>s.kmEst)?'*':''}</small></div></div>
+            <div class="mc"><div class="l">直线距离</div><div class="v">${fmt(r.straight,0)}<small>km</small></div></div>
+            <div class="mc"><div class="l">绕行度</div><div class="v">${fmt(r.detour,2)}<small>x</small></div></div>
+          </div>
+          <div class="g3" style="margin-top:8px">
+            <div class="mc"><div class="l">跨区域数</div><div class="v">${r.regionList.length}<small>个</small></div></div>
+            <div class="mc"><div class="l">直流 / 交流</div><div class="v">${r.dcCount}<small>段</small> / ${r.acCount}<small>段</small></div></div>
+            <div class="mc"><div class="l">涉及站点</div><div class="v">${r.stationList.length}<small>个</small></div></div>
+          </div>
+          <div style="margin-top:9px;font-size:11px;color:var(--ink2);line-height:1.75">
+            <div><b>途经省份</b>：${esc(r.nodes.map(N).join(' → '))}</div>
+            <div><b>电压等级</b>：${esc(r.kvList.join(' / ')||'—')}</div>
+            <div><b>涉及区域</b>：${esc(r.regionList.join('、')||'—')}</div>
+            ${r.stationList.length?`<div><b>换流/变电站</b>：${esc(r.stationList.map(stName).join('、'))}</div>`:''}
+          </div>
+
+          <div class="sub">电量与损耗<em>按 ${fmt(r.qty,0)} MWh 交付电量</em></div>
+          <div class="g2">
+            <div class="mc"><div class="l">送端发电量</div><div class="v">${fmt(r.genMWh,1)}<small>MWh</small></div></div>
+            <div class="mc"><div class="l">受端交付电量</div><div class="v">${fmt(r.qty,1)}<small>MWh</small></div></div>
+          </div>
+          <div class="g2" style="margin-top:8px">
+            <div class="mc"><div class="l">网损电量</div><div class="v">${fmt(r.lossMwh,2)}<small>MWh</small></div></div>
+            <div class="mc"><div class="l">综合线损率</div><div class="v">${fmt((1-r.D)*100,3)}<small>%</small></div></div>
+          </div>
+          <div class="g2" style="margin-top:8px">
+            <div class="mc"><div class="l">交付功率</div><div class="v">${fmt(r.deliverMW,0)}<small>MW</small></div></div>
+            <div class="mc"><div class="l">最大通道占用</div><div class="v">${fmt(r.maxLoad*100,1)}<small>%</small></div></div>
+          </div>
+          <div class="formula" style="margin-top:9px">
+            <div class="mono">送达系数 D = ${fmt(r.D,6)}　送端需发电 ${fmt(r.genQty,6)} MWh / 每交付 1 MWh</div>
+            <div class="txt">多段串联时线损为乘法关系：D = Π(1−ηᵢ)。因此网损是乘法项，不能直接作为路径搜索的边权。</div>
+          </div>
+
+          <div class="sub">费用拆解<em>单价 元/MWh · 总额 元</em></div>
+          <table>
+            <tr><th style="width:40%">费用项</th><th>单价</th><th>总额</th><th>占比</th></tr>
+            <tr><td>送端出清价购电</td><td>${fmt(r.comp.gen)}</td><td>${num(r.yuan.gen)}</td><td>${fmt(r.yuan.gen/r.yuan.total*100,1)}%</td></tr>
+            <tr><td>跨省专项工程输电费</td><td>${fmt(r.comp.trans)}</td><td>${num(r.yuan.trans)}</td><td>${fmt(r.yuan.trans/r.yuan.total*100,1)}%</td></tr>
+            ${r.comp.reg>0?`<tr><td>区域电网输电费</td><td>${fmt(r.comp.reg)}</td><td>${num(r.yuan.reg)}</td><td>${fmt(r.yuan.reg/r.yuan.total*100,1)}%</td></tr>`:''}
+            <tr><td>网损折价（受端承担部分）</td><td>${fmt(r.comp.loss)}</td><td>${num(r.yuan.loss)}</td><td>${fmt(r.yuan.loss/r.yuan.total*100,1)}%</td></tr>
+            <tr><td>受端省网输配电价</td><td>${fmt(r.comp.net)}</td><td>${num(r.yuan.net)}</td><td>${fmt(r.yuan.net/r.yuan.total*100,1)}%</td></tr>
+            <tr><td>政府性基金及附加</td><td>${fmt(r.comp.fund)}</td><td>${num(r.yuan.fund)}</td><td>${fmt(r.yuan.fund/r.yuan.total*100,1)}%</td></tr>
+            <tr><td><b>合计</b></td><td><b>${fmt(r.landed)}</b></td><td><b>${num(r.yuan.total)}</b></td><td>100%</td></tr>
+          </table>
+
+          <div class="sub">逐段明细<em>共 ${r.segs.length} 段</em></div>
+          ${r.segs.map((s,si)=>{
+            const e=s.e, util=s.util;
+            return `<div class="segblk">
+              <div class="hd">
+                <span>第 ${si+1} 段　${esc(N(s.a))} → ${esc(N(s.b))}</span>
+                <em>${esc(e.n)}${tierTag(e.tier)}</em>
+              </div>
+              <div style="font-size:11px;color:var(--ink2)">${esc(e.type==='DC'?'直流':'交流')} ${esc(e.kv)}　核定容量 ${e.cap?e.cap+' MW':'待补'}　线路长度 ${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km（直线估算）'}</div>
+              <div class="grid">
+                <div>输电价<b>${e.t==null?'—':fmt(e.t)}</b></div>
+                <div>线损率<b>${fmt(e.loss,2)}%</b></div>
+                <div>段入口功率<b>${fmt(s.inMW,0)} MW</b></div>
+                <div>段出口功率<b>${fmt(s.outMW,0)} MW</b></div>
+                <div>段入口电量<b>${fmt(s.inMWh,1)} MWh</b></div>
+                <div>段损耗电量<b>${fmt(s.lossMwh,2)} MWh</b></div>
+                <div>段输电费<b>${num(s.feeYuan)} 元</b></div>
+                <div>段网损成本<b>${num(s.lossCost)} 元</b></div>
+              </div>
+              ${util!=null?`<div style="font-size:10.5px;color:var(--ink3);margin-top:8px">通道占用率 ${fmt(util*100,1)}%　剩余可用 ${fmt(s.headroom,0)} / ${e.cap} MW</div><div class="meter"><i class="${util>1?'over':(util>0.8?'hi':'')}" style="width:${Math.min(util*100,100).toFixed(1)}%"></i></div>`
+                :`<div style="font-size:10.5px;color:var(--ink3);margin-top:8px">核定容量待补，无法校验占用率</div>`}
+              <div class="src">
+                ${tierTag(e.tier)}　${e.doc?esc(e.doc):'无发改委文号'}${e.eff?'　生效 '+esc(e.eff):(e.pubDate?'　发布 '+esc(e.pubDate):'')}<br>
+                ${e.docTitle?esc(e.docTitle)+'<br>':''}
+                计费口径：${esc(e.bill)}${e.incLoss?'（含输电环节线损）':'（不含线损，线损另计）'}${e.tax?'　含税':'　不含税'}<br>
+                ${e.status?'状态：'+esc(e.status)+'<br>':''}
+                ${e.fn&&e.fn!==e.n?'别名：'+esc(e.fn)+'<br>':''}
+                ${e.stFrom?`送端 ${esc(stName(e.stFrom))} @ ${esc(stAddr(e.stFrom))}<br>`:''}
+                ${e.stTo?`受端 ${esc(stName(e.stTo))} @ ${esc(stAddr(e.stTo))}<br>`:''}
+                ${e.note?esc(e.note)+'<br>':''}
+                ${e.excerpt?`<q>原文摘录：${esc(e.excerpt)}</q>`:''}
+                ${e.hist&&e.hist.length?`<div style="margin-top:6px"><b>调价历史</b>${e.hist.map(h=>`<br>· ${esc(h.effective_from||'—')}　${esc(h.tariff_raw||'')}${h.loss_rate_pct!=null?'　线损 '+h.loss_rate_pct+'%':''}　${esc(h.doc_number||'')}${h.note?'　'+esc(h.note):''}`).join('')}</div>`:''}
+              </div>
+            </div>`;
+          }).join('')}
+
+          <div class="sub">断面校验<em>${r.secHits.length?r.secHits.length+' 个断面':'本路径未经过已录入断面'}</em></div>
+          ${r.secHits.length? r.secHits.map(h=>`<div class="segblk">
+            <div class="hd"><span>${esc(h.sec.n)}</span><em>${fmt(h.mw,0)} / ${h.sec.limit} MW</em></div>
+            <div style="font-size:11px;color:var(--ink2)">利用率 ${fmt(h.util*100,1)}%　余量 ${fmt(h.sec.limit-h.mw,0)} MW　${h.over?'<span class="pill" style="background:var(--red-bg);color:var(--red)">越限</span>':'<span class="pill" style="background:var(--teal-bg);color:var(--teal)">通过</span>'}</div>
+            <div class="meter"><i class="${h.over?'over':(h.util>0.8?'hi':'')}" style="width:${Math.min(h.util*100,100).toFixed(1)}%"></i></div>
+            <div class="src">计入通道：${esc(h.members.join('、'))}<br>${esc(h.sec.note)}<br>来源：${esc(h.sec.src)}</div>
+          </div>`).join('') : `<p class="note">该路径经过的通道未映射到已录入的断面。断面限额属向注册市场成员披露的信息，公开渠道无法获取运行限额。</p>`}
+
+          <div class="sub">数据溯源</div>
+          <div class="g3">
+            <div class="mc"><div class="l">发改委核定段</div><div class="v">${r.tiers.gov||0}<small>/${r.hops}</small></div></div>
+            <div class="mc"><div class="l">国网披露段</div><div class="v">${r.tiers.grid||0}<small>段</small></div></div>
+            <div class="mc"><div class="l">区域/送出省段</div><div class="v">${r.tiers.region||0}<small>段</small></div></div>
+          </div>
+          ${r.unverified?`<div class="warn" style="margin-top:9px">本路径有 <b>${r.unverified} 段</b>不属于发改委核定价（区域或送出省口径、或待补值），结论仅供比选参考，正式结算前须逐段核对原始文件。</div>`
+            :`<div class="warn ok" style="margin-top:9px">本路径全部 ${r.hops} 段均为发改委核定价格，可回溯到原文。</div>`}
+
+          <div class="sub">口径位置<em>三个口径下的排名与差距</em></div>
+          <div class="g3">
+            <div class="mc"><div class="l">落地成本</div><div class="v">#${r.rankA}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankA===1?'最优':'高 '+fmt(r.landed-res.byA[0].landed)+' 元/MWh'}</div></div>
+            <div class="mc"><div class="l">过网费</div><div class="v">#${r.rankB}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankB===1?'最低':'高 '+fmt(r.channelOnly-res.byB[0].channelOnly)+' 元/MWh'}</div></div>
+            <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.byC[0].senderNet-r.senderNet)+' 元/MWh'}</div></div>
+          </div>
+
+          <div class="formula" style="margin-top:12px">
+            <div class="mono">落地成本 = 出清价 × (1 + ${state.lossBearer} × 网损电量) + Σ(各段输电价 × 段前系数) + 区域电网费 + 受端输配电价 + 基金附加</div>
+            <div class="txt">段前电量 = 1 / Π(该段及之后各段的通过率)。每段导体上都流着下游全部损耗之后的电量，因此越靠送端的段，承担的电量与损耗越多。</div>
+          </div>
+          ${r.segs.some(s=>s.kmEst)?`<p class="note">* 路径长度含以站点直线距离估算的段（该通道线路长度数据待补）。</p>`:''}
+        </div>
+      </details>
+    </div>`;
+  });
+
+  out+=`<div class="card tight"><div class="sec-title">方案排序总表</div>
+    <table><tr><th style="width:40%">路径</th><th>落地</th><th>过网费</th><th>送端收益</th></tr>
+    ${rows.map(r=>`<tr><td>${esc(pathLabel(r))}</td>
+      <td><b>${fmt(r.landed)}</b><br><span style="color:var(--ink3)">#${r.rankA}</span></td>
+      <td>${fmt(r.channelOnly)}<br><span style="color:var(--ink3)">#${r.rankB}</span></td>
+      <td>${fmt(r.senderNet)}<br><span style="color:var(--ink3)">#${r.rankC}</span></td></tr>`).join('')}
+    </table>
+    <p class="note">单位元/MWh，按受端交付电量折算。过网费口径不含网损与省网费用。</p></div>`;
+
+  if(topA.secHits&&topA.secHits.length){
+    out+=`<div class="card tight"><div class="sec-title">断面校验<span class="hint">口径一最优路径</span></div>
+      ${topA.secHits.map(h=>`<div class="kv"><span class="m">${esc(h.sec.n)}</span><b>${fmt(h.mw,0)} / ${h.sec.limit} MW ${h.over?'<span class="chip bad">越限</span>':'<span class="chip ok">通过</span>'}</b></div>
+        <div class="lib-src">${esc(h.sec.note)}（来源：${esc(h.sec.src)}）</div>`).join('')}
+      <p class="note">断面限额为公开报道/文献值，非交易中心披露的运行限额。运行限额属向注册市场成员披露的信息，公众渠道无法获取。</p></div>`;
+  }
+  return out;
+}
+
+function doSolve(){
+  readInputs(); state._res=solve(); saveLast(); renderCalc(); window.scrollTo({top:0,behavior:'smooth'});
+}
+function readInputs(){
+  const g=id=>document.getElementById(id);
+  if(!g('i-from')) return;
+  state.from=g('i-from').value; state.to=g('i-to').value;
+  state.qty=+g('i-qty').value||1000; state.hours=+g('i-hours').value||1;
+  state.K=Math.max(1,Math.min(10,+g('i-k').value||6));
+  state.maxHops=+g('i-hops').value||3; state.maxDetour=+g('i-detour').value||2;
+  state.pGen=+g('i-pgen').value||0; state.pDst=+g('i-pdst').value||0;
+  state.pNet=+g('i-pnet').value||0; state.fund=+g('i-fund').value||0;
+  state.lossBearer=+g('i-bearer').value;
+  state.includeRegion=g('i-region').value==='1';
+}
+function refreshProvinceParams(){
+  const f=PV[state.from], t=PV[state.to];
+  if(f) state.pGen=f.clear;
+  if(t){ state.pNet=t.net; state.fund=t.fund; state.pDst=t.clear; }
+}
+
+/* ================= 费率库 ================= */
+let libTab='ch';
+function renderLib(){
+  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`;
+  out+=`<div class="card tight seg">
+    <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
+    <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
+    <button class="${libTab==='sec'?'on':''}" onclick="libTab='sec';renderLib()">断面 (${SEC.length})</button>
+  </div>`;
+
+  if(libTab==='ch'){
+    out+=`<div class="card tight"><div class="sec-title">通道费率<span class="hint">元/MWh · % · MW</span></div>`;
+    out+=CH.map((c,i)=>`
+      <div class="lib-row">
+        <div class="lib-nm"><span>${esc(c.n)}</span><em>${esc(N(c.from))}→${esc(N(c.to))} ${esc(c.kv)}</em></div>
+        <div class="lib-io">
+          <div><label>输电价</label><input type="number" step="0.1" value="${c.t==null?'':c.t}" onchange="setCh(${i},'t',this.value)"></div>
+          <div><label>线损率</label><input type="number" step="0.05" value="${c.loss==null?'':c.loss}" onchange="setCh(${i},'loss',this.value)"></div>
+          <div><label>容量 MW</label><input type="number" step="100" value="${c.cap==null?'':c.cap}" onchange="setCh(${i},'cap',this.value)" placeholder="待补"></div>
+        </div>
+        <div class="lib-src">${tierTag(c.tier)}　${esc(c.doc||'—')}${c.eff?'　生效 '+esc(c.eff):''}${stName(c.stFrom)?'<br>送端 '+esc(stName(c.stFrom))+'（'+esc(stAddr(c.stFrom))+'）':''}${stName(c.stTo)?'　受端 '+esc(stName(c.stTo))+'（'+esc(stAddr(c.stTo))+'）':''}</div>
+      </div>`).join('');
+    out+=`</div>`;
+  } else if(libTab==='pv'){
+    out+=`<div class="card tight"><div class="sec-title">省级参数<span class="hint">元/MWh</span></div>
+      <div class="prow"><span>省份</span><span>出清价</span><span>输配电价</span><span>基金附加</span><span></span></div>
+      ${Object.keys(PV).map(k=>`<div class="prow">
+        <span class="pn">${PV[k].n}</span>
+        <input type="number" step="5" value="${PV[k].clear}" onchange="setPv('${k}','clear',this.value)">
+        <input type="number" step="0.1" value="${PV[k].net}" onchange="setPv('${k}','net',this.value)">
+        <input type="number" step="0.1" value="${PV[k].fund}" onchange="setPv('${k}','fund',this.value)">
+        <span class="tier ${/发改|监管周期/.test(PV[k].netSrc)?'gov':'est'}">${/发改|监管周期/.test(PV[k].netSrc)?'核实':'待补'}</span>
+      </div>
+      <div class="lib-src" style="margin-top:8px">${Object.keys(PV).map(k=>`<b>${PV[k].n}</b>：${esc(PV[k].netSrc)}`).join('<br>')}</div>`).join('')}
+    </div>`;
+  } else {
+    out+=`<div class="card tight"><div class="sec-title">输电断面<span class="hint">公开报道/文献值</span></div>`;
+    out+=SEC.map(s=>`<div class="lib-row">
+      <div class="lib-nm"><span>${esc(s.n)}</span><em>${s.limit} MW</em></div>
+      <div class="lib-src">${esc(s.note)}<br>来源：${esc(s.src)}${s.edges&&s.edges.length?'　关联通道：'+esc(s.edges.join('、')):'　<span class="tier est">未映射到本图通道</span>'}</div>
+    </div>`).join('');
+    out+=`<p class="note"><b>重要边界</b>：断面限额属向注册市场成员披露的信息，不是公众信息。以上数值来自公开报道与学术文献，与交易中心实际运行限额可能有差异。国网省间现货按「交易路径」建模，南网区域市场按「断面潮流约束（GSDF）」建模，两套口径不能共用同一约束结构。</p></div>`;
+  }
+
+  out+=`<div class="card tight"><div class="sec-title">数据管理</div>
+    <div class="row2"><button class="btn ghost" onclick="exportLib()">导出 JSON</button>
+    <button class="btn ghost" onclick="resetLib()">恢复检索原始值</button></div>
+    <p class="note">构建时间 ${esc(BUILD_TIME)}　·　通道 ${CH.length} 条　·　断面 ${SEC.length} 个　·　区域电网电量电价：${Object.entries(RG).filter(([k])=>!k.startsWith('_')).map(([k,v])=>k+' '+v+' 元/kWh').join('，')}</p></div>`;
+
+  document.getElementById('v-lib').innerHTML=out;
+}
+function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); state._res=null;
+  const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }
+function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); state._res=null; }
+function exportLib(){ const b=new Blob([JSON.stringify({ch:CH,pv:PV,sec:SEC},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='费率库-v2.json'; a.click(); }
+function resetLib(){ if(!confirm('恢复为检索原始值？本地修改将丢失。')) return;
+  CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); state._res=null; }
+
+/* ================= 地图 ================= */
+let map=null,mapReady=false,polyLayer=null,mkLayer=null,lbLayer=null;
+let tdMap=null,tdReady=false,tdLayer=null;
+
+const dotSvg=f=>`data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='4.5' fill='${encodeURIComponent(f)}' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E`;
+const D_HOT=dotSvg('#185FA5'), D_ON=dotSvg('#0F6E56'), D_BASE=dotSvg('#8A8A85');
+
+function visibleChannels(){
+  const r=state._res&&state._res.rows;
+  if(!r) return {list:CH, hot:new Set(), alt:new Set(), nodes:new Set()};
+  const hot=new Set(r[0].edges.map(e=>e.id));
+  const alt=new Set(r[1]?r[1].edges.map(e=>e.id):[]);
+  const nodes=new Set(); r.forEach(row=>row.edges.forEach(e=>{nodes.add(e.from);nodes.add(e.to);}));
+  const ids=new Set([...hot,...alt]);
+  return {list:CH.filter(c=>ids.has(c.id)), hot, alt, nodes};
+}
+
+function initMap(){
+  if(mapReady) return true;
+  if(typeof TMap==='undefined') return false;
+  try{
+    map=new TMap.Map('map-view',{center:new TMap.LatLng(34,108),zoom:4});
+    polyLayer=new TMap.MultiPolyline({map,styles:{
+      hot:new TMap.PolylineStyle({color:'#185FA5',width:5,borderWidth:1,borderColor:'#ffffff',lineCap:'round'}),
+      alt:new TMap.PolylineStyle({color:'#EF9F27',width:3,borderWidth:1,borderColor:'#ffffff',lineCap:'round'}),
+      base:new TMap.PolylineStyle({color:'#B4B2A9',width:1,borderWidth:0,lineCap:'round'})},geometries:[]});
+    mkLayer=new TMap.MultiMarker({map,styles:{
+      hot:new TMap.MarkerStyle({width:14,height:14,anchor:{x:7,y:7},src:D_HOT}),
+      on:new TMap.MarkerStyle({width:16,height:16,anchor:{x:8,y:8},src:D_ON}),
+      base:new TMap.MarkerStyle({width:10,height:10,anchor:{x:5,y:5},src:D_BASE})},geometries:[]});
+    lbLayer=new TMap.MultiLabel({map,styles:{
+      hot:new TMap.LabelStyle({color:'#0C447C',size:11,offset:{x:0,y:-13},alignment:'center'}),
+      base:new TMap.LabelStyle({color:'#8A8A85',size:10,offset:{x:0,y:-10},alignment:'center'})},geometries:[]});
+    mapReady=true; return true;
+  }catch(e){ return false; }
+}
+function drawMapQQ(){
+  if(!initMap()) return false;
+  const v=visibleChannels();
+  const polys=[],mks=[],lbs=[],seen=new Set();
+  v.list.forEach(c=>{
+    const a=lngLatOf(c,'from'), b=lngLatOf(c,'to'); if(!a||!b) return;
+    const sid=v.hot.has(c.id)?'hot':(v.alt.has(c.id)?'alt':'base');
+    polys.push({id:c.id,styleId:sid,paths:[new TMap.LatLng(a[1],a[0]),new TMap.LatLng(b[1],b[0])]});
+    [['from',a],['to',b]].forEach(([side,ll])=>{
+      const st=side==='from'?c.stFrom:c.stTo, pv=side==='from'?c.from:c.to;
+      const key=st||pv; if(seen.has(key)) return; seen.add(key);
+      const isEnd=pv===state.from||pv===state.to;
+      const nm=st?stName(st):N(pv);
+      mks.push({id:'m'+key,styleId:isEnd?'on':'hot',position:new TMap.LatLng(ll[1],ll[0])});
+      lbs.push({id:'l'+key,styleId:isEnd?'hot':'base',position:new TMap.LatLng(ll[1],ll[0]),text:nm});
+    });
+  });
+  Object.keys(PV).forEach(k=>{
+    if(seen.has(k)) return;
+    const ll=provLngLat(k);
+    mks.push({id:'mp'+k,styleId:'base',position:new TMap.LatLng(ll[1],ll[0])});
+    lbs.push({id:'lp'+k,styleId:'base',position:new TMap.LatLng(ll[1],ll[0]),text:N(k)});
+  });
+  polyLayer.setGeometries(polys); mkLayer.setGeometries(mks); lbLayer.setGeometries(lbs);
+  return true;
+}
+function loadTianditu(cb){
+  if(tdReady) return cb(true);
+  if(typeof T!=='undefined'&&T.Map){ tdReady=true; return cb(true); }
+  if(!state.tiandituKey){ return cb(false); }
+  const s=document.createElement('script');
+  s.src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
+  s.onload=()=>{ tdReady=true; cb(true); };
+  s.onerror=()=>cb(false);
+  document.head.appendChild(s);
+}
+function drawMapTD(){
+  if(!tdReady) return false;
+  try{
+    if(!tdMap){ tdMap=new T.Map('map-view'); tdMap.centerAndZoom(new T.LngLat(108,34),5); }
+    tdMap.clearOverLays();
+    const v=visibleChannels(); const seen=new Set();
+    v.list.forEach(c=>{
+      const a=lngLatOf(c,'from'), b=lngLatOf(c,'to'); if(!a||!b) return;
+      const isHot=v.hot.has(c.id), isAlt=v.alt.has(c.id);
+      const line=new T.Polyline([new T.LngLat(a[0],a[1]),new T.LngLat(b[0],b[1])],
+        {color:isHot?'#185FA5':(isAlt?'#EF9F27':'#B4B2A9'),weight:isHot?5:(isAlt?3:1),opacity:isHot||isAlt?0.9:0.5});
+      tdMap.addOverLay(line);
+      [['from',a],['to',b]].forEach(([side,ll])=>{
+        const st=side==='from'?c.stFrom:c.stTo, pv=side==='from'?c.from:c.to;
+        const key=st||pv; if(seen.has(key)) return; seen.add(key);
+        const isEnd=pv===state.from||pv===state.to;
+        const mk=new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl:isEnd?D_ON:D_HOT,iconSize:new T.Point(14,14)})});
+        tdMap.addOverLay(mk);
+        const lb=new T.Label({text:st?stName(st):N(pv),position:new T.LngLat(ll[0],ll[1]),offset:new T.Point(0,-14)});
+        tdMap.addOverLay(lb);
+      });
+    });
+    Object.keys(PV).forEach(k=>{ if(seen.has(k)) return; const ll=provLngLat(k);
+      tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl:D_BASE,iconSize:new T.Point(10,10)})}));
+      tdMap.addOverLay(new T.Label({text:N(k),position:new T.LngLat(ll[0],ll[1]),offset:new T.Point(0,-12)}));
+    });
+    return true;
+  }catch(e){ return false; }
+}
+function showMapFallback(){
+  const mv=document.getElementById('map-view'); if(mv) mv.style.display='none';
+  const fb=document.getElementById('fallback'); if(!fb) return;
+  fb.style.display='block';
+  const v=visibleChannels();
+  let t='<div style="font-weight:600;color:#1F2328;margin-bottom:8px">底图未加载，已降级为拓扑清单</div>';
+  t+='<div style="margin-bottom:12px;line-height:1.7">腾讯地图需要运行环境支持；天地图需要你自己的密钥。</div>';
+  t+=`<div style="font-weight:600;margin-bottom:6px">当前路径涉及通道（${v.list.length} 条）</div>`;
+  v.list.forEach(c=>{
+    const hot=v.hot.has(c.id)?' ●':'';
+    t+=`<div style="padding:4px 0;border-bottom:.5px solid rgba(0,0,0,.06)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.t==null?'—':c.t+' 元/MWh'}　线损 ${c.loss==null?'—':c.loss+'%'}${hot}</div>`;
+  });
+  fb.innerHTML=t;
+}
+function renderMap(){
+  mapReady=false; map=null; polyLayer=null; mkLayer=null; lbLayer=null;
+  tdMap=null;
+  const isQQ=state.mapProvider==='qq';
+  let out=`<div class="card tight">
+    <div class="sec-title">跨省网架地图<span class="hint">合规底图</span></div>
+    <div class="seg">
+      <button class="${isQQ?'on':''}" onclick="switchMap('qq')">腾讯地图</button>
+      <button class="${!isQQ?'on':''}" onclick="switchMap('td')">天地图</button>
+    </div>`;
+  if(!isQQ){
+    out+=`<label class="f"><span>天地图密钥（tk）</span>
+      <input id="i-tk" type="text" value="${esc(state.tiandituKey)}" placeholder="在天地图开放平台申请后粘贴到这里"></label>
+      <div class="row2" style="margin-bottom:10px">
+        <button class="btn ghost" onclick="applyTk()">应用密钥</button>
+        <button class="btn ghost" onclick="window.open('https://console.tianditu.gov.cn/api/key','_blank')">去申请密钥</button>
+      </div>
+      <p class="note">天地图密钥需你在 <b>天地图开放平台（console.tianditu.gov.cn）</b> 注册后自行申请，申请时选择「浏览器端」应用类型。密钥仅保存在本机，不会上传。代码中不内嵌任何有效密钥。</p>`;
+  } else {
+    out+=`<p class="note">腾讯地图为默认底图，通过本地代理调用，无需自备密钥。</p>`;
+  }
+  out+=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ink2);margin:10px 0">
+      <span><i style="display:inline-block;width:16px;height:3px;background:#185FA5;vertical-align:middle;margin-right:5px"></i>最优路径</span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:#EF9F27;vertical-align:middle;margin-right:5px"></i>次优</span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:#B4B2A9;vertical-align:middle;margin-right:5px"></i>其他通道</span>
+    </div>
+    <div id="map-view"></div><div id="fallback"></div>
+    <p class="note" style="margin-top:10px">站点位置为<b>县/市级近似</b>，精确站址见费率库中各通道的送受端地址（多数可到乡镇/村）。落点未采集的通道以省会位置示意。</p>
+  </div>
+  <div class="card tight"><div class="sec-title">通道费用分布<span class="hint">按输电价升序</span></div>
+    <table><tr><th style="width:40%">通道</th><th>输电价</th><th>线损</th><th>容量</th></tr>
+    ${[...CH].filter(c=>c.t!=null).sort((a,b)=>a.t-b.t).map(c=>`<tr>
+      <td>${esc(c.n)}<br><span style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
+      <td>${fmt(c.t)}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>
+  </div>`;
+  document.getElementById('v-map').innerHTML=out;
+  setTimeout(()=>{
+    if(state.mapProvider==='qq'){ if(!drawMapQQ()) showMapFallback(); }
+    else { loadTianditu(ok=>{ if(ok){ if(!drawMapTD()) showMapFallback(); } else showMapFallback(); }); }
+  },80);
+}
+function switchMap(p){ state.mapProvider=p; saveMap(); renderMap(); }
+function applyTk(){ const el=document.getElementById('i-tk'); state.tiandituKey=(el?el.value:'').trim(); tdReady=false; saveMap(); renderMap(); }
+
+/* ================= 视图 ================= */
+function go(t){
+  ['calc','map','lib'].forEach(x=>{ document.getElementById('v-'+x).hidden=(x!==t);
+    document.getElementById('t-'+x).classList.toggle('on',x===t); });
+  if(t==='lib') renderLib(); if(t==='map') renderMap(); if(t==='calc') renderCalc();
+  window.scrollTo({top:0});
+}
+document.addEventListener('change',e=>{
+  const id=e.target.id;
+  if(id==='i-from'||id==='i-to'){
+    state[id==='i-from'?'from':'to']=e.target.value;
+    refreshProvinceParams(); state._res=null; renderCalc();
+  }
+});
+loadStored();
+if(!Object.keys(PV).includes(state.from)) state.from='SC';
+if(!Object.keys(PV).includes(state.to)) state.to='JS';
+if(state.pNet===undefined) refreshProvinceParams();
+state._res=solve();
+renderCalc();
+</script>
+</body>
+</html>
