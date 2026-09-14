@@ -615,6 +615,11 @@ function renderCalc(){
     </select></label>
   </div></details>`;
 
+  const _toPV=PV[state.to];
+  if(_toPV && (_toPV.fund===null || _toPV.fund===undefined)){
+    out+=`<div class="warn">受端省「${esc(_toPV.n)}」的政府性基金及附加暂未获取官方标准，本次测算按 0 计，落地成本会被低估。</div>`;
+  }
+
   if(res&&res.err){
     out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`;
   } else if(res&&res.rows&&res.rows.length){
@@ -840,7 +845,12 @@ function readInputs(){
 function refreshProvinceParams(){
   const f=PV[state.from], t=PV[state.to];
   if(f) state.pGen=f.clear;
-  if(t){ state.pNet=t.net; state.fund=t.fund; state.pDst=t.clear; }
+  if(t){
+    state.pNet=t.net;
+    state.fundMissing=(t.fund===null||t.fund===undefined);
+    state.fund=state.fundMissing?0:t.fund;
+    state.pDst=t.clear;
+  }
 }
 
 /* ================= 费率库 ================= */
