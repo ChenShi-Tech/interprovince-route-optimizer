@@ -199,7 +199,7 @@ const out = tpl
   .replace('__PRICE_VERSION__', priceVersion);
 fs.writeFileSync(path.join(root, 'index.html'), out);
 
-// (b) 手机端与其它消费方：同一份数据的独立 JSON。
+// (b) 手机端与其它消费方：同一份数据的独立 JSON（输出到 shared/，不用 dist/ 以免被发布工具排除）。
 //     与 Web 版同源、同一次构建产出，保证两端数据结构与数值完全一致。
 const appData = {
   schema: 'iproute-app-data/v1',
@@ -233,7 +233,7 @@ const appData = {
   ...payload,
 };
 
-const distDir = path.join(root, 'dist');
+const distDir = path.join(root, 'shared')   // 不要用 dist/：发布工具会把它当构建产物排除;
 fs.mkdirSync(distDir, { recursive: true });
 fs.writeFileSync(path.join(distDir, 'app-data.json'), JSON.stringify(appData, null, 2) + '\n');
 // 另存一份仅含数据的紧凑版，减小手机端体积
@@ -253,4 +253,4 @@ console.log('站点:', Object.keys(extra.stations).length,
 console.log('价格数据源: data/fixed-prices.json');
 console.log('价格数据指纹 priceVersion:', priceVersion);
 console.log('index.html 已生成:', (fs.statSync(path.join(root, 'index.html')).size / 1024).toFixed(1), 'KB');
-console.log('dist/app-data.json 已生成:', (fs.statSync(path.join(distDir, 'app-data.json')).size / 1024).toFixed(1), 'KB（端云共用数据）');
+console.log('shared/app-data.json 已生成:', (fs.statSync(path.join(distDir, 'app-data.json')).size / 1024).toFixed(1), 'KB（端云共用数据）');

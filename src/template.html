@@ -299,7 +299,7 @@ details.adv.boxed summary{font-size:12.5px}
 'use strict';
 /*__DATA__*/
 const BUILD_TIME='__BUILD_TIME__';
-const PRICE_VERSION='__PRICE_VERSION__';   // 价格数据指纹，与 dist/app-data.json 同源
+const PRICE_VERSION='__PRICE_VERSION__';   // 价格数据指纹，与 shared/app-data.json 同源
 
 const PV=DATA.PV, ST=DATA.ST, SEC=DATA.SEC, RG=DATA.RG;
 let CH=DATA.CH.map(c=>({...c}));
@@ -1000,7 +1000,7 @@ function renderLib(){
     <div class="row2"><button class="btn ghost" onclick="exportLib()">导出 JSON</button>
     <button class="btn ghost" onclick="resetLib()">恢复检索原始值</button></div>
     <p class="note">构建时间 ${esc(BUILD_TIME)}　·　<b>价格数据版本 ${esc(PRICE_VERSION)}</b>　·　通道 ${CH.length} 条　·　断面 ${SEC.length} 个　·　区域电网电量电价：${Object.entries(RG).filter(([k])=>!k.startsWith('_')).map(([k,v])=>k+' '+v+' 元/kWh').join('，')}</p>
-    <p class="note">Web 版与手机端共用同一份数据：构建时同时产出 <code>dist/app-data.json</code>，两端的 priceVersion 一致即表示数值同源。</p></div>`;
+    <p class="note">Web 版与手机端共用同一份数据：构建时同时产出 <code>shared/app-data.json</code>，两端的 priceVersion 一致即表示数值同源。</p></div>`;
 
   document.getElementById('v-lib').innerHTML=out;
 }

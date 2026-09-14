@@ -22,8 +22,8 @@ console.log('══ 一、产物存在性 ══');
 const p = {
   fixed: 'data/fixed-prices.json',
   html: 'index.html',
-  full: 'dist/app-data.json',
-  min: 'dist/app-data.min.json',
+  full: 'shared/app-data.json',
+  min: 'shared/app-data.min.json',
   tpl: 'src/template.html',
 };
 const exists = {};
