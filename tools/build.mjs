@@ -92,7 +92,12 @@ for (const r of tariff) {
 }
 
 // ---------- 2. 省间交流联络线（区域电网 / 送出省输电价格口径） ----------
-const EXPORT_DEFAULT = 30.0;   // 元/MWh，多数省第四监管周期送出省输电价格 0.03 元/kWh
+const EXPORT_DEFAULT = 30.0;   // 元/MWh，无专属值的省份适用通用互济条款 0.03 元/kWh
+const EXPORT = extra.exportTariff || {};
+const exportPrice = (code) => {
+  const v = EXPORT[code];
+  return (typeof v === 'number' ? v : EXPORT_DEFAULT / 1000) * 1000;
+};
 const AC_LINKS = [
   ['SC', 'CQ', '川渝联络线', 500, 3000, 0.8],
   ['SC', 'SN', '川陕联络线', 500, 2000, 1.4],
@@ -125,11 +130,11 @@ for (const [a, b, n, kv, cap, loss] of AC_LINKS) {
     id: 'a' + channels.length,
     n, fn: n, from: a, to: b, stFrom: null, stTo: null,
     kv: kv + 'kV', type: 'AC', cap, lenKm: null,
-    t: EXPORT_DEFAULT, loss, tier: 'region',
+    t: exportPrice(a), loss, tier: 'region',
     doc: '送出省输电价格（第四监管周期）', docTitle: '各省第四监管周期输配电价通知',
     eff: '2026-08-01',
     issuer: '省级发展改革委', pubDate: '2026-07/08', url: '',
-    excerpt: '因省间互济等因素临时送省外电量，送出省输电价格按每千瓦时 0.03 元（含税）执行，不计线损。',
+    excerpt: '因省间互济等因素临时送省外电量，送出省输电价格按每千瓦时 ' + (exportPrice(a) / 1000).toFixed(4).replace(/0+$/, '') + ' 元（含税）执行，不计线损。',
     hist: [], tax: true, incLoss: false,
     bill: '送出省输电价格', status: '口径待确认',
     note: '省间交流联络线未单独核定输电价格，此处按第四监管周期各省统一的送出省输电价格口径取 30 元/MWh；跨区交易另需按到达区电量电价加收区域电网输电费。',

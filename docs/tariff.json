@@ -1,7 +1,10 @@
 [
   {
     "name": "灵宝直流（西北—华中背靠背联网）",
-    "alias": ["灵宝直流", "灵宝背靠背"],
+    "alias": [
+      "灵宝直流",
+      "灵宝背靠背"
+    ],
     "from_province": "陕西",
     "to_province": "河南",
     "type": "DC",
@@ -9,7 +12,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 40.3,
     "tariff_raw": "4.03分/千瓦时",
-    "loss_rate_pct": 1.0,
+    "loss_rate_pct": 1,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -17,15 +20,31 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 42.6, "tariff_raw": "4.26分/千瓦时", "loss_rate_pct": 1.0, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01", "note": "2018年调整前为0.0426元/千瓦时（842号附件列原执行价格为42.6元/千千瓦时）" }
+      {
+        "tariff_cny_per_mwh": 42.6,
+        "tariff_raw": "4.26分/千瓦时",
+        "loss_rate_pct": 1,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01",
+        "note": "2018年调整前为0.0426元/千瓦时（842号附件列原执行价格为42.6元/千千瓦时）"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "16 灵宝直流 42.6 40.3 1.00% 2.25 1.13 1.13" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "16 灵宝直流 42.6 40.3 1.00% 2.25 1.13 1.13"
+    },
     "confidence": "high",
     "note": "842号附件表格单位为「元/千千瓦时」，与「分/千瓦时」数值等价。"
   },
   {
     "name": "德宝直流（德阳—宝鸡）",
-    "alias": ["德宝直流"],
+    "alias": [
+      "德宝直流"
+    ],
     "from_province": "四川",
     "to_province": "陕西",
     "type": "DC",
@@ -33,7 +52,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 33.6,
     "tariff_raw": "3.36分/千瓦时",
-    "loss_rate_pct": 3.0,
+    "loss_rate_pct": 3,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -41,15 +60,31 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 35.8, "tariff_raw": "3.58分/千瓦时", "loss_rate_pct": 3.0, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 35.8,
+        "tariff_raw": "3.58分/千瓦时",
+        "loss_rate_pct": 3,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "17 德宝直流 35.8 33.6 3.00% 2.23 1.12 1.12" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "17 德宝直流 35.8 33.6 3.00% 2.23 1.12 1.12"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "锦苏直流（锦屏—苏南±800kV特高压直流）",
-    "alias": ["锦苏直流", "锦屏—苏南特高压直流"],
+    "alias": [
+      "锦苏直流",
+      "锦屏—苏南特高压直流"
+    ],
     "from_province": "四川",
     "to_province": "江苏",
     "type": "DC",
@@ -57,7 +92,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 51.1,
     "tariff_raw": "5.11分/千瓦时",
-    "loss_rate_pct": 7.0,
+    "loss_rate_pct": 7,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -65,15 +100,31 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 55.0, "tariff_raw": "5.50分/千瓦时", "loss_rate_pct": 7.0, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01", "note": "1227号明确「锦苏直流输电价格为5.50分，线损率7%」" }
+      {
+        "tariff_cny_per_mwh": 55,
+        "tariff_raw": "5.50分/千瓦时",
+        "loss_rate_pct": 7,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01",
+        "note": "1227号明确「锦苏直流输电价格为5.50分，线损率7%」"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "13 锦苏直流 55.0 51.1 7.00% 3.93 1.97 1.97" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "13 锦苏直流 55.0 51.1 7.00% 3.93 1.97 1.97"
+    },
     "confidence": "high",
     "note": "用户提到「原电监会批复为0.0856元/千瓦时，另加送出工程0.0144元/千瓦时」——本次未回溯到该批复原文，故未采信该数值，仅作为待核线索记入 gaps.md。"
   },
   {
     "name": "高岭直流（东北—华北背靠背）",
-    "alias": ["高岭直流"],
+    "alias": [
+      "高岭直流"
+    ],
     "from_province": "辽宁",
     "to_province": "河北",
     "type": "DC",
@@ -89,15 +140,31 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 25.0, "tariff_raw": "2.50分/千瓦时", "loss_rate_pct": 1.7, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 25,
+        "tariff_raw": "2.50分/千瓦时",
+        "loss_rate_pct": 1.7,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "18 高岭直流 25.0 23.5 1.70% 1.53 0.76 0.76" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "18 高岭直流 25.0 23.5 1.70% 1.53 0.76 0.76"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "龙政直流（龙泉—政平）",
-    "alias": ["龙政线", "龙政直流"],
+    "alias": [
+      "龙政线",
+      "龙政直流"
+    ],
     "from_province": "湖北",
     "to_province": "江苏",
     "type": "DC",
@@ -113,15 +180,31 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 74.0, "tariff_raw": "7.40分/千瓦时", "loss_rate_pct": 7.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 74,
+        "tariff_raw": "7.40分/千瓦时",
+        "loss_rate_pct": 7.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "1 龙政线 74.0 67.5 7.50% 6.50 3.25 3.25" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "1 龙政线 74.0 67.5 7.50% 6.50 3.25 3.25"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "葛南直流（葛洲坝—南桥）",
-    "alias": ["葛南线", "葛南直流"],
+    "alias": [
+      "葛南线",
+      "葛南直流"
+    ],
     "from_province": "湖北",
     "to_province": "上海",
     "type": "DC",
@@ -137,15 +220,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 60.0, "tariff_raw": "6.0分/千瓦时", "loss_rate_pct": 7.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 60,
+        "tariff_raw": "6.0分/千瓦时",
+        "loss_rate_pct": 7.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "2 葛南线 60.0 55.8 7.50% 4.23 2.12 2.12" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "2 葛南线 60.0 55.8 7.50% 4.23 2.12 2.12"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "林枫直流（团林—枫泾）",
-    "alias": ["林枫直流"],
+    "alias": [
+      "林枫直流"
+    ],
     "from_province": "湖北",
     "to_province": "上海",
     "type": "DC",
@@ -161,15 +259,31 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 47.1, "tariff_raw": "4.71分/千瓦时", "loss_rate_pct": 7.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 47.1,
+        "tariff_raw": "4.71分/千瓦时",
+        "loss_rate_pct": 7.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "3 林枫直流 47.1 43.9 7.50% 3.23 1.61 1.61" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "3 林枫直流 47.1 43.9 7.50% 3.23 1.61 1.61"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "宜华直流（宜都—华新）",
-    "alias": ["宜华线", "宜华直流"],
+    "alias": [
+      "宜华线",
+      "宜华直流"
+    ],
     "from_province": "湖北",
     "to_province": "上海",
     "type": "DC",
@@ -185,15 +299,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 74.0, "tariff_raw": "7.40分/千瓦时", "loss_rate_pct": 7.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 74,
+        "tariff_raw": "7.40分/千瓦时",
+        "loss_rate_pct": 7.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "4 宜华线 74.0 68.5 7.50% 5.49 2.75 2.75" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "4 宜华线 74.0 68.5 7.50% 5.49 2.75 2.75"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "江城直流（江陵—鹅城，湖北→广东）",
-    "alias": ["江城直流"],
+    "alias": [
+      "江城直流"
+    ],
     "from_province": "湖北",
     "to_province": "广东",
     "type": "DC",
@@ -209,15 +338,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 41.7, "tariff_raw": "4.17分/千瓦时", "loss_rate_pct": 7.65, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 41.7,
+        "tariff_raw": "4.17分/千瓦时",
+        "loss_rate_pct": 7.65,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "5 江城直流 41.7 38.5 7.65% 3.20 1.60 1.60" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "5 江城直流 41.7 38.5 7.65% 3.20 1.60 1.60"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "三峡送华中（三峡电源群送出）",
-    "alias": ["三峡送华中"],
+    "alias": [
+      "三峡送华中"
+    ],
     "from_province": "湖北",
     "to_province": "湖北/河南/湖南/江西",
     "type": "AC",
@@ -233,15 +377,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 48.3, "tariff_raw": "4.83分/千瓦时", "loss_rate_pct": 0.7, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 48.3,
+        "tariff_raw": "4.83分/千瓦时",
+        "loss_rate_pct": 0.7,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "6 三峡送华中 48.3 45.1 0.70% 3.19 1.60 1.60" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "6 三峡送华中 48.3 45.1 0.70% 3.19 1.60 1.60"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "中俄直流（阿穆尔—黑河背靠背）",
-    "alias": ["中俄直流"],
+    "alias": [
+      "中俄直流"
+    ],
     "from_province": "俄罗斯阿穆尔",
     "to_province": "黑龙江",
     "type": "DC",
@@ -257,21 +416,38 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 37.1, "tariff_raw": "3.71分/千瓦时", "loss_rate_pct": 1.3, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01", "note": "842号附件降价额度为0，价格未变" }
+      {
+        "tariff_cny_per_mwh": 37.1,
+        "tariff_raw": "3.71分/千瓦时",
+        "loss_rate_pct": 1.3,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01",
+        "note": "842号附件降价额度为0，价格未变"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "10 中俄直流 37.1 37.1 1.30% 0.00 0.00 0.00" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "10 中俄直流 37.1 37.1 1.30% 0.00 0.00 0.00"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "青藏直流（青藏联网）",
-    "alias": ["青藏线", "青藏直流"],
+    "alias": [
+      "青藏线",
+      "青藏直流"
+    ],
     "from_province": "青海",
     "to_province": "西藏",
     "type": "DC",
     "voltage": "±400kV",
     "capacity_mw": null,
-    "tariff_cny_per_mwh": 60.0,
+    "tariff_cny_per_mwh": 60,
     "tariff_raw": "6.00分/千瓦时",
     "loss_rate_pct": 13.7,
     "includes_transmission_loss": false,
@@ -281,21 +457,36 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 60.0, "tariff_raw": "6.0分/千瓦时", "loss_rate_pct": 13.7, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 60,
+        "tariff_raw": "6.0分/千瓦时",
+        "loss_rate_pct": 13.7,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "12 青藏直流 60.0 60.0 13.70% 0.00 0.00 0.00" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "12 青藏直流 60.0 60.0 13.70% 0.00 0.00 0.00"
+    },
     "confidence": "high",
     "note": "全国跨省跨区专项工程中线损率最高的一条。"
   },
   {
     "name": "呼辽直流（伊敏—穆家）",
-    "alias": ["呼辽直流"],
+    "alias": [
+      "呼辽直流"
+    ],
     "from_province": "内蒙古（蒙东）",
     "to_province": "辽宁",
     "type": "DC",
     "voltage": "±500kV",
     "capacity_mw": null,
-    "tariff_cny_per_mwh": 42.0,
+    "tariff_cny_per_mwh": 42,
     "tariff_raw": "4.20分/千瓦时",
     "loss_rate_pct": 4.12,
     "includes_transmission_loss": false,
@@ -305,15 +496,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 45.9, "tariff_raw": "4.59分/千瓦时", "loss_rate_pct": 4.12, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 45.9,
+        "tariff_raw": "4.59分/千瓦时",
+        "loss_rate_pct": 4.12,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "11 呼辽直流 45.9 42.0 4.12% 3.92 1.96 1.96" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "11 呼辽直流 45.9 42.0 4.12% 3.92 1.96 1.96"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "阳城送出（阳城电厂点对网送出）",
-    "alias": ["阳城送出"],
+    "alias": [
+      "阳城送出"
+    ],
     "from_province": "山西",
     "to_province": "江苏",
     "type": "AC",
@@ -321,7 +527,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 20.7,
     "tariff_raw": "2.07分/千瓦时",
-    "loss_rate_pct": 3.0,
+    "loss_rate_pct": 3,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -329,15 +535,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 22.1, "tariff_raw": "2.21分/千瓦时", "loss_rate_pct": 3.0, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 22.1,
+        "tariff_raw": "2.21分/千瓦时",
+        "loss_rate_pct": 3,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "7 阳城送出 22.1 20.7 3.00% 1.44 0.00 1.44" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "7 阳城送出 22.1 20.7 3.00% 1.44 0.00 1.44"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "锦界送出（锦界电厂点对网送出）",
-    "alias": ["锦界送出"],
+    "alias": [
+      "锦界送出"
+    ],
     "from_province": "陕西",
     "to_province": "河北（华北）",
     "type": "AC",
@@ -353,15 +574,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 19.2, "tariff_raw": "1.92分/千瓦时", "loss_rate_pct": 2.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 19.2,
+        "tariff_raw": "1.92分/千瓦时",
+        "loss_rate_pct": 2.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "8 锦界送出 19.2 18.1 2.50% 1.14 0.00 1.14" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "8 锦界送出 19.2 18.1 2.50% 1.14 0.00 1.14"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "府谷送出（府谷电厂点对网送出）",
-    "alias": ["府谷送出"],
+    "alias": [
+      "府谷送出"
+    ],
     "from_province": "陕西",
     "to_province": "河北（华北）",
     "type": "AC",
@@ -377,15 +613,32 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 15.4, "tariff_raw": "1.54分/千瓦时", "loss_rate_pct": 2.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 15.4,
+        "tariff_raw": "1.54分/千瓦时",
+        "loss_rate_pct": 2.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "9 府谷送出 15.4 14.5 2.50% 0.93 0.00 0.93" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "9 府谷送出 15.4 14.5 2.50% 0.93 0.00 0.93"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "长南荆特高压交流（晋东南—南阳—荆门）",
-    "alias": ["晋东南-南阳-荆门工程", "晋南荆工程", "长南荆特高压交流"],
+    "alias": [
+      "晋东南-南阳-荆门工程",
+      "晋南荆工程",
+      "长南荆特高压交流"
+    ],
     "from_province": "山西",
     "to_province": "湖北",
     "type": "AC",
@@ -401,15 +654,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 33.2, "tariff_raw": "3.32分/千瓦时", "loss_rate_pct": 1.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 33.2,
+        "tariff_raw": "3.32分/千瓦时",
+        "loss_rate_pct": 1.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "20 晋南荆工程 33.2 25.1 1.50% 8.07 4.04 4.04" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "20 晋南荆工程 33.2 25.1 1.50% 8.07 4.04 4.04"
+    },
     "confidence": "high",
     "note": "1227号称「晋东南-南阳-荆门工程」，842号称「晋南荆工程」，2026年国网价格表称「长南荆特高压交流」。"
   },
   {
     "name": "溪广线（溪洛渡—广东）",
-    "alias": ["溪广线"],
+    "alias": [
+      "溪广线"
+    ],
     "from_province": "云南/四川（溪洛渡）",
     "to_province": "广东",
     "type": "DC",
@@ -425,15 +693,33 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 53.2, "tariff_raw": "5.32分/千瓦时", "loss_rate_pct": 6.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 53.2,
+        "tariff_raw": "5.32分/千瓦时",
+        "loss_rate_pct": 6.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "25 溪广线 53.2 49.5 6.50% 3.72 1.86 1.86" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "25 溪广线 53.2 49.5 6.50% 3.72 1.86 1.86"
+    },
     "confidence": "high",
     "note": "南方电网经营区工程，未出现在国家电网2026年跨省跨区交易输电价格表中。"
   },
   {
     "name": "复奉直流（向家坝—上海，即「向上工程」）",
-    "alias": ["向上工程", "向上直流", "复奉直流", "向家坝—上海特高压直流"],
+    "alias": [
+      "向上工程",
+      "向上直流",
+      "复奉直流",
+      "向家坝—上海特高压直流"
+    ],
     "from_province": "四川",
     "to_province": "上海",
     "type": "DC",
@@ -441,7 +727,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 57.1,
     "tariff_raw": "5.71分/千瓦时",
-    "loss_rate_pct": 7.0,
+    "loss_rate_pct": 7,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -449,15 +735,31 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 62.0, "tariff_raw": "6.2分/千瓦时", "loss_rate_pct": 7.0, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 62,
+        "tariff_raw": "6.2分/千瓦时",
+        "loss_rate_pct": 7,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "14 向上工程 62.0 57.1 7.00% 4.88 2.44 2.44" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "14 向上工程 62.0 57.1 7.00% 4.88 2.44 2.44"
+    },
     "confidence": "high",
     "note": "1227号与842号称「向上工程」，2026年国网价格表称「复奉直流」。"
   },
   {
     "name": "宾金直流（溪洛渡左岸—浙江金华）",
-    "alias": ["宾金工程", "宾金直流"],
+    "alias": [
+      "宾金工程",
+      "宾金直流"
+    ],
     "from_province": "四川",
     "to_province": "浙江",
     "type": "DC",
@@ -473,15 +775,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 49.5, "tariff_raw": "4.95分/千瓦时", "loss_rate_pct": 6.5, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": 49.5,
+        "tariff_raw": "4.95分/千瓦时",
+        "loss_rate_pct": 6.5,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "15 宾金工程 49.5 45.4 6.50% 4.06 2.03 2.03" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "15 宾金工程 49.5 45.4 6.50% 4.06 2.03 2.03"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "辛洹线（辛安—洹安，华北—华中交流联络线）",
-    "alias": ["辛洹线"],
+    "alias": [
+      "辛洹线"
+    ],
     "from_province": "河北",
     "to_province": "河南",
     "type": "AC",
@@ -497,15 +814,32 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": null, "tariff_raw": "容量电价 每千瓦每年40元", "loss_rate_pct": null, "doc_number": "发改价格〔2018〕1227号", "effective_from": "2018-09-01" }
+      {
+        "tariff_cny_per_mwh": null,
+        "tariff_raw": "容量电价 每千瓦每年40元",
+        "loss_rate_pct": null,
+        "doc_number": "发改价格〔2018〕1227号",
+        "effective_from": "2018-09-01"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "19 辛洹线 40.0 40.0 0.00% 0.00 0.00 0.00" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "19 辛洹线 40.0 40.0 0.00% 0.00 0.00 0.00"
+    },
     "confidence": "high",
-    "note": "唯一采用单一容量电价的存量工程；2026年国网价格表容量电价为 40.0 元/千瓦·年、无电量电价、无线损率。"
+    "note": "唯一采用单一容量电价的存量工程；2026年国网价格表容量电价为 40.0 元/千瓦·年、无电量电价、无线损率。 原文列线损率 0.00%，因属单一容量电价工程、输送电量不单独计费，库中置 null 作口径处理。"
   },
   {
     "name": "天中直流（哈密—郑州±800kV特高压直流，即「哈郑直流」）",
-    "alias": ["哈郑直流", "天中直流", "哈密—郑州特高压直流"],
+    "alias": [
+      "哈郑直流",
+      "天中直流",
+      "哈密—郑州特高压直流"
+    ],
     "from_province": "新疆",
     "to_province": "河南",
     "type": "DC",
@@ -521,15 +855,33 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 65.8, "tariff_raw": "6.58分/千瓦时（842号列原执行价格65.8元/千千瓦时）", "loss_rate_pct": 7.2, "doc_number": "发改价格〔2019〕842号", "effective_from": "2019-05-15", "note": "842号附件「原执行价格」列，即842号之前的价格水平" }
+      {
+        "tariff_cny_per_mwh": 65.8,
+        "tariff_raw": "6.58分/千瓦时（842号列原执行价格65.8元/千千瓦时）",
+        "loss_rate_pct": 7.2,
+        "doc_number": "发改价格〔2019〕842号",
+        "effective_from": "2019-05-15",
+        "note": "842号附件「原执行价格」列，即842号之前的价格水平"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "21 哈郑直流 65.8 61.3 7.20% 4.53 2.27 2.27" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "21 哈郑直流 65.8 61.3 7.20% 4.53 2.27 2.27"
+    },
     "confidence": "high",
     "note": "1227号21个工程中不含天中（哈郑）直流；其现执行价格来自842号附件。"
   },
   {
     "name": "银东直流（宁东—山东±660kV，即「宁东直流」）",
-    "alias": ["宁东直流", "银东直流", "宁东—山东直流"],
+    "alias": [
+      "宁东直流",
+      "银东直流",
+      "宁东—山东直流"
+    ],
     "from_province": "宁夏",
     "to_province": "山东",
     "type": "DC",
@@ -537,7 +889,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 50.8,
     "tariff_raw": "5.08分/千瓦时",
-    "loss_rate_pct": 7.0,
+    "loss_rate_pct": 7,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -545,15 +897,32 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 53.5, "tariff_raw": "5.35分/千瓦时（842号列原执行价格53.5元/千千瓦时）", "loss_rate_pct": 7.0, "doc_number": "发改价格〔2019〕842号", "effective_from": "2019-05-15" }
+      {
+        "tariff_cny_per_mwh": 53.5,
+        "tariff_raw": "5.35分/千瓦时（842号列原执行价格53.5元/千千瓦时）",
+        "loss_rate_pct": 7,
+        "doc_number": "发改价格〔2019〕842号",
+        "effective_from": "2019-05-15"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "22 宁东直流 53.5 50.8 7.00% 2.69 1.34 1.34" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "22 宁东直流 53.5 50.8 7.00% 2.69 1.34 1.34"
+    },
     "confidence": "high",
     "note": "山东电力交易中心披露口径佐证：「宁东直流工程输电价格50.8元/千千瓦时（含税，不含线损），输电线损率7%」。"
   },
   {
     "name": "灵绍直流（宁东—绍兴±800kV特高压直流，即「宁绍直流」）",
-    "alias": ["宁绍直流", "灵绍直流", "宁东—绍兴特高压直流"],
+    "alias": [
+      "宁绍直流",
+      "灵绍直流",
+      "宁东—绍兴特高压直流"
+    ],
     "from_province": "宁夏",
     "to_province": "浙江",
     "type": "DC",
@@ -564,21 +933,45 @@
     "loss_rate_pct": 4.26,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "现行（正式核定）",
     "effective_from": "2022-05-01",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 65.9, "tariff_raw": "6.59分/千瓦时（65.9元/千千瓦时）", "loss_rate_pct": 6.5, "doc_number": "发改价格〔2019〕842号", "effective_from": "2019-05-15" },
-      { "tariff_cny_per_mwh": 71.4, "tariff_raw": "7.144分/千瓦时（含税不含线损）", "loss_rate_pct": 6.5, "doc_number": "发改价格〔2018〕684号", "effective_from": "工程正式投运之日", "note": "首次核定" }
+      {
+        "tariff_cny_per_mwh": 65.9,
+        "tariff_raw": "6.59分/千瓦时（65.9元/千千瓦时）",
+        "loss_rate_pct": 6.5,
+        "doc_number": "发改价格〔2019〕842号",
+        "effective_from": "2019-05-15"
+      },
+      {
+        "tariff_cny_per_mwh": 71.4,
+        "tariff_raw": "7.144分/千瓦时（含税不含线损）",
+        "loss_rate_pct": 6.5,
+        "doc_number": "发改价格〔2018〕684号",
+        "effective_from": "工程正式投运之日",
+        "note": "首次核定"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于核定宁绍、酒湖、锡泰特高压直流工程输电价格的通知", "doc_number": "发改价格〔2022〕558号", "issuer": "国家发展改革委", "publish_date": "2022-04-08", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202204/t20220412_1321939.html", "excerpt": "一、宁绍特高压直流输电价格为每千瓦时4.88分（含税，含输电环节线损，线损率4.26%）。" },
+    "source": {
+      "doc_title": "国家发展改革委关于核定宁绍、酒湖、锡泰特高压直流工程输电价格的通知",
+      "doc_number": "发改价格〔2022〕558号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2022-04-08",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202204/t20220412_1321939.html",
+      "excerpt": "一、宁绍特高压直流输电价格为每千瓦时4.88分（含税，含输电环节线损，线损率4.26%）。"
+    },
     "confidence": "high",
     "note": "含税口径由「不含线损」改为「含输电环节线损」，与旧值不可直接比较。"
   },
   {
     "name": "祁韶直流（酒泉—湖南湘潭±800kV特高压直流，即「酒湖直流」）",
-    "alias": ["酒湖直流", "祁韶直流", "酒泉—湖南特高压直流"],
+    "alias": [
+      "酒湖直流",
+      "祁韶直流",
+      "酒泉—湖南特高压直流"
+    ],
     "from_province": "甘肃",
     "to_province": "湖南",
     "type": "DC",
@@ -589,21 +982,44 @@
     "loss_rate_pct": 4.14,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "现行（正式核定；2022年558号价格高于2019年842号，为上调）",
     "effective_from": "2022-05-01",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 60.2, "tariff_raw": "6.02分/千瓦时（60.2元/千千瓦时）", "loss_rate_pct": 6.5, "doc_number": "发改价格〔2019〕842号", "effective_from": "2019-05-15" },
-      { "tariff_cny_per_mwh": 70.1, "tariff_raw": "7.01分/千瓦时（含税不含线损）", "loss_rate_pct": 6.5, "doc_number": "发改价格〔2018〕684号", "effective_from": "工程正式投运之日", "note": "首次核定" }
+      {
+        "tariff_cny_per_mwh": 60.2,
+        "tariff_raw": "6.02分/千瓦时（60.2元/千千瓦时）",
+        "loss_rate_pct": 6.5,
+        "doc_number": "发改价格〔2019〕842号",
+        "effective_from": "2019-05-15"
+      },
+      {
+        "tariff_cny_per_mwh": 70.1,
+        "tariff_raw": "7.01分/千瓦时（含税不含线损）",
+        "loss_rate_pct": 6.5,
+        "doc_number": "发改价格〔2018〕684号",
+        "effective_from": "工程正式投运之日",
+        "note": "首次核定"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于核定宁绍、酒湖、锡泰特高压直流工程输电价格的通知", "doc_number": "发改价格〔2022〕558号", "issuer": "国家发展改革委", "publish_date": "2022-04-08", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202204/t20220412_1321939.html", "excerpt": "二、酒湖特高压直流输电价格为每千瓦时6.37分（含税，含输电环节线损，线损率4.14%）。" },
+    "source": {
+      "doc_title": "国家发展改革委关于核定宁绍、酒湖、锡泰特高压直流工程输电价格的通知",
+      "doc_number": "发改价格〔2022〕558号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2022-04-08",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202204/t20220412_1321939.html",
+      "excerpt": "二、酒湖特高压直流输电价格为每千瓦时6.37分（含税，含输电环节线损，线损率4.14%）。"
+    },
     "confidence": "high",
     "note": "口径变更：2018/2019年为「含税不含线损」，2022年起为「含税含输电环节线损」。"
   },
   {
     "name": "锡泰直流（锡盟—泰州±800kV特高压直流）",
-    "alias": ["锡泰直流", "锡盟—泰州特高压直流"],
+    "alias": [
+      "锡泰直流",
+      "锡盟—泰州特高压直流"
+    ],
     "from_province": "内蒙古（锡盟）",
     "to_province": "江苏",
     "type": "DC",
@@ -614,18 +1030,28 @@
     "loss_rate_pct": 3.32,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "现行（正式核定）",
     "effective_from": "2022-05-01",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于核定宁绍、酒湖、锡泰特高压直流工程输电价格的通知", "doc_number": "发改价格〔2022〕558号", "issuer": "国家发展改革委", "publish_date": "2022-04-08", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202204/t20220412_1321939.html", "excerpt": "三、锡泰特高压直流输电价格为每千瓦时4.83分（含税，含输电环节线损，线损率3.32%）。" },
+    "source": {
+      "doc_title": "国家发展改革委关于核定宁绍、酒湖、锡泰特高压直流工程输电价格的通知",
+      "doc_number": "发改价格〔2022〕558号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2022-04-08",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202204/t20220412_1321939.html",
+      "excerpt": "三、锡泰特高压直流输电价格为每千瓦时4.83分（含税，含输电环节线损，线损率3.32%）。"
+    },
     "confidence": "high",
     "note": "锡泰直流未出现在1227号或842号附件中，2022年558号为首次公开核价。"
   },
   {
     "name": "雁淮直流（雁门关—淮安±800kV特高压直流）",
-    "alias": ["雁淮直流", "雁门关—淮安特高压直流"],
+    "alias": [
+      "雁淮直流",
+      "雁门关—淮安特高压直流"
+    ],
     "from_province": "山西",
     "to_province": "江苏",
     "type": "DC",
@@ -636,18 +1062,29 @@
     "loss_rate_pct": 2.77,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "现行（正式核定）",
     "effective_from": "2022-11-23",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于核定雁淮、扎青特高压直流工程输电价格的通知", "doc_number": "发改价格〔2022〕1777号", "issuer": "国家发展改革委", "publish_date": "2022-11-23", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202212/t20221206_1343328.html", "excerpt": "一、雁淮特高压直流工程输电价格为每千瓦时3.59分（含税，含输电环节线损，线损率2.77%）。" },
+    "source": {
+      "doc_title": "国家发展改革委关于核定雁淮、扎青特高压直流工程输电价格的通知",
+      "doc_number": "发改价格〔2022〕1777号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2022-11-23",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202212/t20221206_1343328.html",
+      "excerpt": "一、雁淮特高压直流工程输电价格为每千瓦时3.59分（含税，含输电环节线损，线损率2.77%）。"
+    },
     "confidence": "high",
     "note": "用户提供的线索数字已与原文逐字核对一致。「本通知自印发之日起执行」，即 2022-11-23。"
   },
   {
     "name": "扎青直流（扎鲁特—青州±800kV特高压直流，即「鲁固直流」）",
-    "alias": ["扎青直流", "鲁固直流", "扎鲁特—青州特高压直流"],
+    "alias": [
+      "扎青直流",
+      "鲁固直流",
+      "扎鲁特—青州特高压直流"
+    ],
     "from_province": "内蒙古（通辽）",
     "to_province": "山东",
     "type": "DC",
@@ -658,18 +1095,27 @@
     "loss_rate_pct": 2.69,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "现行（正式核定）",
     "effective_from": "2022-11-23",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于核定雁淮、扎青特高压直流工程输电价格的通知", "doc_number": "发改价格〔2022〕1777号", "issuer": "国家发展改革委", "publish_date": "2022-11-23", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202212/t20221206_1343328.html", "excerpt": "二、扎青特高压直流工程输电价格为每千瓦时4.12分（含税，含输电环节线损，线损率2.69%）。" },
+    "source": {
+      "doc_title": "国家发展改革委关于核定雁淮、扎青特高压直流工程输电价格的通知",
+      "doc_number": "发改价格〔2022〕1777号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2022-11-23",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202212/t20221206_1343328.html",
+      "excerpt": "二、扎青特高压直流工程输电价格为每千瓦时4.12分（含税，含输电环节线损，线损率2.69%）。"
+    },
     "confidence": "high",
     "note": "同一工程在国家电网价格表中列名「鲁固直流」，数值与线损率完全一致（41.2、2.69%），已在山东电力交易中心披露中交叉验证。"
   },
   {
     "name": "盂县送出（山西盂县电厂500千伏送出工程）",
-    "alias": ["盂县送出"],
+    "alias": [
+      "盂县送出"
+    ],
     "from_province": "山西",
     "to_province": "河北（邢台西500kV变电站）",
     "type": "AC",
@@ -685,13 +1131,24 @@
     "effective_from": "2021-01-22",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于核定山西盂县电厂500千伏送出工程临时输电价格的通知", "doc_number": "发改价格〔2021〕103号", "issuer": "国家发展改革委", "publish_date": "2021-01-22", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/202102/t20210201_1266593.html", "excerpt": "一、山西盂县电厂500千伏送出工程临时输电价格为0.81分（每千瓦时，含税），线损率2.5%。" },
+    "source": {
+      "doc_title": "国家发展改革委关于核定山西盂县电厂500千伏送出工程临时输电价格的通知",
+      "doc_number": "发改价格〔2021〕103号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2021-01-22",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/202102/t20210201_1266593.html",
+      "excerpt": "一、山西盂县电厂500千伏送出工程临时输电价格为0.81分（每千瓦时，含税），线损率2.5%。"
+    },
     "confidence": "high",
     "note": "全国跨省跨区专项工程中电量电价最低的一条。"
   },
   {
     "name": "雅湖直流（雅中—江西±800kV特高压直流）",
-    "alias": ["雅湖直流", "雅中—江西特高压直流", "雅中直流"],
+    "alias": [
+      "雅湖直流",
+      "雅中—江西特高压直流",
+      "雅中直流"
+    ],
     "from_province": "四川",
     "to_province": "江西",
     "type": "DC",
@@ -699,21 +1156,31 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 68.5,
     "tariff_raw": "6.85分/千瓦时（含税，含输电环节线损）",
-    "loss_rate_pct": 6.0,
+    "loss_rate_pct": 6,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "临时输电价格（正式价格未见公开核定文件）",
     "effective_from": "2021-12-02",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委办公厅关于陕北~湖北、雅中~江西特高压直流工程临时输电价格的通知", "doc_number": "发改办价格〔2021〕958号", "issuer": "国家发展改革委办公厅", "publish_date": "2021-12-02", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202112/t20211209_1307306.html", "excerpt": "二、雅中~江西±800千伏特高压直流工程临时输电价格为每千瓦时6.85分（含税，含输电环节线损，线损率6%）。" },
+    "source": {
+      "doc_title": "国家发展改革委办公厅关于陕北~湖北、雅中~江西特高压直流工程临时输电价格的通知",
+      "doc_number": "发改办价格〔2021〕958号",
+      "issuer": "国家发展改革委办公厅",
+      "publish_date": "2021-12-02",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202112/t20211209_1307306.html",
+      "excerpt": "二、雅中~江西±800千伏特高压直流工程临时输电价格为每千瓦时6.85分（含税，含输电环节线损，线损率6%）。"
+    },
     "confidence": "high",
     "note": "截至2026年7月国网价格表仍为临时价格，未核定正式价格。"
   },
   {
     "name": "陕武直流（陕北—湖北±800kV特高压直流）",
-    "alias": ["陕武直流", "陕北—湖北特高压直流"],
+    "alias": [
+      "陕武直流",
+      "陕北—湖北特高压直流"
+    ],
     "from_province": "陕西",
     "to_province": "湖北",
     "type": "DC",
@@ -721,21 +1188,32 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 51.2,
     "tariff_raw": "5.12分/千瓦时（含税，含输电环节线损）",
-    "loss_rate_pct": 5.0,
+    "loss_rate_pct": 5,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "临时输电价格（正式价格未见公开核定文件）",
     "effective_from": "2021-12-02",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委办公厅关于陕北~湖北、雅中~江西特高压直流工程临时输电价格的通知", "doc_number": "发改办价格〔2021〕958号", "issuer": "国家发展改革委办公厅", "publish_date": "2021-12-02", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202112/t20211209_1307306.html", "excerpt": "一、陕北~湖北±800千伏特高压直流工程临时输电价格为每千瓦时5.12分（含税，含输电环节线损，线损率5%）。" },
+    "source": {
+      "doc_title": "国家发展改革委办公厅关于陕北~湖北、雅中~江西特高压直流工程临时输电价格的通知",
+      "doc_number": "发改办价格〔2021〕958号",
+      "issuer": "国家发展改革委办公厅",
+      "publish_date": "2021-12-02",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202112/t20211209_1307306.html",
+      "excerpt": "一、陕北~湖北±800千伏特高压直流工程临时输电价格为每千瓦时5.12分（含税，含输电环节线损，线损率5%）。"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "建苏直流（白鹤滩—江苏±800kV特高压直流）",
-    "alias": ["建苏直流", "白鹤滩—江苏特高压直流", "白鹤滩~江苏"],
+    "alias": [
+      "建苏直流",
+      "白鹤滩—江苏特高压直流",
+      "白鹤滩~江苏"
+    ],
     "from_province": "四川",
     "to_province": "江苏",
     "type": "DC",
@@ -743,21 +1221,32 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 83.6,
     "tariff_raw": "8.36分/千瓦时（含税，含输电环节线损）",
-    "loss_rate_pct": 6.0,
+    "loss_rate_pct": 6,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "临时输电价格（正式价格未见公开核定文件；2026年国网价格表仍列8.36）",
     "effective_from": "2023-05-01",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于白鹤滩~江苏、白鹤滩~浙江特高压直流工程和白鹤滩水电站配套送出工程临时输电价格的通知", "doc_number": "发改价格〔2023〕404号", "issuer": "国家发展改革委", "publish_date": "2023-04-20", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202305/t20230515_1355752.html", "excerpt": "一、白鹤滩~江苏±800千伏特高压直流工程临时输电价格为每千瓦时8.36分（含税，含输电环节线损，线损率6%）。" },
+    "source": {
+      "doc_title": "国家发展改革委关于白鹤滩~江苏、白鹤滩~浙江特高压直流工程和白鹤滩水电站配套送出工程临时输电价格的通知",
+      "doc_number": "发改价格〔2023〕404号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2023-04-20",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202305/t20230515_1355752.html",
+      "excerpt": "一、白鹤滩~江苏±800千伏特高压直流工程临时输电价格为每千瓦时8.36分（含税，含输电环节线损，线损率6%）。"
+    },
     "confidence": "high",
     "note": "全国跨省跨区专项工程中电量电价最高的一条。"
   },
   {
     "name": "金塘直流（白鹤滩—浙江±800kV特高压直流）",
-    "alias": ["金塘直流", "白鹤滩—浙江特高压直流", "白鹤滩~浙江"],
+    "alias": [
+      "金塘直流",
+      "白鹤滩—浙江特高压直流",
+      "白鹤滩~浙江"
+    ],
     "from_province": "四川",
     "to_province": "浙江",
     "type": "DC",
@@ -765,21 +1254,30 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 81.4,
     "tariff_raw": "8.14分/千瓦时（含税，含输电环节线损）",
-    "loss_rate_pct": 6.0,
+    "loss_rate_pct": 6,
     "includes_transmission_loss": true,
     "tax_included": true,
-    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十八条）",
+    "billing_basis": "落地端结算电量（依据发改价格规〔2021〕1455号第十九条）",
     "status": "临时输电价格（正式价格未见公开核定文件）",
     "effective_from": "2023-05-01",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于白鹤滩~江苏、白鹤滩~浙江特高压直流工程和白鹤滩水电站配套送出工程临时输电价格的通知", "doc_number": "发改价格〔2023〕404号", "issuer": "国家发展改革委", "publish_date": "2023-04-20", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202305/t20230515_1355752.html", "excerpt": "二、白鹤滩~浙江±800千伏特高压直流工程临时输电价格为每千瓦时8.14分（含税，含输电环节线损，线损率6%）。" },
+    "source": {
+      "doc_title": "国家发展改革委关于白鹤滩~江苏、白鹤滩~浙江特高压直流工程和白鹤滩水电站配套送出工程临时输电价格的通知",
+      "doc_number": "发改价格〔2023〕404号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2023-04-20",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202305/t20230515_1355752.html",
+      "excerpt": "二、白鹤滩~浙江±800千伏特高压直流工程临时输电价格为每千瓦时8.14分（含税，含输电环节线损，线损率6%）。"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "白鹤滩水电站配套送出工程（已投产部分）",
-    "alias": ["白鹤滩配套送出"],
+    "alias": [
+      "白鹤滩配套送出"
+    ],
     "from_province": "四川",
     "to_province": "四川",
     "type": "AC",
@@ -795,13 +1293,23 @@
     "effective_from": "2023-05-01",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于白鹤滩~江苏、白鹤滩~浙江特高压直流工程和白鹤滩水电站配套送出工程临时输电价格的通知", "doc_number": "发改价格〔2023〕404号", "issuer": "国家发展改革委", "publish_date": "2023-04-20", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202305/t20230515_1355752.html", "excerpt": "三、已投产白鹤滩水电站配套送出工程临时输电价格为每千瓦时0.85分（含税，不计线损）；在建配套送出工程建成后再按程序核定全部工程输电价格。" },
+    "source": {
+      "doc_title": "国家发展改革委关于白鹤滩~江苏、白鹤滩~浙江特高压直流工程和白鹤滩水电站配套送出工程临时输电价格的通知",
+      "doc_number": "发改价格〔2023〕404号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2023-04-20",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202305/t20230515_1355752.html",
+      "excerpt": "三、已投产白鹤滩水电站配套送出工程临时输电价格为每千瓦时0.85分（含税，不计线损）；在建配套送出工程建成后再按程序核定全部工程输电价格。"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "云霄直流（闽粤联网工程，福建—广东背靠背）",
-    "alias": ["云霄直流", "闽粤联网工程"],
+    "alias": [
+      "云霄直流",
+      "闽粤联网工程"
+    ],
     "from_province": "福建",
     "to_province": "广东",
     "type": "DC",
@@ -817,13 +1325,23 @@
     "effective_from": "2022-10-19",
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "国家发展改革委关于闽粤联网工程临时价格的通知", "doc_number": "发改价格〔2022〕1604号", "issuer": "国家发展改革委", "publish_date": "2022-10-19", "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202211/t20221102_1340733.html", "excerpt": "一、闽粤联网工程临时价格实行单一容量电价制，容量电费为2.3亿元/年（折算容量电价为115.0元/千瓦·年，含税），输送电量不再单独收取费用。" },
+    "source": {
+      "doc_title": "国家发展改革委关于闽粤联网工程临时价格的通知",
+      "doc_number": "发改价格〔2022〕1604号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2022-10-19",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202211/t20221102_1340733.html",
+      "excerpt": "一、闽粤联网工程临时价格实行单一容量电价制，容量电费为2.3亿元/年（折算容量电价为115.0元/千瓦·年，含税），输送电量不再单独收取费用。"
+    },
     "confidence": "high",
     "note": "国家电网2026年跨省跨区价格表将本文号误写为「发改价格〔2023〕1604号」，原文实为〔2022〕1604号。2026年国网表另注「云霄直流电量电价、线损率适用于非福建、广东两省之间的交易，2024年10月至2025年9月云霄换流站站损率为1.515%」。另见发改体改〔2026〕734号《关于在云霄直流开展输电权市场化交易的通知》（2026-06-02）。"
   },
   {
     "name": "青豫直流（青海—河南±800kV特高压直流）",
-    "alias": ["青豫直流", "青海—河南特高压直流"],
+    "alias": [
+      "青豫直流",
+      "青海—河南特高压直流"
+    ],
     "from_province": "青海",
     "to_province": "河南",
     "type": "DC",
@@ -839,13 +1357,26 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格（表1：跨省跨区专项工程输电价格）", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "29 青豫直流 6.489 5.83%" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格（表1：跨省跨区专项工程输电价格）",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "29 青豫直流 6.489 5.83%",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": "数值得自国家电网/北京电力交易中心公开披露的跨省跨区交易价格表，原始核价文件为《国家发展改革委关于青豫直流输电价格的复函》，本次未检索到该复函原文及文号，故 confidence 降为 medium。该表口径为「含增值税，不含上网环节线损」。"
+    "note": "数值得自国家电网/北京电力交易中心公开披露的跨省跨区交易价格表，原始核价文件为《国家发展改革委关于青豫直流输电价格的复函》，本次未检索到该复函原文及文号，故 confidence 降为 medium。该表口径为「含增值税，不含上网环节线损」。",
+    "source_issue": "引用的 PDF 实为 2025 年表（落款 2024-10-31），两版数值恰好一致，故数值可用；但版本标注需更正。"
   },
   {
     "name": "吉泉直流（昌吉—古泉±1100kV特高压直流）",
-    "alias": ["吉泉直流", "昌吉—古泉特高压直流", "准东—皖南"],
+    "alias": [
+      "吉泉直流",
+      "昌吉—古泉特高压直流",
+      "准东—皖南"
+    ],
     "from_province": "新疆",
     "to_province": "安徽",
     "type": "DC",
@@ -853,7 +1384,7 @@
     "capacity_mw": 12000,
     "tariff_cny_per_mwh": 82.9,
     "tariff_raw": "8.29分/千瓦时",
-    "loss_rate_pct": 7.0,
+    "loss_rate_pct": 7,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -861,13 +1392,26 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "27 吉泉直流 8.29 7.00%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "27 吉泉直流 8.29 7.00%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": "国网价格表明确标注「吉泉…直流电价水平已行文报备」，即该价格由国家电网报备、并非发改委核定文件。本次未检索到任何发改委针对吉泉直流的核价通知。"
+    "note": "国网价格表明确标注「吉泉…直流电价水平已行文报备」，即该价格由国家电网报备、并非发改委核定文件。本次未检索到任何发改委针对吉泉直流的核价通知。",
+    "source_issue": "引用的 PDF 实为 2025 年表（落款 2024-10-31），两版数值恰好一致，故数值可用；但版本标注需更正。"
   },
   {
     "name": "昭沂直流（上海庙—临沂±800kV特高压直流，又称上海庙—山东）",
-    "alias": ["昭沂直流", "上海庙—临沂特高压直流", "上海庙—山东"],
+    "alias": [
+      "昭沂直流",
+      "上海庙—临沂特高压直流",
+      "上海庙—山东"
+    ],
     "from_province": "内蒙古（鄂尔多斯上海庙）",
     "to_province": "山东",
     "type": "DC",
@@ -883,13 +1427,26 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "28 昭沂直流 5.895 6.50%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "28 昭沂直流 5.895 6.50%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": "山东电力交易中心2023年9月/10月月度省间交易输电价格方案原文：「昭沂直流。目前国家发改委尚未正式批复输电价格，暂按国网公司向国家发改委备案价格执行。昭沂直流备案价格为58.95元/千千瓦时（含税，不含线损），线损率为6.50%。待输电价格批复后，按国家文件要求予以清算。」（https://news.bjx.com.cn/html/20230904/1329810.shtml）。该值为备案价，后续可能被正式核价清算。"
+    "note": "山东电力交易中心2023年9月/10月月度省间交易输电价格方案原文：「昭沂直流。目前国家发改委尚未正式批复输电价格，暂按国网公司向国家发改委备案价格执行。昭沂直流备案价格为58.95元/千千瓦时（含税，不含线损），线损率为6.50%。待输电价格批复后，按国家文件要求予以清算。」（https://news.bjx.com.cn/html/20230904/1329810.shtml）。该值为备案价，后续可能被正式核价清算。",
+    "source_issue": "引用的 PDF 实为 2025 年表（落款 2024-10-31），两版数值恰好一致，故数值可用；但版本标注需更正。"
   },
   {
     "name": "金永直流（金上—湖北±800kV特高压直流）",
-    "alias": ["金永直流", "金上—湖北特高压直流", "金上直流"],
+    "alias": [
+      "金永直流",
+      "金上—湖北特高压直流",
+      "金上直流"
+    ],
     "from_province": "西藏（昌都卡麦）/四川（甘孜帮果）",
     "to_province": "湖北",
     "type": "DC",
@@ -905,13 +1462,25 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "35 金永直流 8.241 5.62%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "35 金永直流 8.241 5.62%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": "工程2025年12月18日投运，本次未检索到发改委核价文件。"
+    "note": "工程2025年12月18日投运，本次未检索到发改委核价文件。",
+    "source_issue": "⚠️ 原引用 URL 指向《2025年国家电网跨省跨区交易各环节输电价格》（36 条，落款 2024-10-31），该表中不存在本工程。数值已由独立复核对照 2026 年表原文确认正确，但 2026 年表的稳定公开地址待补，可核性受限。"
   },
   {
     "name": "中衡直流（宁夏—湖南±800kV特高压直流）",
-    "alias": ["中衡直流", "宁夏—湖南特高压直流"],
+    "alias": [
+      "中衡直流",
+      "宁夏—湖南特高压直流"
+    ],
     "from_province": "宁夏（中卫中宁）",
     "to_province": "湖南",
     "type": "DC",
@@ -927,13 +1496,26 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "36 中衡直流 7.345 5.5%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "36 中衡直流 7.345 5.5%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": ""
+    "note": "",
+    "source_issue": "⚠️ 原引用 URL 指向《2025年国家电网跨省跨区交易各环节输电价格》（36 条，落款 2024-10-31），该表中不存在本工程。数值已由独立复核对照 2026 年表原文确认正确，但 2026 年表的稳定公开地址待补，可核性受限。"
   },
   {
     "name": "坤渝直流（哈密—重庆±800kV特高压直流）",
-    "alias": ["坤渝直流", "哈密—重庆特高压直流", "疆电入渝"],
+    "alias": [
+      "坤渝直流",
+      "哈密—重庆特高压直流",
+      "疆电入渝"
+    ],
     "from_province": "新疆（哈密巴里坤）",
     "to_province": "重庆",
     "type": "DC",
@@ -949,13 +1531,26 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "37 坤渝直流 7.474 5.4%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "37 坤渝直流 7.474 5.4%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": ""
+    "note": "",
+    "source_issue": "⚠️ 原引用 URL 指向《2025年国家电网跨省跨区交易各环节输电价格》（36 条，落款 2024-10-31），该表中不存在本工程。数值已由独立复核对照 2026 年表原文确认正确，但 2026 年表的稳定公开地址待补，可核性受限。"
   },
   {
     "name": "庆东直流（陇东—山东±800kV特高压直流）",
-    "alias": ["庆东直流", "陇东—山东特高压直流", "陇电入鲁"],
+    "alias": [
+      "庆东直流",
+      "陇东—山东特高压直流",
+      "陇电入鲁"
+    ],
     "from_province": "甘肃（庆阳）",
     "to_province": "山东",
     "type": "DC",
@@ -971,13 +1566,25 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "38 庆东直流 5.278 5.5%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "38 庆东直流 5.278 5.5%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": "工程2025年5月8日竣工投产。"
+    "note": "工程2025年5月8日竣工投产。",
+    "source_issue": "⚠️ 原引用 URL 指向《2025年国家电网跨省跨区交易各环节输电价格》（36 条，落款 2024-10-31），该表中不存在本工程。数值已由独立复核对照 2026 年表原文确认正确，但 2026 年表的稳定公开地址待补，可核性受限。"
   },
   {
     "name": "宝合直流（陕西延安—安徽合肥±800kV特高压直流）",
-    "alias": ["宝合直流", "陕北—安徽特高压直流"],
+    "alias": [
+      "宝合直流",
+      "陕北—安徽特高压直流"
+    ],
     "from_province": "陕西（延安宝塔山）",
     "to_province": "安徽（合肥庐江）",
     "type": "DC",
@@ -985,7 +1592,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 53.23,
     "tariff_raw": "5.323分/千瓦时",
-    "loss_rate_pct": 5.0,
+    "loss_rate_pct": 5,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -993,13 +1600,24 @@
     "effective_from": null,
     "effective_to": null,
     "tariff_history": [],
-    "source": { "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格", "doc_number": "无文号（国网公司2026-07-22文件）", "issuer": "国家电网有限公司", "publish_date": "2026-07-22", "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf", "excerpt": "40 宝合直流 5.323 5.0%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。" },
+    "source": {
+      "doc_title": "2026年国家电网有限公司跨省跨区交易各环节输电价格",
+      "doc_number": "无文号（国网公司2026-07-22文件）",
+      "issuer": "国家电网有限公司",
+      "publish_date": "2026-07-22",
+      "url": "https://www.piinfo.com.cn/uploads/tinymce/images/6ae6bdeca4af3e4f9a5669dbc2b915ef6723444a855fe.pdf",
+      "excerpt": "40 宝合直流 5.323 5.0%　注：1.吉泉、昭沂、金永、中衡、坤渝、庆东、宝合直流电价水平已行文报备。",
+      "doc_version": "国家电网《2026年跨省跨区交易各环节输电价格》（2026-07-22，40 条）"
+    },
     "confidence": "medium",
-    "note": ""
+    "note": "",
+    "source_issue": "⚠️ 原引用 URL 指向《2025年国家电网跨省跨区交易各环节输电价格》（36 条，落款 2024-10-31），该表中不存在本工程。数值已由独立复核对照 2026 年表原文确认正确，但 2026 年表的稳定公开地址待补，可核性受限。"
   },
   {
     "name": "云南送广东（南网超高压）",
-    "alias": ["云南送广东"],
+    "alias": [
+      "云南送广东"
+    ],
     "from_province": "云南",
     "to_province": "广东",
     "type": "AC/DC",
@@ -1015,15 +1633,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 80.2, "tariff_raw": "80.2元/千千瓦时", "loss_rate_pct": 6.57, "doc_number": "发改价格〔2019〕842号（原执行价格列）", "effective_from": "2019-05-15前" }
+      {
+        "tariff_cny_per_mwh": 80.2,
+        "tariff_raw": "80.2元/千千瓦时",
+        "loss_rate_pct": 6.57,
+        "doc_number": "发改价格〔2019〕842号（原执行价格列）",
+        "effective_from": "2019-05-15前"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "26 云南送广东 80.2 75.5 6.57% 4.73 2.37 2.37" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "26 云南送广东 80.2 75.5 6.57% 4.73 2.37 2.37"
+    },
     "confidence": "high",
     "note": "南方电网经营区，未纳入国家电网跨省跨区价格表。"
   },
   {
     "name": "贵州送广东（南网超高压）",
-    "alias": ["贵州送广东"],
+    "alias": [
+      "贵州送广东"
+    ],
     "from_province": "贵州",
     "to_province": "广东",
     "type": "AC/DC",
@@ -1039,15 +1672,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 80.2, "tariff_raw": "80.2元/千千瓦时", "loss_rate_pct": 7.05, "doc_number": "发改价格〔2019〕842号（原执行价格列）", "effective_from": "2019-05-15前" }
+      {
+        "tariff_cny_per_mwh": 80.2,
+        "tariff_raw": "80.2元/千千瓦时",
+        "loss_rate_pct": 7.05,
+        "doc_number": "发改价格〔2019〕842号（原执行价格列）",
+        "effective_from": "2019-05-15前"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "27 贵州送广东 80.2 75.5 7.05% 4.73 2.37 2.37" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "27 贵州送广东 80.2 75.5 7.05% 4.73 2.37 2.37"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "云南送广西（南网）",
-    "alias": ["云南送广西"],
+    "alias": [
+      "云南送广西"
+    ],
     "from_province": "云南",
     "to_province": "广西",
     "type": "AC",
@@ -1063,15 +1711,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 57.2, "tariff_raw": "57.2元/千千瓦时", "loss_rate_pct": 2.98, "doc_number": "发改价格〔2019〕842号（原执行价格列）", "effective_from": "2019-05-15前" }
+      {
+        "tariff_cny_per_mwh": 57.2,
+        "tariff_raw": "57.2元/千千瓦时",
+        "loss_rate_pct": 2.98,
+        "doc_number": "发改价格〔2019〕842号（原执行价格列）",
+        "effective_from": "2019-05-15前"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "28 云南送广西 57.2 53.8 2.98% 3.37 1.69 1.69" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "28 云南送广西 57.2 53.8 2.98% 3.37 1.69 1.69"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "贵州送广西（南网）",
-    "alias": ["贵州送广西"],
+    "alias": [
+      "贵州送广西"
+    ],
     "from_province": "贵州",
     "to_province": "广西",
     "type": "AC",
@@ -1087,15 +1750,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 57.2, "tariff_raw": "57.2元/千千瓦时", "loss_rate_pct": 3.47, "doc_number": "发改价格〔2019〕842号（原执行价格列）", "effective_from": "2019-05-15前" }
+      {
+        "tariff_cny_per_mwh": 57.2,
+        "tariff_raw": "57.2元/千千瓦时",
+        "loss_rate_pct": 3.47,
+        "doc_number": "发改价格〔2019〕842号（原执行价格列）",
+        "effective_from": "2019-05-15前"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "29 贵州送广西 57.2 53.8 3.47% 3.37 1.69 1.69" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "29 贵州送广西 57.2 53.8 3.47% 3.37 1.69 1.69"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "天生桥送广东（南网）",
-    "alias": ["天生桥送广东"],
+    "alias": [
+      "天生桥送广东"
+    ],
     "from_province": "贵州/广西（天生桥）",
     "to_province": "广东",
     "type": "AC",
@@ -1111,15 +1789,30 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 63.2, "tariff_raw": "63.2元/千千瓦时", "loss_rate_pct": 5.63, "doc_number": "发改价格〔2019〕842号（原执行价格列）", "effective_from": "2019-05-15前" }
+      {
+        "tariff_cny_per_mwh": 63.2,
+        "tariff_raw": "63.2元/千千瓦时",
+        "loss_rate_pct": 5.63,
+        "doc_number": "发改价格〔2019〕842号（原执行价格列）",
+        "effective_from": "2019-05-15前"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "30 天生桥送广东 63.2 59.5 5.63% 3.73 1.86 1.86" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "30 天生桥送广东 63.2 59.5 5.63% 3.73 1.86 1.86"
+    },
     "confidence": "high",
     "note": ""
   },
   {
     "name": "天生桥送广西（南网）",
-    "alias": ["天生桥送广西"],
+    "alias": [
+      "天生桥送广西"
+    ],
     "from_province": "贵州/广西（天生桥）",
     "to_province": "广西",
     "type": "AC",
@@ -1127,7 +1820,7 @@
     "capacity_mw": null,
     "tariff_cny_per_mwh": 37.8,
     "tariff_raw": "37.8元/千千瓦时（=3.78分/千瓦时）",
-    "loss_rate_pct": 2.0,
+    "loss_rate_pct": 2,
     "includes_transmission_loss": false,
     "tax_included": true,
     "billing_basis": "未明确",
@@ -1135,9 +1828,22 @@
     "effective_from": "2019-05-15",
     "effective_to": null,
     "tariff_history": [
-      { "tariff_cny_per_mwh": 40.2, "tariff_raw": "40.2元/千千瓦时", "loss_rate_pct": 2.0, "doc_number": "发改价格〔2019〕842号（原执行价格列）", "effective_from": "2019-05-15前" }
+      {
+        "tariff_cny_per_mwh": 40.2,
+        "tariff_raw": "40.2元/千千瓦时",
+        "loss_rate_pct": 2,
+        "doc_number": "发改价格〔2019〕842号（原执行价格列）",
+        "effective_from": "2019-05-15前"
+      }
     ],
-    "source": { "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）", "doc_number": "发改价格〔2019〕842号", "issuer": "国家发展改革委", "publish_date": "2019-05-15", "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html", "excerpt": "31 天生桥送广西 40.2 37.8 2.00% 2.37 1.19 1.19" },
+    "source": {
+      "doc_title": "国家发展改革委关于降低一般工商业电价的通知（附件：跨省跨区专项工程输电价格）",
+      "doc_number": "发改价格〔2019〕842号",
+      "issuer": "国家发展改革委",
+      "publish_date": "2019-05-15",
+      "url": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/201905/t20190515_962447.html",
+      "excerpt": "31 天生桥送广西 40.2 37.8 2.00% 2.37 1.19 1.19"
+    },
     "confidence": "high",
     "note": ""
   }
