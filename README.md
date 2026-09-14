@@ -23,6 +23,9 @@ data/fixed-prices.json            ★ 所有固定价格数据的唯一来源（
 shared/app-data.json                ★ 端云共用数据（Web 与安卓端同源同版本）
 shared/app-data.min.json            同内容的紧凑版，供手机端随包内置
 docs/03-数据接口说明.md             数据契约：结构、版本校验、算法约定
+docs/04-手机端实施计划.md           手机端分阶段实施计划
+android/                          安卓 WebView 壳工程（一键打包 APK）
+tests/                            Playwright 端到端回归
 docs/费率核实报告.md                逐条核实报告（含偏差表与结构性陷阱）
 docs/tariff.json                  费率采集档案（含发改委原文摘录，不参与构建）
 docs/sources.md                   费率来源清单（文号 / 标题 / 颁布机构 / 日期 / URL）
