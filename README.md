@@ -15,20 +15,24 @@ open index.html             # 手机浏览器直接打开即可
 
 ## 目录结构
 
-```
+````
 index.html                        构建产物（自包含，可直接分发）
 src/template.html                 应用模板（界面 + 算法）
-src/extra.json                    网架辅助数据：站点坐标、断面、省级参数、容量、线路长度
-docs/tariff.json                  检索所得的跨省跨区专项工程费率
+src/extra.json                    非价格数据：站点、断面、经纬度、容量、线路长度
+data/fixed-prices.json            ★ 所有固定价格数据的唯一来源（改价只改这个文件）
+docs/费率核实报告.md                逐条核实报告（含偏差表与结构性陷阱）
+docs/tariff.json                  费率采集档案（含发改委原文摘录，不参与构建）
 docs/sources.md                   费率来源清单（文号 / 标题 / 颁布机构 / 日期 / URL）
-docs/gaps.md                      缺口、冲突与待确认疑点  ← 比费率数据本身更重要
+docs/gaps.md                      缺口与待确认疑点
 docs/regression-baseline-v2.json  算法回归基线（503 个省对 / 1739 条路线）
 docs/01-安卓开发框架.md             安卓端落地建议
 docs/02-费率数据采集任务提示.md       费率检索的可复用任务提示词
 tools/build.mjs                   构建脚本
+tools/audit-fees.mjs              费率审计（单位换算 / 来源可追溯 / 数值合理性）
+tools/test-prefill.mjs            受端参数预填行为测试
 tools/baseline2.mjs               基线生成 + 校验 + 渲染冒烟测试
 tools/baseline-check.mjs          基线校验（迁移到其它实现后用它回归）
-```
+````
 
 ## 数据来源分档
 

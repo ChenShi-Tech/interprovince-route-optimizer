@@ -289,12 +289,7 @@ const BUILD_TIME='__BUILD_TIME__';
 const PV=DATA.PV, ST=DATA.ST, SEC=DATA.SEC, RG=DATA.RG;
 let CH=DATA.CH.map(c=>({...c}));
 
-const REGION_OF={BJ:'华北',TJ:'华北',HE:'华北',SX:'华北',SD:'华北',NM:'华北',
- SH:'华东',JS:'华东',ZJ:'华东',AH:'华东',FJ:'华东',
- HB:'华中',HN:'华中',HA:'华中',JX:'华中',CQ:'华中',SC:'华中',XZ:'华中',
- LN:'东北',JL:'东北',HL:'东北',
- SN:'西北',GS:'西北',QH:'西北',NX:'西北',XJ:'西北',
- GD:'南方',GX:'南方',YN:'南方',GZ:'南方'};
+const REGION_OF=DATA.RGOF||{};   // 区域归属由 data/fixed-prices.json 提供
 
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 
@@ -558,12 +553,19 @@ function loadStored(){
   try{
     const a=localStorage.getItem(LS_LIB);
     if(a){ const s=JSON.parse(a); if(s.ch&&s.ch.length===CH.length) CH=s.ch; }
-    const b=localStorage.getItem(LS_LAST); if(b) Object.assign(state,JSON.parse(b));
+    const b=localStorage.getItem(LS_LAST);
+    if(b){
+      const s=JSON.parse(b);
+      const sameBuild=(s._bt===BUILD_TIME);   // 价格数据版本变化时丢弃过期的本地价格改动
+      delete s._bt;
+      Object.assign(state,s);
+      state._stalePrice=!sameBuild;
+    }
     const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
   }catch(e){}
 }
 function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,at:BUILD_TIME}));}catch(e){} }
-function saveLast(){ try{localStorage.setItem(LS_LAST,JSON.stringify(state));}catch(e){} }
+function saveLast(){ try{localStorage.setItem(LS_LAST,JSON.stringify(Object.assign({},state,{_bt:BUILD_TIME})));}catch(e){} }
 function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){} }
 
 /* ================= 测算页 ================= */
@@ -595,14 +597,14 @@ function renderCalc(){
     </select></label>
   </div></div>
 
-  <details class="adv boxed"><summary>价格与口径</summary><div class="inner">
+  <details class="adv boxed" open><summary>价格与口径</summary><div class="inner">
     <div class="row2">
       <label class="f"><span>送端出清价 元/MWh</span><input id="i-pgen" type="number" value="${state.pGen}" step="5"></label>
       <label class="f"><span>受端结算价 元/MWh</span><input id="i-pdst" type="number" value="${state.pDst}" step="5"></label>
     </div>
     <div class="row2">
-      <label class="f"><span>受端省网输配电价</span><input id="i-pnet" type="number" value="${state.pNet}" step="0.1"></label>
-      <label class="f"><span>基金及附加</span><input id="i-fund" type="number" value="${state.fund}" step="0.1"></label>
+      <label class="f"><span>受端省网输配电价 <a onclick="resetOne('pNet')" style="color:var(--blue);font-weight:500;cursor:pointer">恢复核定值</a></span><input id="i-pnet" type="number" value="${state.pNet}" step="0.1"></label>
+      <label class="f"><span>基金及附加 <a onclick="resetOne('fund')" style="color:var(--blue);font-weight:500;cursor:pointer">恢复核定值</a></span><input id="i-fund" type="number" value="${state.fund}" step="0.1"></label>
     </div>
     <label class="f"><span>网损承担方</span><select id="i-bearer">
       <option value="1" ${state.lossBearer==1?'selected':''}>受端承担</option>
@@ -613,6 +615,8 @@ function renderCalc(){
       <option value="1" ${state.includeRegion?'selected':''}>计入</option>
       <option value="0" ${!state.includeRegion?'selected':''}>不计入</option>
     </select></label>
+    <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。</p>
+    <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
   </div></details>`;
 
   const _toPV=PV[state.to];
@@ -842,15 +846,28 @@ function readInputs(){
   state.lossBearer=+g('i-bearer').value;
   state.includeRegion=g('i-region').value==='1';
 }
-function refreshProvinceParams(){
-  const f=PV[state.from], t=PV[state.to];
-  if(f) state.pGen=f.clear;
-  if(t){
-    state.pNet=t.net;
-    state.fundMissing=(t.fund===null||t.fund===undefined);
-    state.fund=state.fundMissing?0:t.fund;
-    state.pDst=t.clear;
-  }
+/* 送端省变化：只影响送端出清价 */
+function applyFromProv(){
+  const f=PV[state.from];
+  if(f&&f.clear!=null) state.pGen=f.clear;
+}
+/* 受端省变化：影响受端省网输配电价、政府性基金及附加、受端结算价 */
+function applyToProv(){
+  const t=PV[state.to];
+  if(!t) return;
+  if(t.net!=null) state.pNet=t.net;
+  state.fundMissing=(t.fund===null||t.fund===undefined);
+  state.fund=state.fundMissing?0:t.fund;
+  if(t.clear!=null) state.pDst=t.clear;
+}
+function applyBothProv(){ applyFromProv(); applyToProv(); }
+/* 把某一项恢复为当前受端省的核定值 */
+function resetOne(k){
+  const t=PV[state.to];
+  if(!t) return;
+  if(k==='pNet'&&t.net!=null) state.pNet=t.net;
+  if(k==='fund'){ state.fundMissing=(t.fund===null||t.fund===undefined); state.fund=state.fundMissing?0:t.fund; }
+  state._res=solve(); saveLast(); renderCalc();
 }
 
 /* ================= 费率库 ================= */
@@ -1225,10 +1242,8 @@ function go(t){
 }
 document.addEventListener('change',e=>{
   const id=e.target.id;
-  if(id==='i-from'||id==='i-to'){
-    state[id==='i-from'?'from':'to']=e.target.value;
-    refreshProvinceParams(); state.sel=0; doSolve(); return;
-  }
+  if(id==='i-from'){ state.from=e.target.value; applyFromProv(); state.sel=0; doSolve(); return; }
+  if(id==='i-to'){ state.to=e.target.value; applyToProv(); state.sel=0; doSolve(); return; }
   if(['i-qty','i-hours','i-hops','i-detour','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region'].indexOf(id)>=0){
     state.sel=0; doSolve();
   }
@@ -1236,7 +1251,7 @@ document.addEventListener('change',e=>{
 loadStored();
 if(!Object.keys(PV).includes(state.from)) state.from='SC';
 if(!Object.keys(PV).includes(state.to)) state.to='JS';
-if(state.pNet===undefined) refreshProvinceParams();
+applyBothProv();   // 启动时一律按核定值预填
 state._res=solve();
 renderCalc();
 </script>
