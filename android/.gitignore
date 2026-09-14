@@ -1,0 +1,8 @@
+# 构建产物与本机配置
+build/
+.gradle/
+local.properties
+app/build/
+app/src/main/assets/
+*.apk
+*.zip
