@@ -16,6 +16,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -172,7 +173,7 @@ for (const [code, geo] of Object.entries(extra.provinces)) {
   };
 }
 
-// ---------- 4. 输出 ----------
+// ---------- 4. 输出：Web 内联版 + 端云共用的独立数据文件 ----------
 const payload = {
   ST: extra.stations,
   CH: channels,
@@ -182,12 +183,61 @@ const payload = {
   RGOF: prices.区域电网分区,
 };
 
+const builtAt = new Date().toISOString();
+const BUILD_TIME = builtAt.slice(0, 16).replace('T', ' ');
+const json = (o) => JSON.stringify(o);
+const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
+
+// 价格数据的版本指纹：只要 fixed-prices.json 变了，这个值就变
+const priceVersion = sha(fs.readFileSync(path.join(root, 'data/fixed-prices.json'), 'utf8')).slice(0, 16);
+
+// (a) Web：自包含单文件，离线可用
 const tpl = fs.readFileSync(path.join(root, 'src/template.html'), 'utf8');
 const out = tpl
-  .replace('/*__DATA__*/', 'const DATA=' + JSON.stringify(payload) + ';')
-  .replace('__BUILD_TIME__', new Date().toISOString().slice(0, 16).replace('T', ' '));
-
+  .replace('/*__DATA__*/', 'const DATA=' + json(payload) + ';')
+  .replace('__BUILD_TIME__', BUILD_TIME)
+  .replace('__PRICE_VERSION__', priceVersion);
 fs.writeFileSync(path.join(root, 'index.html'), out);
+
+// (b) 手机端与其它消费方：同一份数据的独立 JSON。
+//     与 Web 版同源、同一次构建产出，保证两端数据结构与数值完全一致。
+const appData = {
+  schema: 'iproute-app-data/v1',
+  builtAt,
+  priceVersion,                                   // 价格数据指纹，用于两端比对
+  dataHash: sha(json(payload)),                   // 载荷指纹，用于校验完整性
+  counts: {
+    stations: Object.keys(payload.ST).length,
+    channels: payload.CH.length,
+    sections: payload.SEC.length,
+    provinces: Object.keys(payload.PV).length,
+  },
+  units: {
+    价格: '元/兆瓦时',
+    线损率: '百分数 %',
+    容量: '兆瓦 MW',
+    长度: '公里 km',
+    送出省输电价格: '元/千瓦时（与官方文件原文一致，使用时 ×1000 转为 元/兆瓦时）',
+    区域电网输电价格: '元/千瓦时（同上）',
+  },
+  readme: [
+    '本文件由 tools/build.mjs 生成，与 index.html 同源同版本。',
+    '修改价格请改 data/fixed-prices.json 后重新构建，不要直接改本文件。',
+    'CH[].tier 为数据可信度：gov=发改委核定 / grid=国网披露 / region=区域或送出省口径。',
+    'CH[].cap 为用于容量校验的容量，已优先取「实际输送能力」，缺失时回退额定；capBasis 标明口径。',
+    'CH[].priceType 为 energy（电量制）或 capacity（容量制，t 为折算的等效度电成本）。',
+    'CH[].sendFee 为送端省内段费用（送出省输电价格），AC 联络线为 0（其价格已含在该段 t 中）。',
+    'PV[].fund 可能为 null（西藏未获取），消费方需按缺失处理而非当作 0 静默使用。',
+    'LOADING：路径规划算法不在本文件内，需由消费方实现。算法约定与回归基线见 docs/01-安卓开发框架.md 与 docs/regression-baseline-v2.json。',
+  ],
+  ...payload,
+};
+
+const distDir = path.join(root, 'dist');
+fs.mkdirSync(distDir, { recursive: true });
+fs.writeFileSync(path.join(distDir, 'app-data.json'), JSON.stringify(appData, null, 2) + '\n');
+// 另存一份仅含数据的紧凑版，减小手机端体积
+fs.writeFileSync(path.join(distDir, 'app-data.min.json'), json(appData) + '\n');
 
 const byTier = channels.reduce((a, c) => (a[c.tier] = (a[c.tier] || 0) + 1, a), {});
 const est = Object.values(provinceOut).filter((p) => p.net == null).length;
@@ -200,5 +250,7 @@ console.log('站点:', Object.keys(extra.stations).length,
   '| 断面:', extra.sections.length,
   '| 省级参数:', Object.keys(provinceOut).length,
   est ? `（其中 ${est} 个缺输配电价）` : '（全部有值）');
-console.log('价格数据源: data/fixed-prices.json（' + prices.专项工程.length + ' 条专项工程）');
+console.log('价格数据源: data/fixed-prices.json');
+console.log('价格数据指纹 priceVersion:', priceVersion);
 console.log('index.html 已生成:', (fs.statSync(path.join(root, 'index.html')).size / 1024).toFixed(1), 'KB');
+console.log('dist/app-data.json 已生成:', (fs.statSync(path.join(distDir, 'app-data.json')).size / 1024).toFixed(1), 'KB（端云共用数据）');
