@@ -35,6 +35,7 @@ const tests = [
   ['两端数据一致性', 'tools/test-data-share.mjs'],
   ['算法回归基线', 'tools/baseline-check.mjs'],
   ['受端参数预填行为', 'tools/test-prefill.mjs'],
+  ['交互行为回归', 'tools/test-interaction.mjs'],
 ];
 let failed = 0;
 for (const [name, f] of tests) {
