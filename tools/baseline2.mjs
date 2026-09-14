@@ -120,6 +120,7 @@ const checks = [
      '条候选', '送端收益', '展开全部', 'tl-seg-card', 'rc-price', '在网架图上查看', '原文摘录', '调价历史']],
   ['方案切换 sel=1', 'state.sel=1;renderCalc();', 'v-calc', ['方案 #2', '途经节点与线路', '段入口功率', '段损耗电量']],
   ['renderMap() 内置拓扑图', "state.mapProvider='svg';renderMap();", 'v-map', ['内置拓扑图', '全网架', '不依赖任何外部地图服务', '拓扑图']],
+  ['响应式结构（桌面双栏）', 'state.from="SC";state.to="SH";state._res=solve();renderCalc();', 'v-calc', ['class="topbar"', 'class="layout"', 'class="col-side"', 'class="col-main"']],
   ['renderLib() 通道页', "libTab='ch';renderLib();", 'v-lib', ['发改委核定', '国网披露']],
   ['renderLib() 省级页', "libTab='pv';renderLib();", 'v-lib', ['输配电价', '待补']],
   ['renderLib() 断面页', "libTab='sec';renderLib();", 'v-lib', ['川渝断面', 'GSDF']],
