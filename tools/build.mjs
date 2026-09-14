@@ -44,6 +44,16 @@ function stationPair(name) {
   return [null, null];
 }
 
+// ---------- 0. 送出省输电价格与容量制折算（下面两段共用，须先声明） ----------
+const EXPORT_DEFAULT = 0.03;   // 元/千瓦时，无专属值的省份适用通用互济条款
+const EX = prices.送出省输电价格 || {};
+const exportOf = (code) => (typeof EX[code] === 'number' ? EX[code] : EXPORT_DEFAULT);
+// 送出省输电价格：元/千瓦时 → 元/兆瓦时
+const EXPORT_YUAN_PER_MWH = (code) => exportOf(code) * 1000;
+// 容量制工程的等效度电成本：容量电价 × 1000 ÷ 折算利用小时
+const CAP_HOURS = prices.容量制折算利用小时 || 4500;
+const capEq = (r) => (r.容量电价 ? r.容量电价.容量电价 * 1000 / CAP_HOURS : null);
+
 // ---------- 1. 专项工程 ----------
 const channels = [];
 const seen = new Set();
@@ -59,16 +69,13 @@ for (const r of prices.专项工程) {
 
   const [stFrom, stTo] = stationPair(r.名称);
   const tier = r.文号 && /发改/.test(r.文号) ? 'gov' : 'grid';
-  let cap = null, lenKm = null;
-  for (const [k, v] of Object.entries(extra.capacities || {})) {
-    if (k.startsWith('_')) continue;
-    if (cap == null && r.名称.includes(k)) cap = v;
-  }
-  for (const [k, v] of Object.entries(extra.lengths || {})) {
-    if (k.startsWith('_')) continue;
-    if (lenKm == null && r.名称.includes(k)) lenKm = v;
-  }
+  const capRated = r.额定容量 ?? null;
+  const capActual = r.实际输送能力 ?? null;
+  const cap = capActual ?? capRated;          // 容量校验优先用实际输送能力
+  const lenKm = r.线路长度 ?? null;
 
+  const sendFee = EXPORT_YUAN_PER_MWH(from);   // 送端省「送出省输电价格」，发改价格〔2018〕1227号第五条
+  const eq = capEq(r);
   channels.push({
     id: 'g' + channels.length,
     n: r.名称.replace(/（.*?）/g, '').trim(),
@@ -76,7 +83,15 @@ for (const r of prices.专项工程) {
     from, to, stFrom, stTo,
     kv: r.电压等级 || '', type: r.类型,
     cap, lenKm,
-    t: r.输电价,
+    capRated, capActual,
+    capBasis: r.容量口径 || 'unknown',
+    capSrc: r.容量来源 || '',
+    priceType: r.计价方式 || 'energy',
+    capPrice: r.容量电价 || null,
+    t: r.输电价 != null ? r.输电价 : eq,   // 容量制工程用折算的等效度电成本参与比选
+    tRaw: r.输电价,
+    capEq: eq,
+    sendFee,                                // 送端省内段：送出省输电价格
     loss: r.线损率,
     tier,
     doc: r.文号 || '', docTitle: r.文件标题 || '', issuer: r.颁发机构 || '',
@@ -88,14 +103,11 @@ for (const r of prices.专项工程) {
     bill: r.计费口径 || '未明确',
     status: r.状态 || '', note: r.备注 || '',
     docVersion: r.文档版本 || '', sourceIssue: r.出处问题 || '',
+    tradable: true,
   });
 }
 
 // ---------- 2. 省间交流联络线（区域电网 / 送出省输电价格口径） ----------
-const EXPORT_DEFAULT = 0.03;
-const EX = prices.送出省输电价格 || {};
-const exportOf = (code) => (typeof EX[code] === 'number' ? EX[code] : EXPORT_DEFAULT);
-
 const AC_LINKS = [
   ['SC', 'CQ', '川渝联络线', 500, 3000, 0.8],
   ['SC', 'SN', '川陕联络线', 500, 2000, 1.4],
@@ -128,7 +140,11 @@ for (const [a, b, n, kv, cap, loss] of AC_LINKS) {
     id: 'a' + channels.length,
     n, fn: n, from: a, to: b, stFrom: null, stTo: null,
     kv: kv + 'kV', type: 'AC', cap, lenKm: null,
-    t: exportOf(a) * 1000, loss, tier: 'region',
+    t: exportOf(a) * 1000,      // 省间交流联络线未单独核价，其自身即按送出省输电价格计
+    tRaw: exportOf(a) * 1000,
+    capEq: null,
+    sendFee: 0,                 // 上行的送出省价已含在 t 中，不重复计
+    loss, tier: 'region',
     doc: '送出省输电价格（第四监管周期）',
     docTitle: '各省第四监管周期输配电价通知',
     issuer: '省级发展改革委', pubDate: '2026-07/08', url: '',
@@ -136,6 +152,8 @@ for (const [a, b, n, kv, cap, loss] of AC_LINKS) {
     excerpt: `因省间互济等因素临时送省外电量，送出省输电价格按每千瓦时 ${exportOf(a)} 元（含税）执行，不计线损。`,
     hist: [], tax: true, incLoss: false,
     bill: '送出省输电价格', status: '口径待确认',
+    priceType: 'energy', capRated: cap, capActual: cap, capBasis: 'rated', capSrc: '设计容量',
+    tradable: false,   // 省间交流联络线未单独核定输电价格，是否属于省间现货交易网络待确认
     note: '省间交流联络线未单独核定输电价格，此处按第四监管周期该省「送出省输电价格」口径取值；跨区交易另需按到达区电量电价加收区域电网输电费。',
     docVersion: '', sourceIssue: '',
   });

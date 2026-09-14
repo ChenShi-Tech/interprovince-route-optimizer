@@ -242,7 +242,21 @@ details.adv.boxed summary{font-size:12.5px}
   .rc-meta{grid-column:2;grid-row:2;margin:0}
   .rc-price{grid-column:3;grid-row:1/3;text-align:right;align-self:center;font-size:19px}
 
-  .libgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;align-items:start}
+  .libcard{border:.5px solid var(--line);border-radius:10px;background:#fff;margin-bottom:7px;overflow:hidden}
+.libcard summary{list-style:none;cursor:pointer;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center}
+.libcard summary::-webkit-details-marker{display:none}
+.libcard[open] summary{border-bottom:.5px solid var(--line2);background:var(--gray-bg)}
+.lc-n{font-size:13px;font-weight:600;grid-column:1;grid-row:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lc-tag{font-size:9.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:1px 5px;border-radius:4px;margin-left:5px}
+.lc-p{grid-column:2;grid-row:1/3;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;align-self:center}
+.lc-p small{font-size:9.5px;font-weight:500;color:var(--ink3);margin-left:1px}
+.lc-m{grid-column:1;grid-row:2;font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lc-b{grid-column:1;grid-row:3}
+.lc-body{padding:11px 12px}
+.lc-kv{font-size:11px;color:var(--ink2);line-height:1.7;margin-top:9px;padding-top:8px;border-top:.5px solid var(--line2)}
+.lc-kv span{display:inline-block;min-width:74px;color:var(--ink3)}
+.libcount{font-size:11px;color:var(--ink3);margin-bottom:7px}
+.libgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;align-items:start}
   .lib-row{min-width:0}
   .tl-seg-g{grid-template-columns:repeat(6,1fr)}
   .segblk .grid{grid-template-columns:repeat(8,1fr)}
@@ -296,7 +310,7 @@ const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map
 let state={
   from:'SC', to:'JS', qty:1000, hours:1,
   pGen:320, pDst:450, pNet:112, fund:26.6,
-  lossBearer:1, K:6, maxHops:3, maxDetour:2.0,
+  lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10,
   sel:0, showBad:false, sortBy:'A', showAll:false,
   includeRegion:true,
   mapProvider:'svg', tiandituKey:''
@@ -407,12 +421,12 @@ function evalPath(path,ctx){
   const toMW=q=>qty/h*q;
   const toMWh=q=>qty*q;
 
-  let trans=0, regFee=0, dist=0, segLossMwh=0, vsCount=0;
+  let trans=0, regFee=0, sendTotal=0, dist=0, segLossMwh=0, vsCount=0;
   const vset=new Set(), tset=new Set(), rset=new Set(), stset=new Set();
   const segs=edges.map((e,i)=>{
     const q=1/suf[i], qOut=1/suf[i+1];
-    const fee=e.t*q, rg=regionFee(e)*q;
-    trans+=fee; regFee+=rg;
+    const fee=e.t*q, rg=regionFee(e)*q, sf=(e.sendFee||0)*q;
+    trans+=fee; regFee+=rg; sendTotal+=sf;
     const a=lngLatOf(e,'from'), b=lngLatOf(e,'to');
     const crow=havKm(a,b);
     const km=e.lenKm||crow;
@@ -422,7 +436,7 @@ function evalPath(path,ctx){
     if(e.stFrom) stset.add(e.stFrom); if(e.stTo) stset.add(e.stTo);
     if(e.type==='DC') vsCount++;
     return {
-      e,q,qOut,fee,rg,a:nodes[i],b:nodes[i+1],
+      e,q,qOut,fee,rg,sf,a:nodes[i],b:nodes[i+1],
       km, crow, kmEst:!e.lenKm,
       inMW:toMW(q), outMW:toMW(qOut), lossMW:toMW(q-qOut),
       inMWh:toMWh(q), outMWh:toMWh(qOut), lossMwh,
@@ -433,11 +447,11 @@ function evalPath(path,ctx){
     };
   });
   const g=ctx.lossBearer;
-  const cGen=ctx.pGen, cLossBuyer=cGen*g*lossQty, cTrans=trans, cReg=regFee, cNet=ctx.pNet, cFund=ctx.fund;
-  const landed=cGen+cLossBuyer+cTrans+cReg+cNet+cFund;
+  const cGen=ctx.pGen, cLossBuyer=cGen*g*lossQty, cSend=sendTotal, cTrans=trans, cReg=regFee, cNet=ctx.pNet, cFund=ctx.fund;
+  const landed=cGen+cLossBuyer+cSend+cTrans+cReg+cNet+cFund;
   const netLossTotal=cGen*lossQty;
-  const channelOnly=trans;
-  const senderNet=ctx.pDst*D-(cTrans+cReg)*D-netLossTotal*(1-g)*D;
+  const channelOnly=cSend+cTrans;   // 口径二：过网费 = 送端省内段 + 跨省通道费，不含网损与省网费用
+  const senderNet=ctx.pDst*D-(cSend+cTrans+cReg)*D-netLossTotal*(1-g)*D;
   const deliverMW=qty/h;
   const segLd=segs.map(s=>({name:s.e.n,mw:s.inMW,cap:s.e.cap,over:s.e.cap? s.inMW>s.e.cap : false}));
   const maxLoad=Math.max(...segLd.map(s=>s.cap?s.mw/s.cap:0));
@@ -459,13 +473,14 @@ function evalPath(path,ctx){
   const straight=havKm(lngLatOf(edges[0],'from'), lngLatOf(edges[n-1],'to'));
   const yuan={
     gen:ctx.pGen*qty,
+    send:qty*sendTotal,
     trans:qty*trans,
     reg:qty*regFee,
     loss:ctx.pGen*lossMwh*g,
     net:ctx.pNet*qty,
     fund:ctx.fund*qty,
   };
-  yuan.total=yuan.gen+yuan.trans+yuan.reg+yuan.loss+yuan.net+yuan.fund;
+  yuan.total=yuan.gen+yuan.send+yuan.trans+yuan.reg+yuan.loss+yuan.net+yuan.fund;
   const tiers={gov:0,grid:0,region:0,est:0};
   edges.forEach(e=>{tiers[e.tier]=(tiers[e.tier]||0)+1;});
   const unverified=edges.filter(e=>e.tier!=='gov').length;
@@ -476,7 +491,9 @@ function evalPath(path,ctx){
     dist, straight, dcCount:vsCount, acCount:n-vsCount,
     kvList:[...vset].filter(Boolean), typeList:[...tset], regionList:[...rset].filter(Boolean),
     stationList:[...stset], tiers, unverified,
-    comp:{gen:cGen,loss:cLossBuyer,trans:cTrans,reg:cReg,net:cNet,fund:cFund}};
+    comp:{gen:cGen,loss:cLossBuyer,send:cSend,trans:cTrans,reg:cReg,net:cNet,fund:cFund},
+    capUnknown:edges.filter(e=>e.capBasis==='unknown').length,
+    capEqUsed:edges.filter(e=>e.capEq!=null).length};
 }
 // 枚举全部简单路径（不重复经过同一节点）。邻居按近似成本升序，
 // 使低成本路径优先被发现，便于在达到枚举上限时保留最有价值的候选。
@@ -640,14 +657,21 @@ const RLIMIT=18;
 function renderRouteList(res){
   const rows=res.rows, sel=Math.min(state.sel,rows.length-1);
   const sortName={A:'按落地成本',B:'按过网费',C:'按送端净收益'}[state.sortBy];
+  const bestPrice=rows.length?rows[0].landed:0;
+  const thr=bestPrice*(1+(state.degrade??0.10));
+  const inThr=rows.filter(r=>r.landed<=thr);
+  const shown=state.showAll?rows:inThr;
+  const cut=rows.length-inThr.length;
   let out=`<div class="card tight">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}</span></div>
+    <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。</p>
     <div class="seg small">
       ${[['A','落地成本'],['B','过网费'],['C','送端收益']].map(([k,t])=>
         `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
     </div>
     <div class="rlist">`;
   rows.forEach((r,i)=>{
+    if(!state.showAll && r.landed>thr) return;
     if(!state.showAll && i>=RLIMIT) return;
     out+=`<button class="rc ${i===sel?'on':''} ${r.feasible?'':'bad'}" onclick="pick(${i})" title="${esc(r.nodes.map(N).join(' → '))}">
       <div class="rc-top"><span class="rc-no">#${i+1}</span><span class="rc-hop">${r.hops}段</span></div>
@@ -661,9 +685,17 @@ function renderRouteList(res){
       <span>${sortName}升序${state.sortBy==='C'?'（降序）':''}</span>
       <label class="tg"><input type="checkbox" ${state.showBad?'checked':''} onchange="state.showBad=this.checked;state.sel=0;doSolve()"> 含越限</label>
     </div>`;
-  if(rows.length>RLIMIT){
-    out+=`<button class="btn ghost" style="margin-top:8px" onclick="state.showAll=${!state.showAll};renderCalc()">${state.showAll?'收起，仅显示前 '+RLIMIT+' 条':'展开全部 '+rows.length+' 条路线'}</button>`;
+  const hiddenN=rows.length-shown.length;
+  if(hiddenN>0){
+    out+=`<button class="btn ghost" style="margin-top:8px" onclick="state.showAll=${!state.showAll};renderCalc()">${state.showAll?'收起，仅显示成本接近的方案':'展开全部 '+rows.length+' 条路线（含 '+hiddenN+' 条成本更高者）'}</button>`;
   }
+  out+=`<div class="rlist-foot" style="margin-top:7px">
+      <span>成本阈值</span>
+      <select style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:6px" onchange="state.degrade=+this.value;state.sel=0;doSolve()">
+        ${[[0.03,'3%'],[0.05,'5%'],[0.10,'10%'],[0.20,'20%'],[9,'不限']].map(([v,t])=>
+          `<option value="${v}" ${(state.degrade??0.10)==v?'selected':''}>${t}</option>`).join('')}
+      </select>
+    </div>`;
   out+=`</div>`;
   return out;
 }
@@ -675,7 +707,7 @@ function pick(i){ state.sel=i; saveLast(); renderCalc();
 function renderDetail(res,r){
   if(!r) return '';
   const colors=['#85B7EB','#EF9F27','#F0997B','#5DCAA5','#B4B2A9','#AFA9EC'];
-  const comp=[['送端出清价',r.comp.gen],['跨省通道费',r.comp.trans],['区域电网费',r.comp.reg],
+  const comp=[['送端出清价',r.comp.gen],['送端省内段',r.comp.send],['跨省通道费',r.comp.trans],['区域电网费',r.comp.reg],
     ['网损折价',r.comp.loss],['受端输配电价',r.comp.net],['基金及附加',r.comp.fund]].filter(c=>c[1]>0);
   const tot=comp.reduce((s,c)=>s+c[1],0);
 
@@ -750,6 +782,7 @@ function renderDetail(res,r){
     <table>
       <tr><th style="width:40%">费用项</th><th>单价</th><th>总额</th><th>占比</th></tr>
       <tr><td>送端出清价购电</td><td>${fmt(r.comp.gen)}</td><td>${num(r.yuan.gen)}</td><td>${fmt(r.yuan.gen/r.yuan.total*100,1)}%</td></tr>
+      <tr><td>送端省内段（送出省输电价格）</td><td>${fmt(r.comp.send)}</td><td>${num(r.yuan.send)}</td><td>${fmt(r.yuan.send/r.yuan.total*100,1)}%</td></tr>
       <tr><td>跨省专项工程输电费</td><td>${fmt(r.comp.trans)}</td><td>${num(r.yuan.trans)}</td><td>${fmt(r.yuan.trans/r.yuan.total*100,1)}%</td></tr>
       ${r.comp.reg>0?`<tr><td>区域电网输电费</td><td>${fmt(r.comp.reg)}</td><td>${num(r.yuan.reg)}</td><td>${fmt(r.yuan.reg/r.yuan.total*100,1)}%</td></tr>`:''}
       <tr><td>网损折价（受端承担部分）</td><td>${fmt(r.comp.loss)}</td><td>${num(r.yuan.loss)}</td><td>${fmt(r.yuan.loss/r.yuan.total*100,1)}%</td></tr>
@@ -872,6 +905,57 @@ function resetOne(k){
 
 /* ================= 费率库 ================= */
 let libTab='ch';
+function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b) b.innerHTML=renderLibList(); }
+function renderLibList(){
+  const q=(state.libQ||'').trim().toLowerCase();
+  const flt=state.libFilter||'all';
+  const hit=(c)=>{
+    if(flt==='gov'&&c.tier!=='gov') return false;
+    if(flt==='grid'&&c.tier!=='grid') return false;
+    if(flt==='region'&&c.tier!=='region') return false;
+    if(flt==='capacity'&&c.priceType!=='capacity') return false;
+    if(flt==='noCap'&&c.capActual!=null) return false;
+    if(!q) return true;
+    return (c.n+' '+(c.fn||'')+' '+N(c.from)+' '+N(c.to)+' '+(c.doc||'')+' '+(c.kv||'')+' '+(c.status||'')).toLowerCase().includes(q);
+  };
+  const list=CH.map((c,i)=>({c,i})).filter(x=>hit(x.c));
+  if(!list.length) return '<p class="note">没有匹配的通道，试试其它关键词。</p>';
+  return '<div class="libcount">匹配 '+list.length+' 条</div>'+list.map(({c,i})=>`<details class="libcard">
+    <summary>
+      <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}</span>
+      <span class="lc-p">${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
+      <span class="lc-m">${esc(N(c.from))}→${esc(N(c.to))} · ${esc(c.kv)} · 线损 ${c.loss==null?'—':fmt(c.loss,2)+'%'} · ${c.capActual!=null?c.capActual+' MW':(c.cap!=null?'额定 '+c.cap+' MW':'容量待补')}</span>
+      <span class="lc-b">${tierTag(c.tier)}</span>
+    </summary>
+    <div class="lc-body">
+      <div class="lib-io">
+        <div><label>输电价 元/MWh</label><input type="number" step="0.1" value="${c.t==null?'':c.t}" onchange="setCh(${i},'t',this.value)"></div>
+        <div><label>线损率 %</label><input type="number" step="0.05" value="${c.loss==null?'':c.loss}" onchange="setCh(${i},'loss',this.value)"></div>
+        <div><label>容量 MW</label><input type="number" step="100" value="${c.cap==null?'':c.cap}" onchange="setCh(${i},'cap',this.value)" placeholder="待补"></div>
+      </div>
+      <div class="lc-kv">
+        <div><span>送端省</span>${esc(N(c.from))}　<b>送出省输电价格</b> ${c.sendFee>0?fmt(c.sendFee,1)+' 元/MWh':'已含在通道价中'}</div>
+        <div><span>受端省</span>${esc(N(c.to))}</div>
+        <div><span>容量口径</span>${c.capBasis==='cap'?'实际输送能力（非 ATC）':c.capBasis==='rated'?'仅额定容量':'未获取'}${c.capActual!=null?'　实际 '+c.capActual+' MW':''}${c.capRated!=null?'　额定 '+c.capRated+' MW':''}</div>
+        <div><span>容量来源</span>${esc(c.capSrc||'—')}</div>
+        ${c.priceType==='capacity'?`<div><span>计价方式</span>单一容量电价制　容量电价 ${c.capPrice?c.capPrice.容量电价+' '+c.capPrice.单位:''}　折算等效 ${c.capEq!=null?fmt(c.capEq,2)+' 元/MWh':''}（按 ${DATA._capHours||4500} 小时）</div>`:''}
+        ${c.sendFee>0?`<div><span>送端省内段</span>按送端省「送出省输电价格」计，发改价格〔2018〕1227号第五条</div>`:''}
+        <div><span>计费口径</span>${esc(c.bill)}${c.incLoss?'（含线损）':'（不含线损）'}${c.tax?'　含税':'　不含税'}</div>
+        ${c.status?`<div><span>状态</span>${esc(c.status)}</div>`:''}
+        ${c.stFrom?`<div><span>送端落点</span>${esc(stName(c.stFrom))} @ ${esc(stAddr(c.stFrom))}</div>`:''}
+        ${c.stTo?`<div><span>受端落点</span>${esc(stName(c.stTo))} @ ${esc(stAddr(c.stTo))}</div>`:''}
+        ${c.lenKm?`<div><span>线路长度</span>${c.lenKm} km</div>`:''}
+      </div>
+      <div class="lib-src">${esc(c.doc||'无发改委文号')}${c.eff?'　生效 '+esc(c.eff):''}${c.docVersion?'　'+esc(c.docVersion):''}
+        ${c.docTitle?'<br>'+esc(c.docTitle):''}
+        ${c.note?'<br>'+esc(c.note):''}
+        ${c.sourceIssue?'<br><span style="color:var(--red)">'+esc(c.sourceIssue)+'</span>':''}
+        ${c.excerpt?'<q>原文摘录：'+esc(c.excerpt)+'</q>':''}
+        ${c.hist&&c.hist.length?'<div style="margin-top:6px"><b>调价历史</b>'+c.hist.map(x=>'<br>· '+esc(x.effective_from||'—')+'　'+esc(x.tariff_raw||'')+(x.loss_rate_pct!=null?'　线损 '+x.loss_rate_pct+'%':'')+'　'+esc(x.doc_number||'')).join('')+'</div>':''}
+      </div>
+    </div>
+  </details>`).join('');
+}
 function renderLib(){
   let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`;
   out+=`<div class="card tight seg">
@@ -881,18 +965,15 @@ function renderLib(){
   </div>`;
 
   if(libTab==='ch'){
-    out+=`<div class="card tight"><div class="sec-title">通道费率<span class="hint">元/MWh · % · MW</span></div><div class="libgrid">`;
-    out+=CH.map((c,i)=>`
-      <div class="lib-row">
-        <div class="lib-nm"><span>${esc(c.n)}</span><em>${esc(N(c.from))}→${esc(N(c.to))} ${esc(c.kv)}</em></div>
-        <div class="lib-io">
-          <div><label>输电价</label><input type="number" step="0.1" value="${c.t==null?'':c.t}" onchange="setCh(${i},'t',this.value)"></div>
-          <div><label>线损率</label><input type="number" step="0.05" value="${c.loss==null?'':c.loss}" onchange="setCh(${i},'loss',this.value)"></div>
-          <div><label>容量 MW</label><input type="number" step="100" value="${c.cap==null?'':c.cap}" onchange="setCh(${i},'cap',this.value)" placeholder="待补"></div>
-        </div>
-        <div class="lib-src">${tierTag(c.tier)}　${esc(c.doc||'—')}${c.eff?'　生效 '+esc(c.eff):''}${stName(c.stFrom)?'<br>送端 '+esc(stName(c.stFrom))+'（'+esc(stAddr(c.stFrom))+'）':''}${stName(c.stTo)?'　受端 '+esc(stName(c.stTo))+'（'+esc(stAddr(c.stTo))+'）':''}</div>
-      </div>`).join('');
-    out+=`</div></div>`;
+    out+=`<div class="card tight">
+      <div class="sec-title">通道费率<span class="hint">共 ${CH.length} 条</span></div>
+      <input id="lib-q" type="search" placeholder="搜索通道名 / 别名 / 省份 / 文号…" value="${esc(state.libQ||'')}" oninput="libSearch(this.value)" style="margin-bottom:8px">
+      <div class="seg small" style="flex-wrap:wrap">
+        ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量']].map(([k,t])=>
+          `<button class="${(state.libFilter||'all')===k?'on':''}" onclick="state.libFilter='${k}';state._libScr=window.scrollY;renderLib()">${t}</button>`).join('')}
+      </div>
+      <div id="lib-list">${renderLibList()}</div>
+    </div>`;
   } else if(libTab==='pv'){
     out+=`<div class="card tight"><div class="sec-title">省级参数<span class="hint">元/MWh</span></div>
       <div class="prow"><span>省份</span><span>出清价</span><span>输配电价</span><span>基金附加</span><span></span></div>
