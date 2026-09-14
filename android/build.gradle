@@ -1,4 +1,0 @@
-// WebView 壳工程：把根目录 index.html 打包为安卓应用
-plugins {
-    id 'com.android.application' version '8.5.2' apply false
-}

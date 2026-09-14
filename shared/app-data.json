@@ -1,7 +1,7 @@
 {
   "schema": "iproute-app-data/v1",
-  "builtAt": "2026-09-14T10:36:32.182Z",
-  "priceVersion": "6ae6fb21e6ae89a6",
+  "builtAt": "2026-09-14T10:59:10.438Z",
+  "priceVersion": "96078954f87aff52",
   "dataHash": "800759640231da83e24639e934532869c11f7de3e93042cdb6aa45f3f5d1f54c",
   "counts": {
     "stations": 91,

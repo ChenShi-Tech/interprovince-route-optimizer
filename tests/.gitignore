@@ -1,7 +1,0 @@
-# 测试运行产物（node tests/e2e.mjs 重新生成）
-shots/
-report.md
-results.json
-
-# 依赖
-node_modules/
