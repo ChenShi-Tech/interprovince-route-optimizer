@@ -20,6 +20,9 @@ index.html                        构建产物（自包含，可直接分发）
 src/template.html                 应用模板（界面 + 算法）
 src/extra.json                    非价格数据：站点、断面、经纬度、容量、线路长度
 data/fixed-prices.json            ★ 所有固定价格数据的唯一来源（改价只改这个文件）
+dist/app-data.json                ★ 端云共用数据（Web 与安卓端同源同版本）
+dist/app-data.min.json            同内容的紧凑版，供手机端随包内置
+docs/03-数据接口说明.md             数据契约：结构、版本校验、算法约定
 docs/费率核实报告.md                逐条核实报告（含偏差表与结构性陷阱）
 docs/tariff.json                  费率采集档案（含发改委原文摘录，不参与构建）
 docs/sources.md                   费率来源清单（文号 / 标题 / 颁布机构 / 日期 / URL）
@@ -33,6 +36,21 @@ tools/test-prefill.mjs            受端参数预填行为测试
 tools/baseline2.mjs               基线生成 + 校验 + 渲染冒烟测试
 tools/baseline-check.mjs          基线校验（迁移到其它实现后用它回归）
 ````
+
+
+## 数据共用（Web 与安卓端）
+
+构建时一次产出三份，**同源同版本**：
+
+| 产物 | 消费方 | 说明 |
+|---|---|---|
+| `index.html` | Web | 自包含单文件，数据内联，离线可用 |
+| `dist/app-data.json` | 安卓端 | 独立 JSON，含 schema 版本与价格指纹 |
+| `dist/app-data.min.json` | 安卓端 | 紧凑版，体积少约 25% |
+
+两端通过 `priceVersion` 比对版本，通过 `dataHash` 校验完整性。数据结构、算法约定与回归基准见 [数据接口说明](./docs/03-数据接口说明.md)。
+
+校验两端一致性：`node tools/test-data-share.mjs`
 
 ## 数据来源分档
 
