@@ -692,7 +692,7 @@ function renderRouteList(res){
   }
   out+=`<div class="rlist-foot" style="margin-top:7px">
       <span>成本阈值</span>
-      <select style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:6px" onchange="state.degrade=+this.value;state.sel=0;doSolve()">
+      <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:6px">
         ${[[0.03,'3%'],[0.05,'5%'],[0.10,'10%'],[0.20,'20%'],[9,'不限']].map(([v,t])=>
           `<option value="${v}" ${(state.degrade??0.10)==v?'selected':''}>${t}</option>`).join('')}
       </select>
@@ -907,6 +907,41 @@ function resetOne(k){
 /* ================= 费率库 ================= */
 let libTab='ch';
 function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b) b.innerHTML=renderLibList(); }
+function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b) b.innerHTML=renderPvList(); }
+function renderPvList(){
+  const q=(state.pvQ||'').trim().toLowerCase();
+  const ids=Object.keys(PV).filter(k=>{
+    if(!q) return true;
+    const p=PV[k];
+    return (p.n+' '+k+' '+(p.netSrc||'')).toLowerCase().includes(q);
+  });
+  if(!ids.length) return '<p class="note">没有匹配的省份，试试其它关键词。</p>';
+  return '<div class="libcount">匹配 '+ids.length+' 省</div><div class="libgrid">'
+    + ids.map(k=>{
+      const p=PV[k];
+      const verified=/发改|监管周期|130号|116号|460号|556号|157号|242号|432号|1055号|520号|421号|602号/.test(p.netSrc||'');
+      return `<details class="libcard">
+        <summary>
+          <span class="lc-n">${esc(p.n)}</span>
+          <span class="lc-p">${p.net==null?'—':fmt(p.net,1)}<small>元/MWh</small></span>
+          <span class="lc-m">省网输配电价 220kV+ · 基金附加 ${p.fund==null?'<span style="color:var(--red)">未获取</span>':fmt(p.fund,1)+' 元/MWh'}</span>
+          <span class="lc-b">${verified?'<span class="tier gov">已核实</span>':'<span class="tier est">待补</span>'}</span>
+        </summary>
+        <div class="lc-body">
+          <div class="lib-io" style="grid-template-columns:1fr 1fr 1fr">
+            <div><label>出清价 元/MWh</label><input type="number" step="5" value="${p.clear??''}" onchange="setPv('${k}','clear',this.value)"></div>
+            <div><label>省网输配电价 元/MWh</label><input type="number" step="0.1" value="${p.net??''}" onchange="setPv('${k}','net',this.value)"></div>
+            <div><label>基金附加 元/MWh</label><input type="number" step="0.1" value="${p.fund??''}" onchange="setPv('${k}','fund',this.value)"></div>
+          </div>
+          <div class="lc-kv">
+            <div><span>省代码</span>${k}</div>
+            <div><span>区域电网</span>${esc((DATA.RGOF||{})[k]||'—')}</div>
+          </div>
+          <div class="lib-src">取值依据：${esc(p.netSrc||'—')}</div>
+        </div>
+      </details>`;
+    }).join('') + '</div>';
+}
 function renderLibList(){
   const q=(state.libQ||'').trim().toLowerCase();
   const flt=state.libFilter||'all';
@@ -976,16 +1011,10 @@ function renderLib(){
       <div id="lib-list">${renderLibList()}</div>
     </div>`;
   } else if(libTab==='pv'){
-    out+=`<div class="card tight"><div class="sec-title">省级参数<span class="hint">元/MWh</span></div>
-      <div class="prow"><span>省份</span><span>出清价</span><span>输配电价</span><span>基金附加</span><span></span></div>
-      ${Object.keys(PV).map(k=>`<div class="prow">
-        <span class="pn">${PV[k].n}</span>
-        <input type="number" step="5" value="${PV[k].clear}" onchange="setPv('${k}','clear',this.value)">
-        <input type="number" step="0.1" value="${PV[k].net}" onchange="setPv('${k}','net',this.value)">
-        <input type="number" step="0.1" value="${PV[k].fund}" onchange="setPv('${k}','fund',this.value)">
-        <span class="tier ${/发改|监管周期/.test(PV[k].netSrc)?'gov':'est'}">${/发改|监管周期/.test(PV[k].netSrc)?'核实':'待补'}</span>
-      </div>
-      <div class="lib-src" style="margin-top:8px">${Object.keys(PV).map(k=>`<b>${PV[k].n}</b>：${esc(PV[k].netSrc)}`).join('<br>')}</div>`).join('')}
+    out+=`<div class="card tight">
+      <div class="sec-title">省级参数<span class="hint">共 ${Object.keys(PV).length} 省 · 元/MWh</span></div>
+      <input id="pv-q" type="search" placeholder="搜索省份 / 文号 / 来源…" value="${esc(state.pvQ||'')}" oninput="pvSearch(this.value)" style="margin-bottom:8px">
+      <div id="pv-list">${renderPvList()}</div>
     </div>`;
   } else {
     out+=`<div class="card tight"><div class="sec-title">输电断面<span class="hint">公开报道/文献值</span></div><div class="libgrid">`;
@@ -1325,9 +1354,16 @@ function go(t){
 }
 document.addEventListener('change',e=>{
   const id=e.target.id;
-  if(id==='i-from'){ state.from=e.target.value; applyFromProv(); state.sel=0; doSolve(); return; }
-  if(id==='i-to'){ state.to=e.target.value; applyToProv(); state.sel=0; doSolve(); return; }
-  if(['i-qty','i-hours','i-hops','i-detour','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region'].indexOf(id)>=0){
+  if(id==='i-from'||id==='i-to'){
+    const isFrom=(id==='i-from');
+    if(isFrom) state.from=e.target.value; else state.to=e.target.value;
+    readInputs();                                   // 先读其余输入框的当前值
+    if(isFrom) applyFromProv(); else applyToProv(); // 再用该端的核定值覆盖受影响的项
+    state.sel=0; saveLast(); state._res=solve(); renderCalc();
+    return;
+  }
+  if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region'].indexOf(id)>=0){
+    if(id==='i-degrade') state.degrade=+e.target.value;
     state.sel=0; doSolve();
   }
 });
