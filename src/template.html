@@ -589,6 +589,12 @@ function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:
 /* ================= 测算页 ================= */
 function renderCalc(){
   const res=state._res;
+  // 重渲染会整体替换 v-calc：先记录其中的焦点控件，重建后恢复，否则连续步进/输入被打断
+  const host=document.getElementById('v-calc');
+  const ae=document.activeElement;
+  const fid=(ae&&ae.id&&host&&host.contains(ae))?ae.id:null;
+  let caret=null;
+  if(fid){ try{ caret=[ae.selectionStart,ae.selectionEnd]; }catch(e){ /* number 输入不支持 selection */ } }
   const opt=(sel,ex)=>Object.keys(PV).map(k=>
     `<option value="${k}" ${k===sel?'selected':''} ${k===ex?'disabled':''}>${PV[k].n}</option>`).join('');
 
@@ -651,6 +657,13 @@ function renderCalc(){
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
   document.getElementById('v-calc').innerHTML=out;
+  if(fid){
+    const el=document.getElementById(fid);
+    if(el){
+      el.focus({preventScroll:true});
+      if(caret&&caret[0]!=null){ try{ el.setSelectionRange(caret[0],caret[1]); }catch(e){} }
+    }
+  }
 }
 
 /* ---------- 可选路线列表 ---------- */
@@ -873,7 +886,9 @@ function readInputs(){
   const g=id=>document.getElementById(id);
   if(!g('i-from')) return;
   state.from=g('i-from').value; state.to=g('i-to').value;
-  state.qty=+g('i-qty').value||1000; state.hours=+g('i-hours').value||1;
+  // 电量必须为正数：负数是真值，`+v||1000` 拦不住，需显式归一化
+  const qty=+g('i-qty').value; state.qty=qty>0?qty:1000;
+  state.hours=+g('i-hours').value||1;
   state.maxHops=+g('i-hops').value||3; state.maxDetour=+g('i-detour').value||2;
   state.pGen=+g('i-pgen').value||0; state.pDst=+g('i-pdst').value||0;
   state.pNet=+g('i-pnet').value||0; state.fund=+g('i-fund').value||0;
