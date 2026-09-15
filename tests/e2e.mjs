@@ -520,6 +520,32 @@ const tests = [
 
   /* ================= PRD-IPRO-2026-001 ================= */
   {
+    id: 'RQ-01', section: 'PRD-IPRO', title: 'REQ-101：incLoss 通道按落地端结算电量计费',
+    steps: '宁夏→浙江 取灵绍单段路线 segs[0].fee；四川→江西 取雅湖单段路线 segs[0].fee',
+    expected: 'REQ-101 新口径正确值：灵绍 48.80±0.01 / 雅湖 68.50±0.01（incLoss 通道输电费 = 通道电价 × 落地端电量 qOut，依据发改价格规〔2025〕1490号附件4第十八条）。已取代送端电量旧口径（50.97/72.87）',
+    async run(page, set) {
+      // REQ-101 新口径正确值：incLoss 通道 fee = e.t × 落地端电量 qOut，
+      // 依据发改价格规〔2025〕1490号附件4第十八条「专项工程实际输电量按落地端
+      // 结算电量进行统计确认」。单段路线 qOut=1，故 fee 恰等于通道电价本身。
+      const segFee = async (from, to, name) => {
+        await page.goto(G, DCL);
+        await page.selectOption('#i-from', from);
+        await page.selectOption('#i-to', to);
+        return page.evaluate(n => {
+          const row = state._res.rows.find(r => r.segs.length === 1 && r.segs[0].e.n === n);
+          return row ? row.segs[0].fee : null;
+        }, name);
+      };
+      const ls = await segFee('NX', 'ZJ', '灵绍直流');
+      ok(ls !== null, '宁夏→浙江 应存在灵绍单段路线');
+      ok(Math.abs(ls - 48.80) <= 0.01, `灵绍 fee 应为 48.80±0.01（落地端电量新口径），实际 ${ls}`);
+      const yh = await segFee('SC', 'JX', '雅湖直流');
+      ok(yh !== null, '四川→江西 应存在雅湖单段路线');
+      ok(Math.abs(yh - 68.50) <= 0.01, `雅湖 fee 应为 68.50±0.01（落地端电量新口径），实际 ${yh}`);
+      set(`灵绍 fee=${ls.toFixed(4)}、雅湖 fee=${yh.toFixed(4)}（落地端电量新口径，1490号第十八条）`);
+    },
+  },
+  {
     id: 'RQ-603', section: 'PRD-IPRO', title: 'REQ-603+702：拓扑 SVG 五档视口防裁切/高度自适应',
     steps: '五档视口（1920×1080 / 1366×768 / 900×700 / 390×844 / 375×667）打开网架图→拓扑图；再切天地图验证非 svg 模式容器高度行为不变',
     expected: '各视口 svg.bottom ≤ 容器.bottom+1；被裁文字节点=0；容器高与绘制高之差 ≤ 容器高×10%；td 模式容器仍走固定高（aspect-ratio 不生效），修复前实测缺陷（1920 裁 126px/1366 裁 322px）已消除',

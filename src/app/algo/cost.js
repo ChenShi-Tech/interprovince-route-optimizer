@@ -51,7 +51,7 @@ function evalPath(path, ctx, env){
   const vset=new Set(), tset=new Set(), rset=new Set(), stset=new Set();
   const segs=edges.map((e,i)=>{
     const q=1/suf[i], qOut=1/suf[i+1];
-    const fee=e.t*q, rg=regionFee(env,nodes[i],nodes[i+1])*q, sf=(e.sendFee||0)*q;
+    const fee=e.incLoss? e.t*qOut : e.t*q, rg=regionFee(env,nodes[i],nodes[i+1])*q, sf=(e.sendFee||0)*q;
     trans+=fee; regFee+=rg; sendTotal+=sf;
     const a=env.geo.lngLatOf(e,'from'), b=env.geo.lngLatOf(e,'to');
     const crow=havKm(a,b);
