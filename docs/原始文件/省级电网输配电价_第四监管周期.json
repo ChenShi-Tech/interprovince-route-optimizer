@@ -1,0 +1,849 @@
+[
+  {
+    "province": "北京电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.15,
+      "twopart_mwh": 150.0,
+      "single_kwh": 0.2,
+      "single_mwh": 200.0
+    },
+    "voltage_110kv_twopart_kwh": 0.165,
+    "voltage_110kv_twopart_mwh": 165.0,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35~110千伏(合并一档) / 220千伏及以上",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.3800 0.3100 0.2500 0.2000；两部制 0.2050 0.1650 0.1500",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "35kV与110kV合并，故「110kV」栏取该合并档值0.1650。省间互济临时送省外0.03元/千瓦时、不计线损；无单列外送电价。省内线损率3.11%"
+  },
+  {
+    "province": "天津电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.1052,
+      "twopart_mwh": 105.2,
+      "single_kwh": 0.1315,
+      "single_mwh": 131.5
+    },
+    "voltage_110kv_twopart_kwh": 0.1264,
+    "voltage_110kv_twopart_mwh": 126.4,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2836 0.2507 0.1864 0.1534 0.1315；两部制 0.2158 0.1631 0.1402 0.1264 0.1052",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "两部制含不满1千伏档。临时送省外0.03元/千瓦时、不计线损。省内线损率2.54%"
+  },
+  {
+    "province": "河北电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0726,
+      "twopart_mwh": 72.6,
+      "single_kwh": 0.115,
+      "single_mwh": 115.0
+    },
+    "voltage_110kv_twopart_kwh": 0.0976,
+    "voltage_110kv_twopart_mwh": 97.6,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2150 0.1900 0.1650 0.1400 0.1150；两部制 0.1726 0.1476 0.1226 0.0976 0.0726",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "临时送省外0.03元/千瓦时、不计线损。省内线损率4.08%"
+  },
+  {
+    "province": "冀北电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0705,
+      "twopart_mwh": 70.5,
+      "single_kwh": 0.1023,
+      "single_mwh": 102.3
+    },
+    "voltage_110kv_twopart_kwh": 0.0925,
+    "voltage_110kv_twopart_mwh": 92.5,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上",
+    "export_price_yuan_per_kwh": 0.0238,
+    "export_online_loss_rate_pct": 0.94,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1803 0.1583 0.1363 0.1143 0.1023；两部制 0.1585 0.1365 0.1145 0.0925 0.0705",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "原注为「冀北电网」独立表，非河北电网。外送电价0.0238元/千瓦时(含税、不含线损，适用外送新能源及外送京津唐区域外火电)。省内线损率2.87%"
+  },
+  {
+    "province": "山西电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.029,
+      "twopart_mwh": 29.0,
+      "single_kwh": 0.1172,
+      "single_mwh": 117.2
+    },
+    "voltage_110kv_twopart_kwh": 0.049,
+    "voltage_110kv_twopart_mwh": 49.0,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制无不满1千伏）",
+    "export_price_yuan_per_kwh": 0.0217,
+    "export_online_loss_rate_pct": 0.19,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1672 0.1472 0.1322 0.1222 0.1172；两部制 0.1040 0.0740 0.0490 0.0290",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "两部制仅4档(起于1~10千伏)。外送电价0.0217元/千瓦时。省内线损率3.52%"
+  },
+  {
+    "province": "蒙东电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0601,
+      "twopart_mwh": 60.1,
+      "single_kwh": 0.1401,
+      "single_mwh": 140.1
+    },
+    "voltage_110kv_twopart_kwh": 0.087,
+    "voltage_110kv_twopart_mwh": 87.0,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110(66)千伏 / 220千伏及以上",
+    "export_price_yuan_per_kwh": 0.0268,
+    "export_online_loss_rate_pct": 0.71,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.3732 0.3356 0.2499 0.1732 0.1401；两部制 0.1738 0.1346 0.1080 0.0870 0.0601",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "内蒙古分蒙东(国网蒙东电力)、蒙西(内蒙古电力集团)两张独立表。外送电价0.0268元/千瓦时。省内线损率6.41%"
+  },
+  {
+    "province": "蒙西电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0429,
+      "twopart_mwh": 42.9,
+      "single_kwh": 0.092,
+      "single_mwh": 92.0
+    },
+    "voltage_110kv_twopart_kwh": 0.052,
+    "voltage_110kv_twopart_mwh": 52.0,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上",
+    "export_price_yuan_per_kwh": 0.03,
+    "export_online_loss_rate_pct": 0.18,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1561 0.1289 0.1129 0.1029 0.0920；两部制 0.0876 0.0787 0.0637 0.0520 0.0429",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "蒙西电网单独核价。外送电价0.03元/千瓦时；蒙西送华北电量按现行模式执行。省内线损率2.81%"
+  },
+  {
+    "province": "辽宁电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0571,
+      "twopart_mwh": 57.1,
+      "single_kwh": 0.141,
+      "single_mwh": 141.0
+    },
+    "voltage_110kv_twopart_kwh": 0.084,
+    "voltage_110kv_twopart_mwh": 84.0,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 110(66)千伏 / 220千伏及以上（35并入110档）",
+    "export_price_yuan_per_kwh": 0.0259,
+    "export_online_loss_rate_pct": 0.69,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2330 0.2119 0.1881 0.1410；两部制 0.1182 0.1053 0.0840 0.0571",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "仅4档，无独立35千伏档。外送电价0.0259元/千瓦时。省内线损率3.78%"
+  },
+  {
+    "province": "吉林电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.1113,
+      "twopart_mwh": 111.3,
+      "single_kwh": 0.227,
+      "single_mwh": 227.0
+    },
+    "voltage_110kv_twopart_kwh": 0.1213,
+    "voltage_110kv_twopart_mwh": 121.3,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 110(66)千伏 / 220千伏及以上（两部制仅3档）",
+    "export_price_yuan_per_kwh": 0.0251,
+    "export_online_loss_rate_pct": 0.45,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2870 0.2570 0.2470 0.2270；两部制 0.1513 0.1213 0.1113",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "仅4档；两部制起于1~10千伏。外送电价0.0251元/千瓦时。省内线损率5.17%"
+  },
+  {
+    "province": "黑龙江电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0763,
+      "twopart_mwh": 76.3,
+      "single_kwh": 0.226,
+      "single_mwh": 226.0
+    },
+    "voltage_110kv_twopart_kwh": 0.1026,
+    "voltage_110kv_twopart_mwh": 102.6,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110(66)千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0235,
+    "export_online_loss_rate_pct": 1.54,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2828 0.2726 0.2620 0.2410 0.2260；两部制 0.1385 0.1171 0.1026 0.0763",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0235元/千瓦时。省内线损率6.46%"
+  },
+  {
+    "province": "上海电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0851,
+      "twopart_mwh": 85.1,
+      "single_kwh": 0.1076,
+      "single_mwh": 107.6
+    },
+    "voltage_110kv_twopart_kwh": 0.0953,
+    "voltage_110kv_twopart_mwh": 95.3,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2891 0.2446 0.1989 0.1656 0.1076；两部制 0.1781 0.1623 0.1268 0.0953 0.0851",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "临时送省外0.03元/千瓦时、不计线损。省内线损率2.61%"
+  },
+  {
+    "province": "江苏电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0518,
+      "twopart_mwh": 51.8,
+      "single_kwh": 0.1351,
+      "single_mwh": 135.1
+    },
+    "voltage_110kv_twopart_kwh": 0.0788,
+    "voltage_110kv_twopart_mwh": 78.8,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2391 0.2131 0.1881 0.1621 0.1351；两部制 0.1298 0.1048 0.0788 0.0518",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "与用户锚点一致。临时送省外0.03元/千瓦时。省内线损率2.83%"
+  },
+  {
+    "province": "浙江电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0663,
+      "twopart_mwh": 66.3,
+      "single_kwh": 0.135,
+      "single_mwh": 135.0
+    },
+    "voltage_110kv_twopart_kwh": 0.0767,
+    "voltage_110kv_twopart_mwh": 76.7,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2412 0.2114 0.1700 0.1500 0.1350；两部制 0.1250 0.0895 0.0767 0.0663",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "临时送省外0.03元/千瓦时。省内线损率3.07%"
+  },
+  {
+    "province": "安徽电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0548,
+      "twopart_mwh": 54.8,
+      "single_kwh": 0.1044,
+      "single_mwh": 104.4
+    },
+    "voltage_110kv_twopart_kwh": 0.0809,
+    "voltage_110kv_twopart_mwh": 80.9,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2014 0.1794 0.1574 0.1344 0.1044；两部制 0.1324 0.1070 0.0809 0.0548",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "与用户锚点一致。临时送省外0.03元/千瓦时。省内线损率3.90%"
+  },
+  {
+    "province": "福建电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0462,
+      "twopart_mwh": 46.2,
+      "single_kwh": 0.0883,
+      "single_mwh": 88.3
+    },
+    "voltage_110kv_twopart_kwh": 0.0769,
+    "voltage_110kv_twopart_mwh": 76.9,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.022,
+    "export_online_loss_rate_pct": 1.1,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1833 0.1633 0.1433 0.1233 0.0883；两部制 0.1219 0.1019 0.0769 0.0462",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "含闽粤联网工程容量电费。外送电价0.0220元/千瓦时。省内线损率3.37%"
+  },
+  {
+    "province": "江西电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0935,
+      "twopart_mwh": 93.5,
+      "single_kwh": 0.1166,
+      "single_mwh": 116.6
+    },
+    "voltage_110kv_twopart_kwh": 0.1085,
+    "voltage_110kv_twopart_mwh": 108.5,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1916 0.1716 0.1516 0.1316 0.1166；两部制 0.1485 0.1285 0.1085 0.0935",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "单一制0.1166与锚点一致；锚点缺的两部制值为0.0935。临时送省外0.03元/千瓦时。省内线损率3.68%"
+  },
+  {
+    "province": "山东电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.089,
+      "twopart_mwh": 89.0,
+      "single_kwh": 0.1721,
+      "single_mwh": 172.1
+    },
+    "voltage_110kv_twopart_kwh": 0.106,
+    "voltage_110kv_twopart_mwh": 106.0,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2401 0.2231 0.2061 0.1891 0.1721；两部制 0.1400 0.1230 0.1060 0.0890",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "与用户锚点一致。临时送省外0.03元/千瓦时。省内线损率3.07%"
+  },
+  {
+    "province": "河南电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.098,
+      "twopart_mwh": 98.0,
+      "single_kwh": 0.1,
+      "single_mwh": 100.0
+    },
+    "voltage_110kv_twopart_kwh": 0.1125,
+    "voltage_110kv_twopart_mwh": 112.5,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0255,
+    "export_online_loss_rate_pct": 0.57,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1955 0.1680 0.1412 0.1145 0.1000；两部制 0.1655 0.1392 0.1125 0.0980",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0255元/千瓦时。省内线损率4.82%"
+  },
+  {
+    "province": "湖北电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0694,
+      "twopart_mwh": 69.4,
+      "single_kwh": 0.1303,
+      "single_mwh": 130.3
+    },
+    "voltage_110kv_twopart_kwh": 0.0884,
+    "voltage_110kv_twopart_mwh": 88.4,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0328,
+    "export_online_loss_rate_pct": 0.82,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2103 0.1903 0.1703 0.1503 0.1303；两部制 0.1263 0.1065 0.0884 0.0694",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "与用户锚点一致。外送电价0.0328元/千瓦时。省内线损率4.55%"
+  },
+  {
+    "province": "湖南电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0852,
+      "twopart_mwh": 85.2,
+      "single_kwh": 0.1809,
+      "single_mwh": 180.9
+    },
+    "voltage_110kv_twopart_kwh": 0.1104,
+    "voltage_110kv_twopart_mwh": 110.4,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.024,
+    "export_online_loss_rate_pct": 0.88,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2609 0.2409 0.2209 0.2009 0.1809；两部制 0.1694 0.1394 0.1104 0.0852",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "与用户锚点一致。外送电价0.0240元/千瓦时。省内线损率4.95%"
+  },
+  {
+    "province": "广东电网（不含深圳）",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0449,
+      "twopart_mwh": 44.9,
+      "single_kwh": 0.0913,
+      "single_mwh": 91.3
+    },
+    "voltage_110kv_twopart_kwh": 0.0727,
+    "voltage_110kv_twopart_mwh": 72.7,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35~110千伏(合并一档) / 220千伏及以上",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1957 0.1708 0.1282 0.0913；两部制 0.0979 0.0727 0.0449",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "深圳单列，此表为不含深圳的全省平均价。实际执行须叠加价区交叉补贴：珠三角6市+0.0237、惠州+0.0011、东西两翼-0.0580、粤北山区-0.0896（元/千瓦时）。省表见粤发改价格〔2026〕242号附件2。临时送省外0.03元/千瓦时。省内线损率3.31%"
+  },
+  {
+    "province": "深圳电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": null,
+      "twopart_mwh": null,
+      "single_kwh": null,
+      "single_mwh": null
+    },
+    "voltage_110kv_twopart_kwh": 0.1054,
+    "voltage_110kv_twopart_mwh": 105.4,
+    "voltage_tiers_as_published": "10千伏高供高计 / 10千伏高供低计(380V/220V计量) / 20千伏 / 110千伏 / 220千伏及以上",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "一、工商业(101至3000千伏安) 250千瓦时及以下 0.1804 0.2054 0.1744 0.1554 0.1304；250千瓦时以上 0.1604 0.1854 0.1544 0.1354 0.1104；二、工商业(3001千伏安及以上) 400千瓦时及以下 0.1304 0.1554 0.1244 0.1054 0.0804；400千瓦时以上 0.1104 0.1354 0.1044 0.0854 0.0604；三、工商业(100千伏安及以下和公变接入) 0.2135 0.2385 0.2075 0.1885 0.1635",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "深圳不按单一制/两部制划分，而按容量+负荷率分类，220kV+共4个可能取值(0.1304/0.1104/0.0804/0.0604)，指标栏无法单一取数，故置null，详见variants。含上网环节线损费；线损率2.11%。送出省输电价格原文未列。省表见粤发改价格〔2026〕242号附件3",
+    "price_kwh_220kv_above_variants": {
+      "工商业101至3000千伏安_每月每千伏安用电250千瓦时及以下": 0.1304,
+      "工商业101至3000千伏安_每月每千伏安用电250千瓦时以上": 0.1104,
+      "工商业3001千伏安及以上_每月每千瓦用电400千瓦时及以下": 0.0804,
+      "工商业3001千伏安及以上_每月每千瓦用电400千瓦时以上": 0.0604,
+      "工商业100千伏安及以下和公变接入用电": 0.1635
+    }
+  },
+  {
+    "province": "广西电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0293,
+      "twopart_mwh": 29.3,
+      "single_kwh": 0.0843,
+      "single_mwh": 84.3
+    },
+    "voltage_110kv_twopart_kwh": 0.0777,
+    "voltage_110kv_twopart_mwh": 77.7,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.018,
+    "export_online_loss_rate_pct": 0.52,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2606 0.2471 0.2296 0.1199 0.0843；两部制 0.1476 0.1054 0.0777 0.0293",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0180元/千瓦时。省内线损率4.67%"
+  },
+  {
+    "province": "重庆电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0868,
+      "twopart_mwh": 86.8,
+      "single_kwh": 0.1647,
+      "single_mwh": 164.7
+    },
+    "voltage_110kv_twopart_kwh": 0.1062,
+    "voltage_110kv_twopart_mwh": 106.2,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0216,
+    "export_online_loss_rate_pct": 0.85,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2352 0.2149 0.1948 0.1796 0.1647；两部制 0.1515 0.1256 0.1062 0.0868",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0216元/千瓦时。省内线损率4.18%"
+  },
+  {
+    "province": "四川电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0466,
+      "twopart_mwh": 46.6,
+      "single_kwh": 0.0934,
+      "single_mwh": 93.4
+    },
+    "voltage_110kv_twopart_kwh": 0.0644,
+    "voltage_110kv_twopart_mwh": 64.4,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.035,
+    "export_online_loss_rate_pct": 0.99,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2563 0.2299 0.1992 0.1126 0.0934；两部制 0.1391 0.1125 0.0644 0.0466",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送基础价0.035元/千瓦时；向家坝/溪洛渡左岸/白鹤滩年1044亿千瓦时内0.0232，苏洼龙/巴塘年47亿内0.03，锦屏官地(送江苏)0.0304、锦屏官地(送重庆)0.0144、长海0.03、二滩0.043。省内线损率5.64%"
+  },
+  {
+    "province": "贵州电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0468,
+      "twopart_mwh": 46.8,
+      "single_kwh": 0.108,
+      "single_mwh": 108.0
+    },
+    "voltage_110kv_twopart_kwh": 0.072,
+    "voltage_110kv_twopart_mwh": 72.0,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0302,
+    "export_online_loss_rate_pct": 1.13,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2154 0.2024 0.1763 0.1458 0.1080；两部制 0.1238 0.1097 0.0720 0.0468",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0302元/千瓦时。省内线损率4.50%"
+  },
+  {
+    "province": "云南电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0475,
+      "twopart_mwh": 47.5,
+      "single_kwh": 0.1059,
+      "single_mwh": 105.9
+    },
+    "voltage_110kv_twopart_kwh": 0.0683,
+    "voltage_110kv_twopart_mwh": 68.3,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0478,
+    "export_online_loss_rate_pct": 1.47,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1620 0.1520 0.1420 0.1305 0.1059；两部制 0.1246 0.0995 0.0683 0.0475",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送基础价0.0478元/千瓦时；溪洛渡右岸/乌东德年合计566亿千瓦时内0.0253，澜上200亿内0.035，澜上(超200亿部分)/小湾/糯扎渡/景洪/功果桥/龙开口年合计293亿内0.0473。省内线损率4.24%"
+  },
+  {
+    "province": "陕西电网（不含榆林地区）",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0731,
+      "twopart_mwh": 73.1,
+      "single_kwh": 0.1482,
+      "single_mwh": 148.2
+    },
+    "voltage_110kv_twopart_kwh": 0.0861,
+    "voltage_110kv_twopart_mwh": 86.1,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0348,
+    "export_online_loss_rate_pct": 0.59,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "一般工商业(单一制) 0.2297 0.2082 0.1867 0.1602 0.1482；大工业(两部制) 0.1271 0.1061 0.0861 0.0731",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "陕西分榆林/非榆林两张独立表。外送电价0.0348元/千瓦时。省内线损率4.24%"
+  },
+  {
+    "province": "陕西电网（榆林地区）",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0543,
+      "twopart_mwh": 54.3,
+      "single_kwh": 0.1482,
+      "single_mwh": 148.2
+    },
+    "voltage_110kv_twopart_kwh": 0.0673,
+    "voltage_110kv_twopart_mwh": 67.3,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0348,
+    "export_online_loss_rate_pct": 0.59,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "一般工商业(单一制) 0.2297 0.2082 0.1867 0.1602 0.1482；大工业(两部制) 0.1083 0.0873 0.0673 0.0543",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "榆林地区两部制低于非榆林。外送电价0.0348元/千瓦时。省内线损率4.24%"
+  },
+  {
+    "province": "甘肃电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0693,
+      "twopart_mwh": 69.3,
+      "single_kwh": 0.1134,
+      "single_mwh": 113.4
+    },
+    "voltage_110kv_twopart_kwh": 0.0799,
+    "voltage_110kv_twopart_mwh": 79.9,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.028,
+    "export_online_loss_rate_pct": 1.01,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2945 0.2745 0.2545 0.1251 0.1134；两部制 0.1063 0.0923 0.0799 0.0693",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0280元/千瓦时。省内线损率2.31%"
+  },
+  {
+    "province": "青海电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.06,
+      "twopart_mwh": 60.0,
+      "single_kwh": 0.1073,
+      "single_mwh": 107.3
+    },
+    "voltage_110kv_twopart_kwh": 0.0711,
+    "voltage_110kv_twopart_mwh": 71.1,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0339,
+    "export_online_loss_rate_pct": 1.39,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1926 0.1866 0.1806 0.1133 0.1073；两部制 0.0871 0.0811 0.0711 0.0600",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0339元/千瓦时。省内线损率2.90%"
+  },
+  {
+    "province": "宁夏电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0491,
+      "twopart_mwh": 49.1,
+      "single_kwh": 0.0763,
+      "single_mwh": 76.3
+    },
+    "voltage_110kv_twopart_kwh": 0.0567,
+    "voltage_110kv_twopart_mwh": 56.7,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.025,
+    "export_online_loss_rate_pct": 0.5,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1841 0.1631 0.1431 0.1034 0.0763；两部制 0.0903 0.0749 0.0567 0.0491",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0250元/千瓦时。省内线损率2.58%"
+  },
+  {
+    "province": "新疆电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0485,
+      "twopart_mwh": 48.5,
+      "single_kwh": 0.1059,
+      "single_mwh": 105.9
+    },
+    "voltage_110kv_twopart_kwh": 0.0808,
+    "voltage_110kv_twopart_mwh": 80.8,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": 0.0343,
+    "export_online_loss_rate_pct": 0.27,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.1636 0.1606 0.1566 0.1221 0.1059；两部制 0.1202 0.1098 0.0808 0.0485",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "外送电价0.0343元/千瓦时。省内线损率3.45%"
+  },
+  {
+    "province": "海南电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.0702,
+      "twopart_mwh": 70.2,
+      "single_kwh": 0.1748,
+      "single_mwh": 174.8
+    },
+    "voltage_110kv_twopart_kwh": 0.0993,
+    "voltage_110kv_twopart_mwh": 99.3,
+    "voltage_tiers_as_published": "不满1千伏 / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上（两部制4档）",
+    "export_price_yuan_per_kwh": null,
+    "export_online_loss_rate_pct": null,
+    "source": {
+      "doc_number": "发改价格〔2026〕1077号",
+      "doc_title": "国家发展改革委关于第四监管周期省级电网输配电价、区域电网输电价格及有关事项的通知",
+      "url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/t20260710_1406433.html",
+      "attachment_url": "https://www.ndrc.gov.cn/xwdt/tzgg/202607/P020260710613710982159.pdf",
+      "original_quote": "单一制 0.2553 0.2324 0.2103 0.1893 0.1748；两部制 0.1348 0.1180 0.0993 0.0702",
+      "effective_from": "2026-08-01",
+      "confidence": "official_primary"
+    },
+    "note": "不在用户30省清单内，同批次核定，附此备查。临时送省外0.03元/千瓦时。省内线损率5.37%"
+  },
+  {
+    "province": "西藏电网",
+    "voltage_220kv_above": {
+      "twopart_kwh": 0.2824,
+      "twopart_mwh": 282.4,
+      "single_kwh": 0.2924,
+      "single_mwh": 292.4
+    },
+    "voltage_110kv_twopart_kwh": 0.2824,
+    "voltage_110kv_twopart_mwh": 282.4,
+    "voltage_tiers_as_published": "不满1千伏(大工业无) / 1~10(20)千伏 / 35千伏 / 110千伏 / 220千伏及以上",
+    "export_price_yuan_per_kwh": 0.0495,
+    "export_online_loss_rate_pct": 3.22,
+    "source": {
+      "doc_number": "藏发改价格（第四监管周期西藏电网输配电价通知）",
+      "doc_title": "西藏自治区发展和改革委员会关于第四监管周期西藏电网输配电价有关事项的通知",
+      "url": "https://drc.xizang.gov.cn/fgdt/jggl/202607/t20260731_552206.html",
+      "attachment_url": "https://drc.xizang.gov.cn/fgdt/jggl/202607/P020260731720782056116.pdf",
+      "original_quote": "大工业 单一制 0.3124 0.3024 0.2924 0.2924；两部制 0.3024 0.2924 0.2824 0.2824。一般工商业 单一制 0.3824 0.3724 0.3624 0.3524 0.3524；两部制 0.3724 0.3624 0.3524 0.3424 0.3424",
+      "effective_from": "2026-10-01",
+      "confidence": "official_primary"
+    },
+    "note": "不在1077号附件1内，由西藏自治区发展改革委单独印发（2026-07-31，2026-10-01起执行，经国家发改委核定）。表按「大工业/一般工商业」×「单一制/两部制」分列：此处220kV+两部制取大工业值0.2824；一般工商业两部制220kV+为0.3424。首次核定外送输电价格。省内线损率10.81%"
+  }
+]
