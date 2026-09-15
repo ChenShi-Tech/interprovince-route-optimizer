@@ -59,12 +59,12 @@ function change(id, val) {
     : id === 'i-from' ? "state.from=e.target.value;readInputs();applyFromProv();"
     : id === 'i-degrade' ? "state.degrade=+e.target.value;readInputs();"
     : "readInputs();";
-  G(`(function(){const e={target:{id:${JSON.stringify(id)},value:${JSON.stringify(val)}}};${branch}state._res=solve();renderCalc();})();`);
+  G(`(function(){const e={target:{id:${JSON.stringify(id)},value:${JSON.stringify(val)}}};${branch}state._res=solve(state, algoData());renderCalc();})();`);
   syncDom();
 }
 
 function boot(from, to) {
-  G(`state.from='${from}';state.to='${to}';state.showAll=true;state.maxHops=2;state.degrade=0.10;applyBothProv();state._res=solve();renderCalc();`);
+  G(`state.from='${from}';state.to='${to}';state.showAll=true;state.maxHops=2;state.degrade=0.10;applyBothProv();state._res=solve(state, algoData());renderCalc();`);
   syncDom();
 }
 
@@ -109,15 +109,15 @@ ok(G('state.maxHops') === 3, '跳数上限改 3 生效');
 console.log('══ 四、手工覆盖受保护且可恢复 ══');
 boot('SC', 'JS');
 change('i-to', 'SH');
-G('state.pNet=999;state._res=solve();renderCalc();'); syncDom();
+G('state.pNet=999;state._res=solve(state, algoData());renderCalc();'); syncDom();
 change('i-from', 'YN');
 ok(G('state.pNet') === 999, '切送端不会抹掉手工改过的受端值', `得到 ${G('state.pNet')}`);
 change('i-to', 'SH');
 ok(G('state.pNet') === PV.SH.net, '重选受端后回到核定值（视为重新核准）');
-G('state.pNet=777;state._res=solve();renderCalc();');
+G('state.pNet=777;state._res=solve(state, algoData());renderCalc();');
 G("resetOne('pNet');");
 ok(G('state.pNet') === PV.SH.net, '「恢复核定值」按钮可还原', `得到 ${G('state.pNet')}，应为 ${PV.SH.net}`);
-G('state.fund=555;state._res=solve();renderCalc();');
+G('state.fund=555;state._res=solve(state, algoData());renderCalc();');
 G("resetOne('fund');");
 ok(G('state.fund') === PV.SH.fund, '基金附加亦可恢复', `得到 ${G('state.fund')}`);
 
@@ -134,9 +134,9 @@ console.log('══ 六、受端省内费用口径开关（计入 / 只算到省
 boot('SC', 'JS');
 for (const [f, t] of [['SC', 'JS'], ['YN', 'GD'], ['GS', 'SD'], ['SX', 'JS']]) {
   boot(f, t);
-  G('state.includeDstCost=true;state._res=solve();');
+  G('state.includeDstCost=true;state._res=solve(state, algoData());');
   const A = G('state._res.rows[0]');
-  G('state.includeDstCost=false;state._res=solve();');
+  G('state.includeDstCost=false;state._res=solve(state, algoData());');
   const B = G('state._res.rows[0]');
   const expect = PV[t].net + PV[t].fund;
   ok(Math.abs((A.landed - B.landed) - expect) < 1e-6,
@@ -148,12 +148,12 @@ for (const [f, t] of [['SC', 'JS'], ['YN', 'GD'], ['GS', 'SD'], ['SX', 'JS']]) {
   ok(A.channelOnly === B.channelOnly, '  过网费口径不受影响');
   ok(Math.abs((B.yuan.total / B.qty) - B.landed) < 1e-6, '  费用总额与单价自洽');
 }
-G('state.includeDstCost=false;state._res=solve();renderCalc();');
+G('state.includeDstCost=false;state._res=solve(state, algoData());renderCalc();');
 const hEx = G("document.getElementById('v-calc').innerHTML");
 ok(hEx.includes('送到受端省界'), '界面标签切换为「送到受端省界」');
 ok(hEx.includes('已按口径排除'), '费用表标注受端省内费用已排除');
 ok(!hEx.includes('<td>受端省网输配电价</td>'), '费用表不再列出受端输配电价行');
-G('state.includeDstCost=true;state._res=solve();renderCalc();');
+G('state.includeDstCost=true;state._res=solve(state, algoData());renderCalc();');
 const hIn = G("document.getElementById('v-calc').innerHTML");
 ok(hIn.includes('元/MWh 落地') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
 
@@ -168,8 +168,10 @@ console.log('══ 七、区域电网费按「实际行进方向」取价（反
   const travelRegion = RGOF[ch.from];         // 实际行进 湖北→山西，到达华北
   ok(storedRegion !== travelRegion, `该通道存储方向(${ch.from}→${ch.to})与实际行进方向跨区结果不同`);
   G('state.includeRegion=true;');
-  const feeCorrect = G(`regionFee('HB','SX')`);
-  const feeWrong = G(`regionFee('${ch.from}','${ch.to}')`);
+  // regionFee 现为纯函数，数据经 env 传入（见 src/app/algo/cost.js）
+  const ENV = "({REGION_OF:DATA.RGOF||{},RG:DATA.RG,includeRegion:true})";
+  const feeCorrect = G(`regionFee(${ENV},'HB','SX')`);
+  const feeWrong = G(`regionFee(${ENV},'${ch.from}','${ch.to}')`);
   ok(feeCorrect === RG['华北'] * 1000, `regionFee('HB','SX') = ${feeCorrect}，取华北 10.8 ✅`);
   ok(feeWrong === RG['华中'] * 1000 && feeWrong !== feeCorrect,
     `若误用存储方向会得 ${feeWrong}（华中 25.6），差 ${(feeWrong - feeCorrect).toFixed(1)} 元/MWh`);
@@ -177,7 +179,7 @@ console.log('══ 七、区域电网费按「实际行进方向」取价（反
   // 逐条核对：任意路径的区域费必须等于「按行进方向逐跨区段累加」
   let bad = 0, checked = 0;
   for (const [f, t] of [['HB', 'JS'], ['SX', 'JS'], ['SC', 'JS'], ['GS', 'SD'], ['HB', 'HE'], ['CQ', 'JS'], ['SN', 'HB']]) {
-    G(`state.from='${f}';state.to='${t}';state.maxHops=2;state.includeRegion=true;state.includeDstCost=true;applyBothProv();state._res=solve();`);
+    G(`state.from='${f}';state.to='${t}';state.maxHops=2;state.includeRegion=true;state.includeDstCost=true;applyBothProv();state._res=solve(state, algoData());`);
     const r = G('state._res');
     if (r.err) continue;
     for (const x of r.rows) {

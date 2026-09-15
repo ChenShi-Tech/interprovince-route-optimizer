@@ -32,6 +32,7 @@ run(`${NODE} tools/build.mjs`);
 
 // ── 2. 全量测试 ──
 const tests = [
+  ['模块结构与算法纯度', 'tools/test-modules.mjs'],
   ['两端数据一致性', 'tools/test-data-share.mjs'],
   ['算法回归基线', 'tools/baseline-check.mjs'],
   ['受端参数预填行为', 'tools/test-prefill.mjs'],

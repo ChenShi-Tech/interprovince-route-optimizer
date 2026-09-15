@@ -15,30 +15,34 @@ open index.html             # 手机浏览器直接打开即可
 
 ## 目录结构
 
-````
-index.html                        构建产物（自包含，可直接分发）
-src/template.html                 应用模板（界面 + 算法）
-src/extra.json                    非价格数据：站点、断面、经纬度、容量、线路长度
+`````
+index.html                        构建产物（自包含单文件，可直接分发）
+src/
+  template.html                   页面骨架 + 样式 + 两处注入占位符
+  app/
+    config.js                     构建期常量与本地存储键
+    format.js                     显示格式化与徽标
+    data.js                       数据装载、访问器、交给算法层的数据包
+    state.js                      应用状态与本地持久化（UI 层专用）
+    algo/                         算法层——纯函数，可被安卓端原样复用
+      network.js                  图与邻接表、几何与绕行度
+      cost.js                     区域电网费、近似边权、单条路径精确计价
+      paths.js                    简单路径枚举（按近似成本优先展开）
+      solve.js                    求解编排（唯一入口）
+    ui/                           界面层
+      calc.js                     测算页：参数、方案列表、方案详情
+      lib.js                      费率库：通道、省级参数、断面
+      map.js                      网架图：内置拓扑图 / 腾讯地图 / 天地图
+    boot.js                       视图切换、事件绑定与启动（唯一含顶层执行语句）
 data/fixed-prices.json            ★ 所有固定价格数据的唯一来源（改价只改这个文件）
-shared/app-data.json                ★ 端云共用数据（Web 与安卓端同源同版本）
-shared/app-data.min.json            同内容的紧凑版，供手机端随包内置
-docs/03-数据接口说明.md             数据契约：结构、版本校验、算法约定
-docs/04-手机端实施计划.md           手机端分阶段实施计划
-android/                          安卓 WebView 壳工程（一键打包 APK）
+src/extra.json                    非价格数据：站点、断面、经纬度
+shared/app-data.json              ★ 端云共用数据（Web 与安卓端同源同版本）
+shared/app-data.min.json          同内容的紧凑版，供手机端随包内置
+android/                          安卓 WebView 壳工程（node android/build-apk.mjs 出 APK）
 tests/                            Playwright 端到端回归
-docs/费率核实报告.md                逐条核实报告（含偏差表与结构性陷阱）
-docs/tariff.json                  费率采集档案（含发改委原文摘录，不参与构建）
-docs/sources.md                   费率来源清单（文号 / 标题 / 颁布机构 / 日期 / URL）
-docs/gaps.md                      缺口与待确认疑点
-docs/regression-baseline-v2.json  算法回归基线（503 个省对 / 1739 条路线）
-docs/01-安卓开发框架.md             安卓端落地建议
-docs/02-费率数据采集任务提示.md       费率检索的可复用任务提示词
-tools/build.mjs                   构建脚本
-tools/audit-fees.mjs              费率审计（单位换算 / 来源可追溯 / 数值合理性）
-tools/test-prefill.mjs            受端参数预填行为测试
-tools/baseline2.mjs               基线生成 + 校验 + 渲染冒烟测试
-tools/baseline-check.mjs          基线校验（迁移到其它实现后用它回归）
-````
+docs/                             设计文档、核实报告、实施计划、数据契约
+tools/                            构建、发版、测试与审计脚本
+`````
 
 
 ## 数据共用（Web 与安卓端）
