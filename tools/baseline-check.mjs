@@ -64,7 +64,7 @@ for (const c of baseline.cases) {
       pGen:${p.pGen},pDst:${p.pDst},pNet:${p.pNet},fund:${p.fund},
       lossBearer:${p.lossBearer},qty:${p.qty},hours:${p.hours},showBad:true,sortBy:"A",showAll:true,
       maxHops:${p.maxHops},maxDetour:${p.maxDetour},K:6,includeRegion:${p.includeRegion}});`, ctx);
-  const R = vm.runInContext('solve()', ctx);
+  const R = vm.runInContext('solve(state, algoData())', ctx);
   if (R.err) { failed++; problems.push(`${c.from}→${c.to}: 基线有解但现引擎报错「${R.err}」`); continue; }
   if (R.rows.length !== c.routeTotal) {
     failed++; problems.push(`${c.from}→${c.to}: 路线总数 ${R.rows.length} ≠ 基线 ${c.routeTotal}`); continue;

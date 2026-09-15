@@ -192,9 +192,31 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const priceVersion = sha(fs.readFileSync(path.join(root, 'data/fixed-prices.json'), 'utf8')).slice(0, 16);
 
 // (a) Web：自包含单文件，离线可用
+// 内联顺序：常量 → 格式化 → 数据 → 状态 → 算法 → 界面 → 启动（boot 有顶层执行语句，必须最后）
+const APP_FILES = [
+  'src/app/config.js',
+  'src/app/format.js',
+  'src/app/data.js',
+  'src/app/state.js',
+  'src/app/algo/network.js',
+  'src/app/algo/cost.js',
+  'src/app/algo/paths.js',
+  'src/app/algo/solve.js',
+  'src/app/ui/calc.js',
+  'src/app/ui/lib.js',
+  'src/app/ui/map.js',
+  'src/app/boot.js',
+];
+const appSource = APP_FILES.map((f) => {
+  const p = path.join(root, f);
+  if (!fs.existsSync(p)) throw new Error('缺少模块：' + f);
+  return `/* ===== ${f} ===== */\n` + fs.readFileSync(p, 'utf8').trim();
+}).join('\n\n');
+
 const tpl = fs.readFileSync(path.join(root, 'src/template.html'), 'utf8');
 const out = tpl
   .replace('/*__DATA__*/', 'const DATA=' + json(payload) + ';')
+  .replace('/*__APP__*/', appSource)
   .replace('__BUILD_TIME__', BUILD_TIME)
   .replace('__PRICE_VERSION__', priceVersion);
 fs.writeFileSync(path.join(root, 'index.html'), out);
@@ -251,6 +273,7 @@ console.log('站点:', Object.keys(extra.stations).length,
   '| 省级参数:', Object.keys(provinceOut).length,
   est ? `（其中 ${est} 个缺输配电价）` : '（全部有值）');
 console.log('价格数据源: data/fixed-prices.json');
+console.log('应用模块:', APP_FILES.length, '个（' + (appSource.length / 1024).toFixed(1) + ' KB）');
 console.log('价格数据指纹 priceVersion:', priceVersion);
 console.log('index.html 已生成:', (fs.statSync(path.join(root, 'index.html')).size / 1024).toFixed(1), 'KB');
 console.log('shared/app-data.json 已生成:', (fs.statSync(path.join(distDir, 'app-data.json')).size / 1024).toFixed(1), 'KB（端云共用数据）');

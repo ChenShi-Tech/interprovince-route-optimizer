@@ -86,12 +86,12 @@ console.log('\n══ 六、西藏基金缺失的显式处理 ══');
 G(c1, "state.to='XZ';applyToProv();");
 ok(G(c1, 'state.fundMissing') === true, '选定西藏为受端 → fundMissing 标记为真');
 ok(G(c1, 'state.fund') === 0, '西藏基金按 0 计（避免 NaN）');
-G(c1, 'state._res=solve();renderCalc();');
+G(c1, 'state._res=solve(state, algoData());renderCalc();');
 const xzHtml = G(c1, "__dom['v-calc'].innerHTML");
 ok(xzHtml.includes('暂未获取官方标准'), '界面显式告警西藏基金未获取');
 
 console.log('\n══ 七、价格与口径折叠默认展开 ══');
-G(c1, "state.to='JS';applyToProv();state._res=solve();renderCalc();");
+G(c1, "state.to='JS';applyToProv();state._res=solve(state, algoData());renderCalc();");
 const h2 = G(c1, "__dom['v-calc'].innerHTML");
 ok(/<details class="adv boxed" open>/.test(h2), '折叠块带 open 属性');
 ok(h2.includes('当前取值依据'), '显示当前取值依据');
