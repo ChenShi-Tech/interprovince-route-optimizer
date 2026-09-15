@@ -35,7 +35,7 @@ if (fail) { console.log('\n产物缺失，先跑 node tools/build.mjs'); process
 
 console.log('\n══ 二、手机端数据结构 ══');
 const ad = JSON.parse(fs.readFileSync(path.join(root, p.full), 'utf8'));
-ok(ad.schema === 'iproute-app-data/v1', `schema = ${ad.schema}`);
+ok(ad.schema === 'iproute-app-data/v2', `schema = ${ad.schema}（v2：CH 新增 bidir / regional / tRev）`);
 ok(typeof ad.priceVersion === 'string' && ad.priceVersion.length === 16, `priceVersion = ${ad.priceVersion}`);
 ok(typeof ad.dataHash === 'string' && ad.dataHash.length === 64, 'dataHash 长度正确');
 ok(ad.ST && Object.keys(ad.ST).length === ad.counts.stations, `ST 站点 ${ad.counts.stations} 个与 counts 一致`);
@@ -78,6 +78,12 @@ ok(ch.every((c) => typeof c.sendFee === 'number'), '每条通道都带 sendFee�
 ok(ch.every((c) => c.capBasis), '每条通道都带 capBasis（容量口径）');
 ok(ch.every((c) => c.priceType), '每条通道都带 priceType（计价方式）');
 ok(ch.every((c) => typeof c.tradable === 'boolean'), '每条通道都带 tradable 标记');
+ok(ch.every((c) => typeof c.bidir === 'boolean' && typeof c.regional === 'boolean'), '每条通道都带 bidir / regional 标记');
+ok(ch.filter((c) => c.bidir).every((c) => typeof c.tRev === 'number') && ch.filter((c) => !c.bidir).every((c) => c.tRev === null),
+  '双向联络线带反向输电价 tRev，专项工程为 null');
+ok(ch.filter((c) => c.bidir).length === 24 && ch.filter((c) => c.bidir).every((c) => c.regional && !c.tradable && c.tier === 'region'),
+  '24 条省间联络线为双向、计区域电网费、tier=region');
+ok(ch.filter((c) => !c.bidir).every((c) => !c.regional), '专项工程均不计区域电网费');
 ok(ch.filter((c) => c.priceType === 'capacity').length === 2, '容量制工程 2 条');
 ok(ch.filter((c) => c.capActual != null).length > 0, `有实际输送能力的通道 ${ch.filter((c) => c.capActual != null).length} 条`);
 const xz = ad.PV.XZ;

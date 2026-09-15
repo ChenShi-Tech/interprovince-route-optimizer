@@ -1,0 +1,233 @@
+# CODEBUDDY.md
+
+This file provides guidance to CodeBuddy Code when working with code in this repository.
+
+## 仓库位置
+
+本文件即位于仓库根，GitHub `ChenShi-Tech/interprovince-route-optimizer`，分支 `main`。**以下所有路径与命令都以仓库根为基准。**
+
+上一级目录 `跨省交易app/` 不是 git 仓库，只是外层工作目录，放着两份松散的核实源文件（`ndrc842.pdf`、`省级电网输配电价_第四监管周期.json/.md`）；仓库内已归档同名副本，见 `docs/原始文件/`。改动请以仓库内的副本为准。
+
+## 项目是什么
+
+省间电力现货交易的**跨省送电路径优选测算工具**。给定送端省、受端省与上网电量，枚举候选输电路径，按三种口径比选并逐段拆解费用。
+
+- Web：`index.html`，自包含单文件、离线可用，线上 `https://interprovince-route.app.workbuddy.host/`
+- 安卓：`android/` WebView 壳工程
+- iOS：`ios/` **仅有目录与路线图，Xcode 工程尚未创建**
+- 无后端、无 npm 依赖（根目录没有 `package.json`，全部是系统 Node 直跑的 `.mjs`）
+
+## 常用命令
+
+```bash
+# 构建：src/ + data/ → index.html（自包含）+ shared/app-data.json(.min)
+node tools/build.mjs
+
+# 算法回归基线，必须 688/688 通过
+node tools/baseline-check.mjs
+
+# 重新生成基线 + 渲染冒烟测试 + 底图合规检查（改了费率/通道数据后必须先跑这个）
+node tools/baseline2.mjs
+
+# 一键发版：构建 → 5 组测试 → 提交 → 推送（任一测试不过即中止）
+node tools/release.mjs "提交信息"
+node tools/release.mjs "提交信息" --no-push     # 只到提交为止
+
+# 5 组测试可单独跑
+node tools/test-modules.mjs        # 模块结构 + 算法层纯度守卫
+node tools/test-data-share.mjs     # Web 与安卓端数据一致性
+node tools/baseline-check.mjs      # 算法回归基线 688 条
+node tools/test-prefill.mjs        # 受端参数预填行为
+node tools/test-interaction.mjs    # 交互与计价口径回归
+
+# 校验外部引擎（迁移到 RN/Swift 后包装成导出 solve/state/CH/PV 同名接口即可）
+node tools/baseline-check.mjs <你的引擎.js>
+
+# Playwright 端到端（需先在 tests/ 下 npm install）
+node tests/dev-server.mjs          # 仓库根挂到 http://127.0.0.1:8734/，需另开终端常驻
+node tests/e2e.mjs                 # 产出 tests/report.md + tests/shots/*.png + tests/results.json
+
+# 安卓 APK（工具链 ~/android-toolchain：便携 JDK 17 + Gradle 8.7 + Android SDK）
+node android/build-apk.mjs         # → android/app/build/outputs/apk/debug/app-debug.apk
+
+# 数据维护
+node tools/audit-fees.mjs          # 费率库内部审计：单位换算、数值合理性、来源可追溯
+node tools/fetch-sources.mjs       # 抓取 sources.md 的 S01~S13 原文到 docs/原始文件/
+node tools/push-github.mjs         # 推送到 GitHub（走 Git Data API，见下文）
+node tools/restore-from-remote.mjs <commit_sha> [文件路径...]   # 从历史提交恢复误删文件
+```
+
+## 架构
+
+### 构建管线：三进一出
+
+`node tools/build.mjs` 把三个输入合成一个自包含 HTML：
+
+| 输入 | 职责 |
+|---|---|
+| `data/fixed-prices.json` | **所有价格数值的唯一来源**（改价只改这个文件） |
+| `src/extra.json` | 非价格数据：站点、断面、经纬度、容量、线路长度 |
+| `src/template.html` | 页面骨架 + 样式 + 两处注入占位符 |
+
+`docs/tariff.json` 是采集档案（含原文摘录），**不再参与构建**。
+
+产出三份（同源同版本）：
+
+| 产物 | 消费方 |
+|---|---|
+| `index.html` | Web，数据内联，离线可用 |
+| `shared/app-data.json` | 安卓/iOS，含 `schema` / `priceVersion` / `dataHash` / `counts` |
+| `shared/app-data.min.json` | 手机端随包内置的紧凑版 |
+
+**`index.html` 和 `shared/` 都是构建产物，不要手改**——下次构建会被覆盖。
+
+### 单文件打包与模块内联顺序
+
+`src/app/*.js` 不是 ES 模块，构建时按 `build.mjs` 里的 `APP_FILES` 顺序**字符串拼接**进一个 `<script>`，共享全局作用域。顺序有硬约束：
+
+```
+config → format → data → state → algo/{network,cost,paths,solve} → ui/{calc,lib,map} → boot
+```
+
+`boot.js` **必须最后**——它是唯一含顶层执行语句的模块。`src/template.html` 里的 `/*__DATA__*/` 与 `/*__APP__*/` **必须独占一行**，替换后残留文字会变成悬空代码导致语法错误。新增模块时要同步改 `build.mjs` 的 `APP_FILES` 和 `tools/test-modules.mjs` 的同一列表。
+
+### 算法层必须是纯函数
+
+`src/app/algo/*` **不得引用任何界面全局**（`state` / `PV` / `CH` / `DATA` / DOM）。数据经 `data` 参数传入，用户参数经 `input` 传入：
+
+```js
+solve(input, data)                                 // 算法层唯一入口 → {rows,byA,byB,byC,bestA,bestB,bestC,...} 或 {err}
+regionFee(env, e, toCode)                          // 按段判断是否计收（仅联络线），toCode 为行进方向的到达节点
+tariffOf(e, fromCode)                              // 按行进方向取联络线输电价（反向取 tRev）
+enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方给权重函数
+```
+
+**这是为了让安卓端/iOS 端能原样复用同一份算法**，不必从 HTML 里抠代码。`tools/test-modules.mjs` 守住这条（会检测算法层里的裸引用界面全局，守卫本身已用反向注入验证过）。
+
+界面层通过 `algoData()`（`src/app/data.js`）组装数据包：`{CH, PV, SEC, RG, REGION_OF, geo:{lngLatOf,provLngLat}, name}`。
+
+### 六个高频陷阱
+
+1. **网损是乘法项，不能直接当边权**。送达系数 `D = Π(1−ηᵢ)`，故分两步：① 用线性近似权重 `t + sendFee + 线损率×出清价 + 区域费` 求候选路径；② 对候选路径按乘性公式精确重算并重新排序。
+2. **路径唯一标识用节点序列** `nodes.join('>')`，不能用边的 `from`/`to`——反向通行的联络线存储方向与行进方向相反，用边拼键会把 `A→B→C` 与 `C→B→A` 误判为同一条。
+3. **专项工程只按核定方向通行（`bidir=false`），联络线才双向；任何用到边方向的地方都必须按实际行进方向取值**。2026-09-15 之前专项工程被建成双向边，默认参数下 295 个连通省对里有 112 个只靠「反着走直流」才连通（如河北→四川经锦界送出反向+德宝直流反向），且反向时 `sendFee` 仍取存储方向送端省的价格。现在联络线反向行进取 `tRev`，区域电网费与绕行度起点也按行进方向取。
+4. **必须保留跳数上限与绕行度上限**，否则会算出绕行大半个中国的路径。绕行度 = 实际里程 ÷ 起终点直线距离（`detourOf`）。
+5. **输出目录不能用 `dist/`**——发布工具把它当构建产物排除，站点会 404。本项目用 `shared/`。
+6. **842 号附件的单位是「元/千千瓦时」**，数值上等于 元/兆瓦时，不要误按「分/千瓦时」再乘 10。`docs/开发约定与操作手册.md` 与 `README.md` 都记了这条。
+
+### 计价口径
+
+```
+落地价 = 出清价 × (1 + g × 网损电量)
+      + Σ [sendFee_i × 段前系数_i]
+      + Σ [t_i × 计量系数_i]            计量系数 = incLoss ? 段后系数 : 段前系数
+      + Σ [区域电网费_i × 段前系数_i]     仅联络线段（regional=true）
+      + 受端省网输配电价 + 政府性基金及附加
+```
+
+- **段前系数** `= 1 / Π_{j≥i}(1 − η_j/100)`——越靠送端的段承担的电量与损耗越多；**段后系数** `= 1 / Π_{j>i}(1 − η_j/100)`
+- **网损电量** `= 1/D − 1`（每交付 1 MWh）；`g` 为受端承担的网损比例
+- **含线损的专项工程价按段后电量计费**：`incLoss=true` 的 9 条通道（灵绍、祁韶、锡泰、雁淮、扎青、雅湖、陕武、建苏、金塘）价格已「含输电环节线损」，1490号附件4第九条的公式已除以 `(1−线损率)`、第十八条按落地端结算电量确认，再按段前电量计会把线损放大两次
+- **区域电网费只在联络线段计收、专项工程段不收**：取 `RG[RGOF[该段到达省]] × 1000`。1227号第五条的专项工程购电价格构成里没有区域电网费；1490号附件3第十一条的电量电费按区域共用（交流）网络结算电量向购电方收取。跨区联络线取到达区域是本工具的口径假设
+- **联络线输电价按行进方向取值**：正向 `t`（存储方向送端省的送出省价格），反向 `tRev`（对侧省的）
+- 三种口径：A 受端落地购电成本（最小）/ B 过网费（最小，不含网损与省网费用）/ C 送端折回净收益（最大）
+- 费用表各项之和必须等于合计、合计 ÷ 电量必须等于单价——`tools/audit-fees.mjs` 与基线都会校验，这条曾抓出一次网损重复计算
+
+### 数据契约与分档
+
+`shared/app-data.json` 的顶层键：`ST`（站点）`CH`（通道）`SEC`（断面）`PV`（省级参数）`RG`（区域电网输电价格）`RGOF`（省→区域归属）。完整 TypeScript 定义见 `docs/03-数据接口说明.md`。
+
+- `CH[].tier`：`gov`（发改委核定，有文号）/ `grid`（国网披露，含报备价）/ `region`（区域电网或送出省口径）。路径含非 `gov` 段时界面要主动告警
+- `CH[].cap` 优先取「实际输送能力」，缺失回退额定，`capBasis` 标明口径；`priceType` 区分电量制 / 容量制（容量制的 `t` 是折算的等效度电成本）
+- `PV[].fund` **可能为 `null`**（当前仅西藏）。消费方必须按「缺失」处理并提示用户，**不要静默当 0**——那会低估落地成本
+- 两端通过 `priceVersion`（`data/fixed-prices.json` 的内容哈希）比对版本，`dataHash` 校验完整性。**版本不一致时不要混用两端数据**
+
+## 纪律（最高优先级）
+
+来自 `docs/开发约定与操作手册.md`，接手前必读。
+
+1. **不得编造费率数值。** 找不到就写 `null` 并在文档里记录已检索路径。这条高于一切——一个编造的费率比一个缺失的费率危害大得多。容量同理：ATC 我国不公开，宁可标「未获取」也不编系数。
+2. **价格数据只有一处来源**：`data/fixed-prices.json`。改价格只改这个文件，然后 `node tools/build.mjs`。
+3. **费率必须分档标注来源**，不得把报备价与发改委核定价混为一谈。2024 年后新投运的金永、中衡、坤渝、庆东、宝合与吉泉、昭沂目前只有国网报备价（昭沂的还有被追溯清算的可能）。
+4. **改动算法后必须跑基线**，`688/688` 通过才算完成。
+
+## 底图与合规
+
+只用监管白名单内的底图：**腾讯地图**（默认，走本地代理、免密钥）与**天地图**（用户在应用内粘贴自己的 tk）。
+
+- 代码中不内嵌任何有效地图密钥；`_TMapSecurityConfig` 的 `__WB_HTTP_PORT__` / `__WB_TMAP_SECRET__` 占位符须原样保留
+- 不使用 Google / Apple / Bing 海外版 / OpenStreetMap / Mapbox / Leaflet
+- 省界由合规底图负责，应用不自行绘制行政区划
+- 腾讯地图那条线依赖 WorkBuddy 预览环境注入的本地代理，安卓包内与 iOS 里都不存在该代理，网架图会**按设计降级为内置 SVG 拓扑图 / 文本清单**；天地图路径在手机上可用
+
+`tools/baseline2.mjs` 末尾的「底图合规检查」会守住这些约束。
+
+## 推送机制（为什么不用 git push）
+
+本机所有流量走本地代理（`127.0.0.1:60205`），该代理放行 `api.github.com`，但对 `github.com` 返回 502。**`git push` / `git pull` / `git ls-remote` 均不可用**，`gh` CLI 正常。因此推送走 GitHub Git Data API，脚本在 `tools/push-github.mjs`。
+
+- 它用 `base_tree` **在远端现有树上叠加本地文件**，而不是用本地文件重建整棵树——后者会在多会话并行时删掉别人推送的内容（2026-09-14 真实发生过，误删 18 个文件）
+- **改文件名 = 新增 + 遗留旧文件**。`base_tree` 会保留远端旧名文件形成重复；确认新旧 blob sha 相同后用 `--allow-delete` 清理
+- 推送前会列出「远端有、本地没有」的文件，默认保留；确实要删须显式加 `--allow-delete`
+- `git ls-files` 默认对中文路径做八进制转义，脚本读文件会 ENOENT，**必须用 `git -c core.quotepath=false ls-files`**
+
+## 发布
+
+- 线上：`https://interprovince-route.app.workbuddy.host/`，管理入口在 WorkBuddy「设置—数据管理—应用」
+- 部署是本机目录的**快照**，不是 git 钩子——改完要重新发布才生效
+- 部署偶发报「3000 端口未就绪」（旧静态服务占着端口），**直接重试一次即可**
+- 部署是**叠加式**的：重新发布不会删除站点上已移除的文件，仓库清理后线上可能仍有残留（无害，但要知道原因）
+- 安卓端数据有三种取数方式（随包内置 / 站点同目录 / jsDelivr CDN），推荐内置一份兜底 + 联网比对 `priceVersion`
+
+## 当前状态与已知缺口
+
+已验证：回归基线 688/688；30 个省输配电价 + 70 条通道全部有来源文号；一手原件归档在 `docs/原始文件/`（24 个文件，可离线核对）。
+
+**已知缺口（不要假装它们不存在）**：
+
+| 项 | 状态 |
+|---|---|
+| ATC（可用输电能力） | 27 条主要通道全部未获取，公开渠道无口径；当前用「实际输送能力」校验容量 |
+| 省内重要输电通道清单与限额 | 未获取（由省调披露，非交易中心）；两端省内段只能按省网输配电价近似 |
+| 交易路径集合 | 确认不存在公开清单，路径由国调中心在等值交易网络上运行时生成；已改用规则条款推导约束 |
+| 30 个省级参数 | 仅 7 个（江苏、山东、安徽、湖北、湖南、北京、江西）的输配电价取自官方文件，其余为估算并在界面标注 |
+| 通道额定容量 | 10 条缺失，无法校验占用率 |
+| 500kV 省间联络线（24 条） | 无单独核定的输电价格，按送出省输电价格口径取 30 元/MWh；线路长度按站点直线距离估算 |
+| 断面限额（10 个） | 来自公开报道与学术文献，**不是交易中心披露的运行限额** |
+| 西藏政府性基金及附加 | 未获取，应用内显式告警 |
+
+未实现的想法见 `docs/改进计划.md`：时间维度（96 点时序）、两部制容量电费独立测算、中长期与现货分离、交易路径集合约束、方案并排对比。
+
+## 重要边界
+
+- 本工具是**测算与比选辅助工具**，不构成交易建议，不能替代正式交易系统
+- 实际可用交易路径须在电力交易中心公布的路径集合内；本工具按全网拓扑枚举
+- **国网与南网是两套不兼容的模型**：国网省间现货按「交易路径」建模（与本项目的图模型一致）；南方区域市场没有交易路径概念，用断面极限功率 + GSDF 灵敏度约束。覆盖南网省份需另建一套引擎
+- 额定容量 ≠ 可用输电能力（ATC）。ATC 的 TRM / CBM 取值我国不公开，工具中不写死默认值
+
+## 法规依据与文档地图
+
+费率不是估的，每条都有文号，原件在 `docs/原始文件/`：
+
+- 省级输配电价 → 发改价格〔2026〕1077号 附件1（34 张表）
+- 通道专项工程输电价 → 多个文号，存量部分主依据〔2019〕842号 附件
+- 送出省输电价格 → 各省第四监管周期通知
+- 定价规则 → **发改价格规〔2025〕1490号 附件4（现行）**
+- 购电价格构成与线损偏差归属 → 发改价格〔2018〕1227号
+
+**定价规则谱系**：`〔2017〕2269号` → `〔2021〕1455号` → **`〔2025〕1490号`（现行）**。引用条款注意用现行版本——1455号 已被 1490号 废止（`tools/patch-regulation-refs.mjs` 专门修过这类过期引用）。
+
+按需查阅：
+
+| 文档 | 内容 |
+|---|---|
+| `docs/开发约定与操作手册.md` | ★ 接手必读：纪律、踩坑清单、推送机制、缺口 |
+| `docs/03-数据接口说明.md` | ★ Web/端侧共用的数据契约、算法公式、字段 TypeScript 定义 |
+| `README.md` | 项目总览、界面、路线枚举、验证 |
+| `docs/gaps.md` | 已知数据缺口与检索路径 |
+| `docs/sources.md` | 费率来源清单（S01~S13 与原文链接） |
+| `docs/费率核实报告.md` | 逐条核实结论 |
+| `docs/改进计划.md` | 未实现想法与依据 |
+| `docs/01-安卓开发框架.md` / `android/README.md` | 安卓路线、工具链、真机验收要点 |
+| `ios/README.md` / `ios/ROADMAP.md` | iOS 路线选择（WKWebView 壳先行 / SwiftUI 主力）与阶段计划 |
+| `docs/regression-baseline-v2.json` | 295 个省对 / 688 条路线的数值基线（iOS/RN 也必须对它跑） |

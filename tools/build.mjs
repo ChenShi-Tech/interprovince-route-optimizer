@@ -93,6 +93,9 @@ for (const r of prices.专项工程) {
     tRaw: r.输电价,
     capEq: eq,
     sendFee,                                // 送端省内段：送出省输电价格
+    // 专项工程送受端固定、潮流方向固定（1490号附件4第二条），只按核定方向通行；
+    // 不经区域共用交流网络，不计区域电网电量电价（1227号第五条的购电价格构成中没有该项）
+    bidir: false, regional: false, tRev: null,
     loss: r.线损率,
     tier,
     doc: r.文号 || '', docTitle: r.文件标题 || '', issuer: r.颁发机构 || '',
@@ -141,8 +144,11 @@ for (const [a, b, n, kv, cap, loss] of AC_LINKS) {
     id: 'a' + channels.length,
     n, fn: n, from: a, to: b, stFrom: null, stTo: null,
     kv: kv + 'kV', type: 'AC', cap, lenKm: null,
-    t: exportOf(a) * 1000,      // 省间交流联络线未单独核价，其自身即按送出省输电价格计
+    t: exportOf(a) * 1000,      // 省间交流联络线未单独核价，其自身即按送出省输电价格计（存储方向 a→b，取 a 的价格）
     tRaw: exportOf(a) * 1000,
+    tRev: exportOf(b) * 1000,   // 反向行进 b→a 时送端省是 b，取 b 的送出省输电价格
+    bidir: true,                // 交流联络线可双向通行
+    regional: true,             // 经区域共用交流网络输送，按到达省所在区域计区域电网电量电价（1490号附件3第十一条）
     capEq: null,
     sendFee: 0,                 // 上行的送出省价已含在 t 中，不重复计
     loss, tier: 'region',
@@ -155,7 +161,7 @@ for (const [a, b, n, kv, cap, loss] of AC_LINKS) {
     bill: '送出省输电价格', status: '口径待确认',
     priceType: 'energy', capRated: cap, capActual: cap, capBasis: 'rated', capSrc: '设计容量',
     tradable: false,   // 省间交流联络线未单独核定输电价格，是否属于省间现货交易网络待确认
-    note: '省间交流联络线未单独核定输电价格，此处按第四监管周期该省「送出省输电价格」口径取值；跨区交易另需按到达区电量电价加收区域电网输电费。',
+    note: '省间交流联络线未单独核定输电价格，此处按第四监管周期送端省「送出省输电价格」口径取值（反向行进取对侧省的价格）；该段经区域共用交流网络输送，另按到达省所在区域的电量电价计区域电网输电费。',
     docVersion: '', sourceIssue: '',
   });
 }
@@ -226,7 +232,7 @@ fs.writeFileSync(path.join(root, 'index.html'), out);
 // (b) 手机端与其它消费方：同一份数据的独立 JSON（输出到 shared/，不用 dist/ 以免被发布工具排除）。
 //     与 Web 版同源、同一次构建产出，保证两端数据结构与数值完全一致。
 const appData = {
-  schema: 'iproute-app-data/v1',
+  schema: 'iproute-app-data/v2',   // v2：CH 新增 bidir / regional / tRev 三个字段
   builtAt,
   priceVersion,                                   // 价格数据指纹，用于两端比对
   dataHash: sha(json(payload)),                   // 载荷指纹，用于校验完整性
@@ -251,6 +257,9 @@ const appData = {
     'CH[].cap 为用于容量校验的容量，已优先取「实际输送能力」，缺失时回退额定；capBasis 标明口径。',
     'CH[].priceType 为 energy（电量制）或 capacity（容量制，t 为折算的等效度电成本）。',
     'CH[].sendFee 为送端省内段费用（送出省输电价格），AC 联络线为 0（其价格已含在该段 t 中）。',
+    'CH[].bidir：专项工程为 false，只按 from→to 方向通行；AC 联络线为 true，可双向通行，反向时输电价取 tRev（对侧省的送出省输电价格）。',
+    'CH[].regional：仅 AC 联络线为 true，表示经区域共用交流网络输送，该段按到达省所在区域计区域电网电量电价；专项工程段不计区域电网费。',
+    'CH[].incLoss 为 true 的专项工程价已含输电环节线损，输电费按该段落地端（段后）电量计；其余按段前电量计。',
     'PV[].fund 可能为 null（西藏未获取），消费方需按缺失处理而非当作 0 静默使用。',
     'LOADING：路径规划算法不在本文件内，需由消费方实现。算法约定与回归基线见 docs/01-安卓开发框架.md 与 docs/regression-baseline-v2.json。',
   ],

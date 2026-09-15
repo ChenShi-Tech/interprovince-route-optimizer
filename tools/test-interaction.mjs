@@ -157,39 +157,81 @@ G('state.includeDstCost=true;state._res=solve(state, algoData());renderCalc();')
 const hIn = G("document.getElementById('v-calc').innerHTML");
 ok(hIn.includes('元/MWh 落地') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
 
-console.log('══ 七、区域电网费按「实际行进方向」取价（反向通行不得收错区域）══');
+console.log('══ 七、行进方向、区域电网费与含线损计费口径 ══');
 {
   const RGOF = G('REGION_OF'), RG = G('RG');
-  // 反向通行的典型：长南荆存为 山西→湖北，行进方向 湖北→山西 应取华北而非华中
-  const back = G("CH.filter(c=>(c.from==='HB'&&c.to==='SX')||(c.from==='SX'&&c.to==='HB'))");
-  ok(back.length > 0, '存在 湖北-山西 通道（长南荆）');
-  const ch = back[0];
-  const storedRegion = RGOF[ch.to];           // 按存储方向的到达区
-  const travelRegion = RGOF[ch.from];         // 实际行进 湖北→山西，到达华北
-  ok(storedRegion !== travelRegion, `该通道存储方向(${ch.from}→${ch.to})与实际行进方向跨区结果不同`);
-  G('state.includeRegion=true;');
-  // regionFee 现为纯函数，数据经 env 传入（见 src/app/algo/cost.js）
   const ENV = "({REGION_OF:DATA.RGOF||{},RG:DATA.RG,includeRegion:true})";
-  const feeCorrect = G(`regionFee(${ENV},'HB','SX')`);
-  const feeWrong = G(`regionFee(${ENV},'${ch.from}','${ch.to}')`);
-  ok(feeCorrect === RG['华北'] * 1000, `regionFee('HB','SX') = ${feeCorrect}，取华北 10.8 ✅`);
-  ok(feeWrong === RG['华中'] * 1000 && feeWrong !== feeCorrect,
-    `若误用存储方向会得 ${feeWrong}（华中 25.6），差 ${(feeWrong - feeCorrect).toFixed(1)} 元/MWh`);
+  G('state.showBad=true;state.includeRegion=true;state.includeDstCost=true;');
 
-  // 逐条核对：任意路径的区域费必须等于「按行进方向逐跨区段累加」
-  let bad = 0, checked = 0;
-  for (const [f, t] of [['HB', 'JS'], ['SX', 'JS'], ['SC', 'JS'], ['GS', 'SD'], ['HB', 'HE'], ['CQ', 'JS'], ['SN', 'HB']]) {
-    G(`state.from='${f}';state.to='${t}';state.maxHops=2;state.includeRegion=true;state.includeDstCost=true;applyBothProv();state._res=solve(state, algoData());`);
+  // ① 专项工程单向通行：长南荆存为 山西→湖北，湖北→山西 不得经它反向行进
+  const cnj = G("CH.find(c=>c.n==='长南荆特高压交流')");
+  ok(!!cnj && cnj.from === 'SX' && cnj.to === 'HB' && cnj.bidir === false, '长南荆存为 山西→湖北，标记为单向专项工程');
+  G("state.from='HB';state.to='SX';state.maxHops=1;state.maxDetour=9;applyBothProv();state._res=solve(state, algoData());");
+  const r1 = G('state._res');
+  ok(!!r1.err || r1.rows.every((x) => x.edges[0].n !== '长南荆特高压交流'), '湖北→山西 1 段以内没有反向经长南荆的路线');
+  G("state.from='SX';state.to='HB';state._res=solve(state, algoData());");
+  const r2 = G('state._res');
+  ok(!r2.err && r2.rows.some((x) => x.edges[0].n === '长南荆特高压交流'), '山西→湖北 仍可经长南荆正向行进');
+  // 全网核对：任何路线都不得把专项工程段反向走
+  let revProj = 0, rowsAll = 0;
+  const keys = Object.keys(PV);
+  for (const f of keys) for (const t of keys) {
+    if (f === t) continue;
+    G(`state.from='${f}';state.to='${t}';state.maxHops=3;state.maxDetour=2;applyBothProv();state._res=solve(state, algoData());`);
+    const r = G('state._res');
+    if (r.err) continue;
+    for (const x of r.rows) { rowsAll++; x.edges.forEach((e, i) => { if (!e.bidir && x.nodes[i] !== e.from) revProj++; }); }
+  }
+  ok(rowsAll > 0 && revProj === 0, `全网 ${rowsAll} 条路线中没有反向行进的专项工程段`, revProj ? `${revProj} 段反向` : '');
+
+  // ② 区域电网费只在联络线段计收、取到达省所在区域；专项工程段为 0
+  const link = G("CH.find(c=>c.n==='川渝联络线')");
+  ok(G(`regionFee(${ENV},CH.find(c=>c.n==='锦苏直流'),'JS')`) === 0, '专项工程段（锦苏直流，华中→华东）不收区域电网费');
+  ok(G(`regionFee(${ENV},CH.find(c=>c.n==='川渝联络线'),'CQ')`) === RG['华中'] * 1000, `联络线段（川渝，同在华中）收华中电量电价 ${RG['华中'] * 1000}`);
+  ok(G(`regionFee(${ENV},CH.find(c=>c.n==='川陕联络线'),'SN')`) === RG['西北'] * 1000, '跨区联络线（川陕，四川→陕西）取到达区域西北的电量电价');
+  ok(G(`regionFee(${ENV},CH.find(c=>c.n==='川陕联络线'),'SC')`) === RG['华中'] * 1000, '同一联络线反向（陕西→四川）取到达区域华中的电量电价');
+  ok(G(`regionFee(({REGION_OF:DATA.RGOF,RG:DATA.RG,includeRegion:false}),CH.find(c=>c.n==='川渝联络线'),'CQ')`) === 0, '不计入区域电网费时为 0');
+  // 逐条核对：任意路径的区域费 = Σ 联络线段 × 到达省区域电量电价 × 段前系数，专项工程段一律为 0
+  let bad = 0, checked = 0, projSeg = 0;
+  for (const [f, t] of [['HB', 'JS'], ['SX', 'JS'], ['SC', 'JS'], ['GS', 'SD'], ['HB', 'HE'], ['CQ', 'JS'], ['SN', 'HB'], ['SC', 'HB'], ['NM', 'BJ'], ['CQ', 'SC']]) {
+    G(`state.from='${f}';state.to='${t}';state.maxHops=3;state.maxDetour=2;applyBothProv();state._res=solve(state, algoData());`);
     const r = G('state._res');
     if (r.err) continue;
     for (const x of r.rows) {
-      const expect = x.segs.filter((s) => RGOF[s.a] !== RGOF[s.b])
-        .reduce((a, s) => a + (RG[RGOF[s.b]] || 0) * 1000 * s.q, 0);
+      const expect = x.segs.filter((s) => s.e.regional).reduce((a, s) => a + (RG[RGOF[s.b]] || 0) * 1000 * s.q, 0);
       checked++;
-      if (Math.abs(x.comp.reg - expect) > 1e-6) { bad++; }
+      if (Math.abs(x.comp.reg - expect) > 1e-6) bad++;
+      x.segs.forEach((s) => { if (!s.e.regional && s.rg !== 0) projSeg++; });
     }
   }
-  ok(bad === 0, `${checked} 条路线的区域电网费均等于逐跨区段累加值`, bad ? `${bad} 条不符` : '');
+  ok(checked > 0 && bad === 0, `${checked} 条路线的区域电网费均等于联络线段累加值`, bad ? `${bad} 条不符` : '');
+  ok(projSeg === 0, '没有任何专项工程段被计入区域电网费');
+
+  // ③ 联络线反向行进时按实际送端省的送出省输电价格计价
+  G("state.from='CQ';state.to='SC';state.maxHops=1;state.maxDetour=9;applyBothProv();state._res=solve(state, algoData());");
+  const r3 = G('state._res');
+  const cs = !r3.err && r3.rows.find((x) => x.edges[0].n === '川渝联络线');
+  ok(!!cs && link.tRev !== link.t && cs.segs[0].t === link.tRev,
+    `重庆→四川 反向经川渝联络线，输电价取重庆送出省价格 ${cs && cs.segs[0].t}（存储方向四川为 ${link.t}）`);
+  ok(!!cs && Math.abs(cs.comp.trans - link.tRev * cs.segs[0].q) < 1e-9, '反向联络线的过网费 = tRev × 段前系数');
+  G("state.from='SC';state.to='CQ';state._res=solve(state, algoData());");
+  const r3b = G('state._res');
+  const sc = !r3b.err && r3b.rows.find((x) => x.edges[0].n === '川渝联络线');
+  ok(!!sc && sc.segs[0].t === link.t, `四川→重庆 正向经川渝联络线，输电价取四川送出省价格 ${link.t}`);
+
+  // ④ 含输电环节线损的专项工程按落地端结算电量计费（t × 段后电量），其余按段前电量
+  G("state.from='NX';state.to='ZJ';state.maxHops=1;applyBothProv();state._res=solve(state, algoData());");
+  const r4 = G('state._res');
+  const ls = !r4.err && r4.rows.find((x) => x.edges[0].n === '灵绍直流');
+  ok(!!ls && ls.edges[0].incLoss === true && Math.abs(ls.segs[0].fee - ls.edges[0].t * ls.segs[0].qOut) < 1e-9,
+    `灵绍直流（含线损）输电费 ${ls && ls.segs[0].fee.toFixed(4)} = t × 段后电量`);
+  G("state.from='SC';state.to='JS';state.maxHops=1;applyBothProv();state._res=solve(state, algoData());");
+  const r5 = G('state._res');
+  const js = !r5.err && r5.rows.find((x) => x.edges[0].n === '锦苏直流');
+  ok(!!js && js.edges[0].incLoss === false && Math.abs(js.segs[0].fee - js.edges[0].t * js.segs[0].q) < 1e-9,
+    `锦苏直流（不含线损）输电费 ${js && js.segs[0].fee.toFixed(4)} = t × 段前电量`);
+  ok(!!js && js.comp.reg === 0, '四川→江苏 经锦苏直流不计区域电网费');
+  ok(!!js && Math.abs(js.yuan.total / js.qty - js.landed) < 1e-6, '费用总额 ÷ 电量 = 落地单价（改口径后仍自洽）');
 }
 
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);

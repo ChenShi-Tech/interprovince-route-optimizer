@@ -12,6 +12,8 @@ function renderCalc(){
   if(_fid){ try{ _caret=[_ae.selectionStart,_ae.selectionEnd]; }catch(e){ /* number 型输入无 selection */ } }
   const opt=(sel,ex)=>Object.keys(PV).map(k=>
     `<option value="${k}" ${k===sel?'selected':''} ${k===ex?'disabled':''}>${PV[k].n}</option>`).join('');
+  // 只算到受端省界：受端省内两项（省网输配电价 / 基金及附加）不参与计算，界面上置灰并标注
+  const noDst=state.includeDstCost===false;
 
   let out=`<div class="topbar"><div class="picker">
     <div class="pk-col">
@@ -42,24 +44,28 @@ function renderCalc(){
       <label class="f"><span>受端结算价 元/MWh</span><input id="i-pdst" type="number" value="${state.pDst}" step="5"></label>
     </div>
     <div class="row2">
-      <label class="f"><span>受端省网输配电价 <a onclick="resetOne('pNet')" style="color:var(--blue);font-weight:500;cursor:pointer">恢复核定值</a></span><input id="i-pnet" type="number" value="${state.pNet}" step="0.1"></label>
-      <label class="f"><span>基金及附加 <a onclick="resetOne('fund')" style="color:var(--blue);font-weight:500;cursor:pointer">恢复核定值</a></span><input id="i-fund" type="number" value="${state.fund}" step="0.1"></label>
+      <label class="f${noDst?' off':''}"><span>受端省网输配电价 ${noDst?'<span class="pill g">本口径下不使用</span>':`<a onclick="resetOne('pNet')" style="color:var(--blue);font-weight:500;cursor:pointer">恢复核定值</a>`}</span><input id="i-pnet" type="number" value="${state.pNet}" step="0.1"${noDst?' disabled':''}></label>
+      <label class="f${noDst?' off':''}"><span>基金及附加 ${noDst?'<span class="pill g">本口径下不使用</span>':`<a onclick="resetOne('fund')" style="color:var(--blue);font-weight:500;cursor:pointer">恢复核定值</a>`}</span><input id="i-fund" type="number" value="${state.fund}" step="0.1"${noDst?' disabled':''}></label>
     </div>
-    <label class="f"><span>网损承担方</span><select id="i-bearer">
-      <option value="1" ${state.lossBearer==1?'selected':''}>受端承担</option>
-      <option value="0.5" ${state.lossBearer==0.5?'selected':''}>两端各半</option>
-      <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
+
+    <div class="sub">计价口径<em>决定算式怎么算、主指标是什么</em></div>
+    <label class="f"><span>费用边界</span><select id="i-dstcost">
+      <option value="1" ${!noDst?'selected':''}>完整落地价 —— 含受端省内费用</option>
+      <option value="0" ${noDst?'selected':''}>只算到受端省界 —— 不含受端省内费用</option>
     </select></label>
-    <label class="f"><span>受端省内费用（省网输配电价 + 政府性基金及附加）</span><select id="i-dstcost">
-      <option value="1" ${state.includeDstCost!==false?'selected':''}>计入 —— 完整落地价</option>
-      <option value="0" ${state.includeDstCost===false?'selected':''}>不计入 —— 只算到受端省界</option>
-    </select></label>
-    <label class="f"><span>区域电网输电价格</span><select id="i-region">
-      <option value="1" ${state.includeRegion?'selected':''}>计入</option>
-      <option value="0" ${!state.includeRegion?'selected':''}>不计入</option>
-    </select></label>
-    <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。</p>
-    <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
+    <div class="row2">
+      <label class="f"><span>区域电网输电价格</span><select id="i-region">
+        <option value="1" ${state.includeRegion?'selected':''}>计入</option>
+        <option value="0" ${!state.includeRegion?'selected':''}>不计入</option>
+      </select></label>
+      <label class="f"><span>网损承担方</span><select id="i-bearer">
+        <option value="1" ${state.lossBearer==1?'selected':''}>受端承担</option>
+        <option value="0.5" ${state.lossBearer==0.5?'selected':''}>两端各半</option>
+        <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
+      </select></label>
+    </div>
+    <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。口径二（过网费）与口径三（送端净收益）不含受端省内费用，因此不受「费用边界」开关影响。</p>
+    <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
   </div></details>`;
 
   const _toPV=PV[state.to];
@@ -89,17 +95,21 @@ function renderCalc(){
 const RLIMIT=18;
 function renderRouteList(res){
   const rows=res.rows, sel=Math.min(state.sel,rows.length-1);
-  const sortName={A:'按落地成本',B:'按过网费',C:'按送端净收益'}[state.sortBy];
-  const bestPrice=rows.length?rows[0].landed:0;
+  const isDst=state.includeDstCost!==false;
+  // 口径A 的主指标随「费用边界」换名；口径B/C 本就不含受端省内费用，不受开关影响
+  const costName=isDst?'落地成本':'省界成本';
+  const sortName={A:'按'+costName,B:'按过网费',C:'按送端净收益'}[state.sortBy];
+  // 阈值基准取列表中最低的落地价：按过网费 / 送端收益排序时首条并不是落地价最低者
+  const bestPrice=rows.length?Math.min(...rows.map(r=>r.landed)):0;
   const thr=bestPrice*(1+(state.degrade??0.10));
   const inThr=rows.filter(r=>r.landed<=thr);
   const shown=state.showAll?rows:inThr;
   const cut=rows.length-inThr.length;
   let out=`<div class="card tight">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}</span></div>
-    <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。</p>
+    <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
     <div class="seg small">
-      ${[['A','落地成本'],['B','过网费'],['C','送端收益']].map(([k,t])=>
+      ${[['A',costName],['B','过网费'],['C','送端收益']].map(([k,t])=>
         `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
     </div>
     <div class="rlist">`;
@@ -139,6 +149,7 @@ function pick(i){ state.sel=i; saveLast(); renderCalc();
 /* ---------- 选中路线详情 ---------- */
 function renderDetail(res,r){
   if(!r) return '';
+  const costName=state.includeDstCost!==false?'落地成本':'省界成本';
   const colors=['#85B7EB','#EF9F27','#F0997B','#5DCAA5','#B4B2A9','#AFA9EC'];
   const comp=[['送端出清价',r.comp.gen],['送端省内段',r.comp.send],['跨省通道费',r.comp.trans],['区域电网费',r.comp.reg],
     ['网损折价',r.comp.loss],['受端输配电价',r.comp.net],['基金及附加',r.comp.fund]].filter(c=>c[1]>0);
@@ -195,7 +206,7 @@ function renderDetail(res,r){
           <div class="tl-seg-g">
             <div>长度<b>${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}</b></div>
             <div>容量<b>${e.cap?e.cap+' MW':'待补'}</b></div>
-            <div>输电价<b>${fmt(e.t)} 元/MWh</b></div>
+            <div>输电价<b>${fmt(s.t)} 元/MWh</b></div>
             <div>线损率<b>${fmt(e.loss,2)}%</b></div>
             <div>段入口功率<b>${fmt(s.inMW,0)} MW</b></div>
             <div>段损耗电量<b>${fmt(s.lossMwh,2)} MWh</b></div>
@@ -263,7 +274,8 @@ function renderDetail(res,r){
       <div class="src" style="margin-top:4px;padding-top:0;border-top:0">
         ${tierTag(e.tier)}　${e.doc?esc(e.doc):'无发改委文号'}${e.eff?'　生效 '+esc(e.eff):(e.pubDate?'　发布 '+esc(e.pubDate):'')}<br>
         ${e.docTitle?esc(e.docTitle)+'<br>':''}
-        计费口径：${esc(e.bill)}${e.incLoss?'（含输电环节线损）':'（不含线损，线损另计）'}${e.tax?'　含税':'　不含税'}<br>
+        计费口径：${esc(e.bill)}${e.incLoss?'（含输电环节线损，输电费按段后电量计）':'（不含线损，线损另计）'}${e.tax?'　含税':'　不含税'}<br>
+        ${s.t!==e.t?`本段反向行进：按送端 ${esc(N(s.a))} 的送出省输电价格 ${fmt(s.t)} 元/MWh 计（存储方向 ${esc(N(e.from))}→${esc(N(e.to))} 为 ${fmt(e.t)}）<br>`:''}
         ${e.status?'状态：'+esc(e.status)+'<br>':''}
         ${e.fn&&e.fn!==e.n?'别名：'+esc(e.fn)+'<br>':''}
         ${e.stFrom?`送端 ${esc(stName(e.stFrom))} @ ${esc(stAddr(e.stFrom))}<br>`:''}
@@ -285,9 +297,9 @@ function renderDetail(res,r){
 
     <div class="sub">口径位置<em>三个口径下的排名与差距</em></div>
     <div class="g3">
-      <div class="mc"><div class="l">落地成本</div><div class="v">#${r.rankA}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankA===1?'最优':'高 '+fmt(r.landed-res.bestA.landed)+' 元/MWh'}</div></div>
-      <div class="mc"><div class="l">过网费</div><div class="v">#${r.rankB}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankB===1?'最低':'高 '+fmt(r.channelOnly-res.bestB.channelOnly)+' 元/MWh'}</div></div>
-      <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.bestC.senderNet-r.senderNet)+' 元/MWh'}</div></div>
+      <div class="mc"><div class="l">${costName}</div><div class="v">#${r.rankA}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankA===1?'最优':'高 '+fmt(r.landed-res.byA[0].landed)+' 元/MWh'}</div></div>
+      <div class="mc"><div class="l">过网费</div><div class="v">#${r.rankB}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankB===1?'最低':'高 '+fmt(r.channelOnly-res.byB[0].channelOnly)+' 元/MWh'}</div></div>
+      <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.byC[0].senderNet-r.senderNet)+' 元/MWh'}</div></div>
     </div>
     <div class="formula" style="margin-top:12px">
       <div class="mono">${state.includeDstCost===false
