@@ -31,7 +31,7 @@ function renderCalc(){
     <label><span>电量</span><input id="i-qty" type="number" value="${state.qty}" step="100" min="1"></label>
     <label><span>时长 h</span><input id="i-hours" type="number" value="${state.hours}" step="0.25" min="0.25"></label>
     <label><span>跳数</span><select id="i-hops">
-      ${[1,2,3,4,5,6].map(v=>`<option value="${v}" ${state.maxHops==v?'selected':''}>${v===6?'不限':v}</option>`).join('')}
+      ${[1,2,3,4,5,6].map(v=>`<option value="${v}" ${state.maxHops==v?'selected':''}>${v===6?'6（上限）':v}</option>`).join('')}
     </select></label>
     <label><span>绕行</span><select id="i-detour">
       ${[[1.5,'1.5x'],[2,'2.0x'],[2.5,'2.5x'],[9,'不限']].map(([v,t])=>`<option value="${v}" ${state.maxDetour==v?'selected':''}>${t}</option>`).join('')}
@@ -65,6 +65,8 @@ function renderCalc(){
       </select></label>
     </div>
     <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。口径二（过网费）与口径三（送端净收益）不含受端省内费用，因此不受「费用边界」开关影响。</p>
+    <p class="note"><b>区域电网输电价格</b>是国网华北、华东、华中、东北、西北五个区域分部运营的区域共用输电网络（跨省 500kV / 1000kV 联络网架）的电量电价，由国家发改委核定（发改价格〔2026〕1077号附件2），随区域电网实际交易结算电量向购电方收取。本工具只对经省间联络线走区域网架的段计收，按该段到达省所在区域取价；跨区直流等专项工程有单独核定的输电价格，其购电价格构成（发改价格〔2018〕1227号第五条）不含此项，故专项工程段不计。跨区联络线取到达区域的价格是本工具的口径假设。</p>
+    <p class="note"><b>网损承担方</b>的政策口径是<b>受端（购电方）承担</b>：按落地端结算电量结算，送端为线损多发的电量由购电方按送端出清价补偿（1227号第五条「专项工程输电价格及损耗」；发改价格规〔2025〕1490号附件4第十八条，线损率偏差损益由购电方承担或享有）。「两端各半」与「送端承担」用于模拟中长期双边谈判条款，送端承担实质是送端把线损折入报价。各段线损率一律按核定值计，不按实际值。</p>
     <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
   </div></details>`;
 
@@ -108,6 +110,7 @@ function renderRouteList(res){
   let out=`<div class="card tight">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}</span></div>
     <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
+    <p class="note" style="margin:-4px 0 9px">「候选」是 ${state.maxHops} 段以内、绕行度不超过 ${state.maxDetour>=9?'不限':state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。专项工程只按核定方向计入，省间联络线可双向，放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
     <div class="seg small">
       ${[['A',costName],['B','过网费'],['C','送端收益']].map(([k,t])=>
         `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
