@@ -39,6 +39,7 @@ src/extra.json                    非价格数据：站点、断面、经纬度
 shared/app-data.json              ★ 端云共用数据（Web 与安卓端同源同版本）
 shared/app-data.min.json          同内容的紧凑版，供手机端随包内置
 android/                          安卓 WebView 壳工程（node android/build-apk.mjs 出 APK）
+ios/                              iOS 端（目录与路线图已建，工程待建；见 ios/ROADMAP.md）
 tests/                            Playwright 端到端回归
 docs/                             设计文档、核实报告、实施计划、数据契约
 tools/                            构建、发版、测试与审计脚本

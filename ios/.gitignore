@@ -1,0 +1,26 @@
+# Xcode
+build/
+DerivedData/
+*.xcarchive
+*.ipa
+*.dSYM.zip
+*.moved-aside
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# 签名与凭据 —— 绝对不入库
+*.p12
+*.mobileprovision
+*.cer
+ExportOptions.plist
+AuthKey_*.p8
+*.keystore
+
+# macOS
+.DS_Store
