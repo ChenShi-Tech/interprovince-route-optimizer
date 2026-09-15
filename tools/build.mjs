@@ -213,6 +213,7 @@ const APP_FILES = [
   'src/app/ui/calc.js',
   'src/app/ui/lib.js',
   'src/app/ui/map.js',
+  'src/app/ui/ai.js',
   'src/app/boot.js',
 ];
 const appSource = APP_FILES.map((f) => {

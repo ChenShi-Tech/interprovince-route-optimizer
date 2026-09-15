@@ -20,7 +20,7 @@ const ok = (c, l, d) => { if (c) { pass++; console.log('  ✅ ' + l); } else { f
 const APP_FILES = [
   'src/app/config.js', 'src/app/format.js', 'src/app/data.js', 'src/app/state.js',
   'src/app/algo/network.js', 'src/app/algo/cost.js', 'src/app/algo/paths.js', 'src/app/algo/solve.js',
-  'src/app/ui/calc.js', 'src/app/ui/lib.js', 'src/app/ui/map.js', 'src/app/boot.js',
+  'src/app/ui/calc.js', 'src/app/ui/lib.js', 'src/app/ui/map.js', 'src/app/ui/ai.js', 'src/app/boot.js',
 ];
 
 console.log('══ 一、模块齐全 ══');

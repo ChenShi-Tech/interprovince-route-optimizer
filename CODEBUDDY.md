@@ -86,8 +86,10 @@ node tools/restore-from-remote.mjs <commit_sha> [文件路径...]   # 从历史�
 `src/app/*.js` 不是 ES 模块，构建时按 `build.mjs` 里的 `APP_FILES` 顺序**字符串拼接**进一个 `<script>`，共享全局作用域。顺序有硬约束：
 
 ```
-config → format → data → state → algo/{network,cost,paths,solve} → ui/{calc,lib,map} → boot
+config → format → data → state → algo/{network,cost,paths,solve} → ui/{calc,lib,map,ai} → boot
 ```
+
+`ui/ai.js` 是智能推荐：把 `solve()` 产出的可行路线摘要与用户的自然语言要求发给 OpenAI 兼容接口（默认 DeepSeek），模型只在候选里挑选。它不参与计价、排序或候选生成，密钥存 `localStorage`（`LS_AI`），推荐结果绑定生成它的 `state._res` 对象，参数一变即失效。
 
 `boot.js` **必须最后**——它是唯一含顶层执行语句的模块。`src/template.html` 里的 `/*__DATA__*/` 与 `/*__APP__*/` **必须独占一行**，替换后残留文字会变成悬空代码导致语法错误。新增模块时要同步改 `build.mjs` 的 `APP_FILES` 和 `tools/test-modules.mjs` 的同一列表。
 

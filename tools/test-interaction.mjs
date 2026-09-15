@@ -234,6 +234,57 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
   ok(!!js && Math.abs(js.yuan.total / js.qty - js.landed) < 1e-6, '费用总额 ÷ 电量 = 落地单价（改口径后仍自洽）');
 }
 
+console.log('══ 八、智能推荐：只在可行路线里选、密钥缺失即提示、结果随测算失效 ══');
+{
+  G("state.from='SC';state.to='SH';state.maxHops=6;state.maxDetour=9;state.showBad=true;state.sel=0;applyBothProv();state._res=solve(state, algoData());state._ai=null;renderCalc();");
+  const h0 = G("document.getElementById('v-calc').innerHTML");
+  ok(h0.includes('智能推荐') && h0.includes('id="i-ai-prompt"') && h0.includes('让模型推荐'), '测算页含智能推荐卡片、输入框与按钮');
+  const res = G('state._res');
+  const feasible = res.rows.filter((r) => r.feasible).length;
+  const digest = G('aiRouteDigest(state._res)');
+  ok(digest.total === feasible && digest.sent === Math.min(feasible, 40) && digest.routes.every((r) => res.rows[r.id - 1].feasible),
+    `送给模型的候选只含可行路线（可行 ${feasible} 条，送入 ${digest.sent} 条，id 与列表序号一致）`);
+  ok(digest.routes.every((r) => Math.abs(r['落地成本_元每MWh'] - res.rows[r.id - 1].landed) < 0.051), '候选摘要里的落地成本与测算结果一致');
+  const msgs = G('aiBuildMessages(state._res)');
+  ok(msgs.length === 2 && /JSON/.test(msgs[0].content) && msgs[1].content.includes('"id":1') && msgs[1].content.includes(PV.SC.n) && msgs[1].content.includes(PV.SH.n),
+    '提示词含 JSON 输出要求、候选表与送受端');
+  // 密钥缺失
+  G("aiState.key='';aiState.base='https://api.deepseek.com';aiState.model='deepseek-chat';");
+  await G('aiRun()');
+  ok(/API Key/.test(G('state._ai.error') || ''), '未填密钥时给出提示而不发请求');
+  // 模拟接口：记录请求，返回一条有效 id、一条无效 id、一条越限 id
+  const badIdx = res.rows.findIndex((r) => !r.feasible);
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push({ url, opts });
+    const body = { recommendations: [{ id: 2, rank: 1, reason: '线损更低' }, { id: 999, rank: 2, reason: '不存在' }, ...(badIdx >= 0 ? [{ id: badIdx + 1, rank: 3, reason: '越限的' }] : [])],
+      summary: '总体判断', caveats: '请核实' };
+    return { ok: true, json: async () => ({ choices: [{ message: { content: '```json\n' + JSON.stringify(body) + '\n```' } }], usage: { total_tokens: 1 } }) };
+  };
+  G("aiState.key='sk-test';aiState.prompt='优先线损低';");
+  await G('aiRun()');
+  const ai = G('state._ai');
+  ok(calls.length === 1 && calls[0].url === 'https://api.deepseek.com/chat/completions', '请求发到 接口地址 + /chat/completions');
+  const req = calls.length ? JSON.parse(calls[0].opts.body) : {};
+  ok(calls.length && calls[0].opts.headers.Authorization === 'Bearer sk-test' && req.model === 'deepseek-chat' && req.response_format && req.response_format.type === 'json_object',
+    '请求带 Bearer 密钥、模型名与 JSON 输出格式');
+  ok(req.messages && req.messages[1].content.includes('优先线损低'), '用户写的考虑因素进入提示词');
+  ok(ai && ai.result && ai.result.recs.length === 1 && ai.result.recs[0].idx === 1 && ai.result.recs[0].reason === '线损更低',
+    `无效 id 与越限路线被剔除，只保留可行候选（保留 ${ai && ai.result ? ai.result.recs.length : 0} 条）`);
+  ok(ai && ai.result && ai.result.summary === '总体判断' && ai.result.caveats === '请核实', '围栏包裹的 JSON 也能解析，summary / caveats 原样保留');
+  const h1 = G("document.getElementById('v-calc').innerHTML");
+  ok(h1.includes('推荐 1') && h1.includes('线损更低') && h1.includes('onclick="pick(1)"'), '推荐结果渲染为可点击的路线卡片');
+  // 参数变化后旧推荐不再显示
+  G("state.to='JS';applyBothProv();state._res=solve(state, algoData());renderCalc();");
+  const h2 = G("document.getElementById('v-calc').innerHTML");
+  ok(!h2.includes('推荐 1') && h2.includes('智能推荐'), '重新测算后旧推荐结果失效，卡片仍在');
+  // 接口报错
+  ctx.fetch = async () => ({ ok: false, status: 401, text: async () => 'invalid key' });
+  await G('aiRun()');
+  ok(/401/.test(G('state._ai.error') || ''), '接口报错时把状态码显示给用户');
+  delete ctx.fetch;
+}
+
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);
 if (fail) { console.log('未通过项：'); problems.forEach((p) => console.log('  · ' + p)); }
 process.exit(fail ? 1 : 0);

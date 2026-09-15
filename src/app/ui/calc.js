@@ -78,7 +78,7 @@ function renderCalc(){
   if(res&&res.err){
     out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`;
   } else if(res&&res.rows&&res.rows.length){
-    out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+'</div>'
+    out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+renderAI(res)+'</div>'
        + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+'</div></div>';
   } else {
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
