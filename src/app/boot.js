@@ -22,6 +22,7 @@ document.addEventListener('change',e=>{
   }
 });
 loadStored();
+aiLoad();          // 智能推荐的服务商 / 密钥 / 上次输入（独立存储，不随 state 持久化）
 if(!Object.keys(PV).includes(state.from)) state.from='SC';
 if(!Object.keys(PV).includes(state.to)) state.to='JS';
 applyBothProv();   // 启动时一律按核定值预填

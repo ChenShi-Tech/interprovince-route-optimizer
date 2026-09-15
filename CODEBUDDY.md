@@ -23,7 +23,7 @@ This file provides guidance to CodeBuddy Code when working with code in this rep
 # 构建：src/ + data/ → index.html（自包含）+ shared/app-data.json(.min)
 node tools/build.mjs
 
-# 算法回归基线，必须 688/688 通过
+# 算法回归基线，必须 693/693 通过
 node tools/baseline-check.mjs
 
 # 重新生成基线 + 渲染冒烟测试 + 底图合规检查（改了费率/通道数据后必须先跑这个）
@@ -36,7 +36,7 @@ node tools/release.mjs "提交信息" --no-push     # 只到提交为止
 # 5 组测试可单独跑
 node tools/test-modules.mjs        # 模块结构 + 算法层纯度守卫
 node tools/test-data-share.mjs     # Web 与安卓端数据一致性
-node tools/baseline-check.mjs      # 算法回归基线 688 条
+node tools/baseline-check.mjs      # 算法回归基线 693 条
 node tools/test-prefill.mjs        # 受端参数预填行为
 node tools/test-interaction.mjs    # 交互与计价口径回归
 
@@ -86,8 +86,10 @@ node tools/restore-from-remote.mjs <commit_sha> [文件路径...]   # 从历史�
 `src/app/*.js` 不是 ES 模块，构建时按 `build.mjs` 里的 `APP_FILES` 顺序**字符串拼接**进一个 `<script>`，共享全局作用域。顺序有硬约束：
 
 ```
-config → format → data → state → algo/{network,cost,paths,solve} → ui/{calc,lib,map} → boot
+config → format → data → state → algo/{network,cost,paths,solve} → ui/{calc,lib,map,ai} → boot
 ```
+
+`ui/ai.js` 是智能推荐：把 `solve()` 产出的可行路线摘要与用户的自然语言要求发给 OpenAI 兼容接口（默认 DeepSeek），模型只在候选里挑选。它不参与计价、排序或候选生成，密钥存 `localStorage`（`LS_AI`），推荐结果绑定生成它的 `state._res` 对象，参数一变即失效。
 
 `boot.js` **必须最后**——它是唯一含顶层执行语句的模块。`src/template.html` 里的 `/*__DATA__*/` 与 `/*__APP__*/` **必须独占一行**，替换后残留文字会变成悬空代码导致语法错误。新增模块时要同步改 `build.mjs` 的 `APP_FILES` 和 `tools/test-modules.mjs` 的同一列表。
 
@@ -97,7 +99,8 @@ config → format → data → state → algo/{network,cost,paths,solve} → ui/
 
 ```js
 solve(input, data)                                 // 算法层唯一入口 → {rows,byA,byB,byC,bestA,bestB,bestC,...} 或 {err}
-regionFee(env, e, toCode)                          // 按段判断是否计收（仅联络线），toCode 为行进方向的到达节点
+regionRate(env, code)                              // 省所在区域的电量电价；买方区域在路径层面计一次
+sendFeeOf(e, fromCode)                             // 按行进方向取送端省内段费用（双向工程反向取 sendFeeRev）
 tariffOf(e, fromCode)                              // 按行进方向取联络线输电价（反向取 tRev）
 enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方给权重函数
 ```
@@ -110,7 +113,7 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 
 1. **网损是乘法项，不能直接当边权**。送达系数 `D = Π(1−ηᵢ)`，故分两步：① 用线性近似权重 `t + sendFee + 线损率×出清价 + 区域费` 求候选路径；② 对候选路径按乘性公式精确重算并重新排序。
 2. **路径唯一标识用节点序列** `nodes.join('>')`，不能用边的 `from`/`to`——反向通行的联络线存储方向与行进方向相反，用边拼键会把 `A→B→C` 与 `C→B→A` 误判为同一条。
-3. **专项工程只按核定方向通行（`bidir=false`），联络线才双向；任何用到边方向的地方都必须按实际行进方向取值**。2026-09-15 之前专项工程被建成双向边，默认参数下 295 个连通省对里有 112 个只靠「反着走直流」才连通（如河北→四川经锦界送出反向+德宝直流反向），且反向时 `sendFee` 仍取存储方向送端省的价格。现在联络线反向行进取 `tRev`，区域电网费与绕行度起点也按行进方向取。
+3. **通道方向逐条由数据给定（`bidir`），任何用到边方向的地方都必须按实际行进方向取值**。单向送电直流（锦苏、复奉、天中……）只按核定方向；德宝、青藏、长南荆、辛洹、灵宝、高岭、云霄经公开报道证实双向运行（依据在 `data/fixed-prices.json` 的「方向依据」与 `CH[].dirNote`）；联络线双向。反向时联络线输电价取 `tRev`，双向专项工程的送端省内段取 `sendFeeRev`，绕行度起点按行进方向。2026-09-15 之前曾把全部通道建成双向（河北→四川会反着走锦界送出+德宝），后又一度把全部专项工程改成单向（把德宝这类互济直流也砍掉了），两次都是错的，方向必须逐条核对。
 4. **必须保留跳数上限与绕行度上限**，否则会算出绕行大半个中国的路径。绕行度 = 实际里程 ÷ 起终点直线距离（`detourOf`）。
 5. **输出目录不能用 `dist/`**——发布工具把它当构建产物排除，站点会 404。本项目用 `shared/`。
 6. **842 号附件的单位是「元/千千瓦时」**，数值上等于 元/兆瓦时，不要误按「分/千瓦时」再乘 10。`docs/开发约定与操作手册.md` 与 `README.md` 都记了这条。
@@ -118,18 +121,21 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 ### 计价口径
 
 ```
-落地价 = 出清价 × (1 + g × 网损电量)
-      + Σ [sendFee_i × 段前系数_i]
-      + Σ [t_i × 计量系数_i]            计量系数 = incLoss ? 段后系数 : 段前系数
-      + Σ [区域电网费_i × 段前系数_i]     仅联络线段（regional=true）
+省界价 = 出清价 × (1 + g × 网损电量)
+      + Σ [sendFee_i × 段前系数_i]        送出省段按其出口电量
+      + Σ [t_i × 段后系数_i]              所有段按段后电量（S14 规则 4.3.1）
+      + 买方区域电量电价 × 1 + Σ [过境区域电量电价 × 段后系数]
+落地价 = 省界价 + 省界价 × ρ受/(1−ρ受)    受端上网环节线损（1077号附件1 注3）
       + 受端省网输配电价 + 政府性基金及附加
 ```
 
-- **段前系数** `= 1 / Π_{j≥i}(1 − η_j/100)`——越靠送端的段承担的电量与损耗越多；**段后系数** `= 1 / Π_{j>i}(1 − η_j/100)`
-- **网损电量** `= 1/D − 1`（每交付 1 MWh）；`g` 为受端承担的网损比例
-- **含线损的专项工程价按段后电量计费**：`incLoss=true` 的 9 条通道（灵绍、祁韶、锡泰、雁淮、扎青、雅湖、陕武、建苏、金塘）价格已「含输电环节线损」，1490号附件4第九条的公式已除以 `(1−线损率)`、第十八条按落地端结算电量确认，再按段前电量计会把线损放大两次
-- **区域电网费只在联络线段计收、专项工程段不收**：取 `RG[RGOF[该段到达省]] × 1000`。1227号第五条的专项工程购电价格构成里没有区域电网费；1490号附件3第十一条的电量电费按区域共用（交流）网络结算电量向购电方收取。跨区联络线取到达区域是本工具的口径假设
-- **联络线输电价按行进方向取值**：正向 `t`（存储方向送端省的送出省价格），反向 `tRev`（对侧省的）
+- 两条系数链：**物理链**用全部段的核定线损率，算功率、容量占用；**计费链**把 `incLoss=true` 的段线损按 0 计（S14 3.3.2 含网损的段不再另收）。`D`、段前 / 段后系数、网损电量都指计费链，`Dphys` 为物理链
+- **段前系数** `= 1 / Π_{j≥i}(1 − η_j/100)`，**段后系数** `= 1 / Π_{j>i}(1 − η_j/100)`；**网损电量** `= 1/D − 1`；`g` 为受端承担的网损比例
+- **区域电网电量电价**：买方所在区域一律计一次（S14 3.4.2(a)、S15 第二条），过境其它区域的联络线段再按该区域计一次；区域电网自身网损率未公开，按 0
+- **方向相关取值**：联络线输电价正向 `t`、反向 `tRev`；双向专项工程送端省内段正向 `sendFee`、反向 `sendFeeRev`
+- **省内线损**：送端「送省外上网环节线损率」(`PV[].exportLoss`) 由卖方承担（S14 7.3(a)），只进口径三；受端「省内上网环节线损率」(`PV[].inLoss`) 进完整落地价
+- **容量制工程**：辛洹线边际输电价 0，云霄取输电权报价下限 25.6（可在费率库改）；4500 小时折算值只留在 `capEq` 供展示
+- 原件与推导见 `docs/05-省间现货规则核对与费用口径修正.md`
 - 三种口径：A 受端落地购电成本（最小）/ B 过网费（最小，不含网损与省网费用）/ C 送端折回净收益（最大）
 - 费用表各项之和必须等于合计、合计 ÷ 电量必须等于单价——`tools/audit-fees.mjs` 与基线都会校验，这条曾抓出一次网损重复计算
 
@@ -138,7 +144,7 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 `shared/app-data.json` 的顶层键：`ST`（站点）`CH`（通道）`SEC`（断面）`PV`（省级参数）`RG`（区域电网输电价格）`RGOF`（省→区域归属）。完整 TypeScript 定义见 `docs/03-数据接口说明.md`。
 
 - `CH[].tier`：`gov`（发改委核定，有文号）/ `grid`（国网披露，含报备价）/ `region`（区域电网或送出省口径）。路径含非 `gov` 段时界面要主动告警
-- `CH[].cap` 优先取「实际输送能力」，缺失回退额定，`capBasis` 标明口径；`priceType` 区分电量制 / 容量制（容量制的 `t` 是折算的等效度电成本）
+- `CH[].cap` 优先取「实际输送能力」，缺失回退额定，`capBasis` 标明口径；`priceType` 区分电量制 / 容量制（容量制的 `t` 是交易方的边际输电价，见 `marginalNote`）
 - `PV[].fund` **可能为 `null`**（当前仅西藏）。消费方必须按「缺失」处理并提示用户，**不要静默当 0**——那会低估落地成本
 - 两端通过 `priceVersion`（`data/fixed-prices.json` 的内容哈希）比对版本，`dataHash` 校验完整性。**版本不一致时不要混用两端数据**
 
@@ -149,7 +155,7 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 1. **不得编造费率数值。** 找不到就写 `null` 并在文档里记录已检索路径。这条高于一切——一个编造的费率比一个缺失的费率危害大得多。容量同理：ATC 我国不公开，宁可标「未获取」也不编系数。
 2. **价格数据只有一处来源**：`data/fixed-prices.json`。改价格只改这个文件，然后 `node tools/build.mjs`。
 3. **费率必须分档标注来源**，不得把报备价与发改委核定价混为一谈。2024 年后新投运的金永、中衡、坤渝、庆东、宝合与吉泉、昭沂目前只有国网报备价（昭沂的还有被追溯清算的可能）。
-4. **改动算法后必须跑基线**，`688/688` 通过才算完成。
+4. **改动算法后必须跑基线**，`693/693` 通过才算完成。
 
 ## 底图与合规
 
@@ -181,7 +187,7 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 
 ## 当前状态与已知缺口
 
-已验证：回归基线 688/688；30 个省输配电价 + 70 条通道全部有来源文号；一手原件归档在 `docs/原始文件/`（24 个文件，可离线核对）。
+已验证：回归基线 693/693；30 个省输配电价 + 64 条通道全部有来源文号；一手原件归档在 `docs/原始文件/`（S01～S28，可离线核对）。
 
 **已知缺口（不要假装它们不存在）**：
 
@@ -230,4 +236,4 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 | `docs/改进计划.md` | 未实现想法与依据 |
 | `docs/01-安卓开发框架.md` / `android/README.md` | 安卓路线、工具链、真机验收要点 |
 | `ios/README.md` / `ios/ROADMAP.md` | iOS 路线选择（WKWebView 壳先行 / SwiftUI 主力）与阶段计划 |
-| `docs/regression-baseline-v2.json` | 295 个省对 / 688 条路线的数值基线（iOS/RN 也必须对它跑） |
+| `docs/regression-baseline-v2.json` | 331 个省对 / 693 条路线的数值基线（iOS/RN 也必须对它跑） |

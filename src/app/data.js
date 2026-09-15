@@ -20,10 +20,14 @@ function lngLatOf(ch,side){
    算法模块不直接引用上面的全局变量，而是由调用方把这份数据传进去，
    这样同一份算法代码可以原样给安卓端使用（见 docs/03-数据接口说明.md）。 */
 function algoData(){
+  // 省级线损率（1077号附件1 注3 / 注4）：exportLoss = 送省外上网环节线损率（卖方承担），inLoss = 省内上网环节线损率（受端用户承担）
+  const LOSS_OF={};
+  for(const k in PV) LOSS_OF[k]={ exportLoss: PV[k].exportLoss ?? null, inLoss: PV[k].inLoss ?? null };
   return {
     CH, PV, SEC,
     RG: DATA.RG,
     REGION_OF: DATA.RGOF || {},
+    LOSS_OF,
     geo: { lngLatOf, provLngLat },
     name: N,
   };
