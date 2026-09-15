@@ -25,6 +25,7 @@ function solve(input, data){
   const env={
     REGION_OF: data.REGION_OF,
     RG: data.RG,
+    LOSS_OF: data.LOSS_OF || {},
     SEC: data.SEC,
     geo: data.geo,
     includeRegion: input.includeRegion !== false,
