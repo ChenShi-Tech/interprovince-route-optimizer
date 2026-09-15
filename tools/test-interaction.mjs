@@ -130,6 +130,33 @@ ok(!!G("document.getElementById('i-to')"), '参数区仍可操作（可改回有
 change('i-to', 'GD');
 ok(!G('state._res.err') && G('state._res.rows.length > 0'), '改回有路径的端点后恢复正常');
 
+console.log('══ 六、受端省内费用口径开关（计入 / 只算到省界）══');
+boot('SC', 'JS');
+for (const [f, t] of [['SC', 'JS'], ['YN', 'GD'], ['GS', 'SD'], ['SX', 'JS']]) {
+  boot(f, t);
+  G('state.includeDstCost=true;state._res=solve();');
+  const A = G('state._res.rows[0]');
+  G('state.includeDstCost=false;state._res=solve();');
+  const B = G('state._res.rows[0]');
+  const expect = PV[t].net + PV[t].fund;
+  ok(Math.abs((A.landed - B.landed) - expect) < 1e-6,
+    `${PV[f].n}→${PV[t].n}：省界价 = 落地价 − 受端输配电价 − 基金附加`,
+    `差 ${(A.landed - B.landed).toFixed(2)}，应为 ${expect.toFixed(2)}`);
+  ok(B.comp.net === 0 && B.comp.fund === 0, '  不计入时受端两项归零');
+  ok(A.comp.send === B.comp.send && A.comp.trans === B.comp.trans && A.comp.reg === B.comp.reg,
+    '  送端省内段/通道费/区域费不受影响');
+  ok(A.channelOnly === B.channelOnly, '  过网费口径不受影响');
+  ok(Math.abs((B.yuan.total / B.qty) - B.landed) < 1e-6, '  费用总额与单价自洽');
+}
+G('state.includeDstCost=false;state._res=solve();renderCalc();');
+const hEx = G("document.getElementById('v-calc').innerHTML");
+ok(hEx.includes('送到受端省界'), '界面标签切换为「送到受端省界」');
+ok(hEx.includes('已按口径排除'), '费用表标注受端省内费用已排除');
+ok(!hEx.includes('<td>受端省网输配电价</td>'), '费用表不再列出受端输配电价行');
+G('state.includeDstCost=true;state._res=solve();renderCalc();');
+const hIn = G("document.getElementById('v-calc').innerHTML");
+ok(hIn.includes('元/MWh 落地') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
+
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);
 if (fail) { console.log('未通过项：'); problems.forEach((p) => console.log('  · ' + p)); }
 process.exit(fail ? 1 : 0);

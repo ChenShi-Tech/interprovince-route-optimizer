@@ -311,7 +311,7 @@ const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map
 let state={
   from:'SC', to:'JS', qty:1000, hours:1,
   pGen:320, pDst:450, pNet:112, fund:26.6,
-  lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10,
+  lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10, includeDstCost:true,
   sel:0, showBad:false, sortBy:'A', showAll:false,
   includeRegion:true,
   mapProvider:'svg', tiandituKey:''
@@ -448,7 +448,11 @@ function evalPath(path,ctx){
     };
   });
   const g=ctx.lossBearer;
-  const cGen=ctx.pGen, cLossBuyer=cGen*g*lossQty, cSend=sendTotal, cTrans=trans, cReg=regFee, cNet=ctx.pNet, cFund=ctx.fund;
+  // 可选口径：不计入受端省内费用（省网输配电价与政府性基金及附加），
+  // 即只算到受端省界，用于与「送到省界」的口径对齐。
+  const cNet=ctx.includeDstCost===false?0:ctx.pNet;
+  const cFund=ctx.includeDstCost===false?0:ctx.fund;
+  const cGen=ctx.pGen, cLossBuyer=cGen*g*lossQty, cSend=sendTotal, cTrans=trans, cReg=regFee;
   const landed=cGen+cLossBuyer+cSend+cTrans+cReg+cNet+cFund;
   const netLossTotal=cGen*lossQty;
   const channelOnly=cSend+cTrans;   // 口径二：过网费 = 送端省内段 + 跨省通道费，不含网损与省网费用
@@ -478,8 +482,8 @@ function evalPath(path,ctx){
     trans:qty*trans,
     reg:qty*regFee,
     loss:ctx.pGen*lossMwh*g,
-    net:ctx.pNet*qty,
-    fund:ctx.fund*qty,
+    net:cNet*qty,
+    fund:cFund*qty,
   };
   yuan.total=yuan.gen+yuan.send+yuan.trans+yuan.reg+yuan.loss+yuan.net+yuan.fund;
   const tiers={gov:0,grid:0,region:0,est:0};
@@ -524,7 +528,8 @@ function tagOf(r){
 }
 function solve(){
   const ctx={pGen:state.pGen,pDst:state.pDst,pNet:state.pNet,fund:state.fund,
-    lossBearer:state.lossBearer,qty:state.qty,hours:state.hours};
+    lossBearer:state.lossBearer,qty:state.qty,hours:state.hours,
+    includeDstCost:state.includeDstCost!==false};
   const adj=buildAdj(CH);
   if(!PV[state.from]||!PV[state.to]) return {err:'省份代码无效'};
   if(state.from===state.to) return {err:'送端与受端不能相同'};
@@ -636,6 +641,10 @@ function renderCalc(){
       <option value="0.5" ${state.lossBearer==0.5?'selected':''}>两端各半</option>
       <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
     </select></label>
+    <label class="f"><span>受端省内费用（省网输配电价 + 政府性基金及附加）</span><select id="i-dstcost">
+      <option value="1" ${state.includeDstCost!==false?'selected':''}>计入 —— 完整落地价</option>
+      <option value="0" ${state.includeDstCost===false?'selected':''}>不计入 —— 只算到受端省界</option>
+    </select></label>
     <label class="f"><span>区域电网输电价格</span><select id="i-region">
       <option value="1" ${state.includeRegion?'selected':''}>计入</option>
       <option value="0" ${!state.includeRegion?'selected':''}>不计入</option>
@@ -732,7 +741,8 @@ function renderDetail(res,r){
     <div class="lines">
       ${r.edges.map(e=>`<span class="ln ${e.type==='DC'?'dc':'ac'}">${esc(e.n)}</span>`).join('<span class="plus">+</span>')}
     </div>
-    <div class="big">${fmt(r.landed)}<span class="u">元/MWh 落地</span></div>
+    <div class="big">${fmt(r.landed)}<span class="u">元/MWh ${state.includeDstCost===false?'送到受端省界':'落地'}</span></div>
+    ${state.includeDstCost===false?'<p class="note" style="margin:-4px 0 8px">当前口径<b>不含</b>受端省网输配电价与政府性基金及附加，仅为送到受端省界的价格。</p>':''}
     <div class="bar">${comp.map((c,j)=>`<div style="width:${(c[1]/tot*100).toFixed(2)}%;background:${colors[j%6]}"></div>`).join('')}</div>
     <div class="lg">${comp.map((c,j)=>`<span><i style="background:${colors[j%6]}"></i>${c[0]} ${fmt(c[1])}</span>`).join('')}</div>
     <div class="chips">
@@ -801,8 +811,9 @@ function renderDetail(res,r){
       <tr><td>跨省专项工程输电费</td><td>${fmt(r.comp.trans)}</td><td>${num(r.yuan.trans)}</td><td>${fmt(r.yuan.trans/r.yuan.total*100,1)}%</td></tr>
       ${r.comp.reg>0?`<tr><td>区域电网输电费</td><td>${fmt(r.comp.reg)}</td><td>${num(r.yuan.reg)}</td><td>${fmt(r.yuan.reg/r.yuan.total*100,1)}%</td></tr>`:''}
       <tr><td>网损折价（受端承担部分）</td><td>${fmt(r.comp.loss)}</td><td>${num(r.yuan.loss)}</td><td>${fmt(r.yuan.loss/r.yuan.total*100,1)}%</td></tr>
-      <tr><td>受端省网输配电价</td><td>${fmt(r.comp.net)}</td><td>${num(r.yuan.net)}</td><td>${fmt(r.yuan.net/r.yuan.total*100,1)}%</td></tr>
-      <tr><td>政府性基金及附加</td><td>${fmt(r.comp.fund)}</td><td>${num(r.yuan.fund)}</td><td>${fmt(r.yuan.fund/r.yuan.total*100,1)}%</td></tr>
+      ${r.comp.net>0?`<tr><td>受端省网输配电价</td><td>${fmt(r.comp.net)}</td><td>${num(r.yuan.net)}</td><td>${fmt(r.yuan.net/r.yuan.total*100,1)}%</td></tr>`:''}
+      ${r.comp.fund>0?`<tr><td>政府性基金及附加</td><td>${fmt(r.comp.fund)}</td><td>${num(r.yuan.fund)}</td><td>${fmt(r.yuan.fund/r.yuan.total*100,1)}%</td></tr>`:''}
+      ${state.includeDstCost===false?`<tr><td style="color:var(--ink3)">受端省内费用</td><td style="color:var(--ink3)">已按口径排除</td><td style="color:var(--ink3)">—</td><td style="color:var(--ink3)">—</td></tr>`:''}
       <tr><td><b>合计</b></td><td><b>${fmt(r.landed)}</b></td><td><b>${num(r.yuan.total)}</b></td><td>100%</td></tr>
     </table>
 
@@ -870,7 +881,9 @@ function renderDetail(res,r){
       <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.bestC.senderNet-r.senderNet)+' 元/MWh'}</div></div>
     </div>
     <div class="formula" style="margin-top:12px">
-      <div class="mono">落地成本 = 出清价 × (1 + ${state.lossBearer} × 网损电量) + Σ(各段输电价 × 段前系数) + 区域电网费 + 受端输配电价 + 基金附加</div>
+      <div class="mono">${state.includeDstCost===false
+        ? '送到省界价 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[(送端省内段费 + 通道输电价) × 段前系数] + 区域电网费　—— 不含受端省内费用'
+        : '落地成本 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[(送端省内段费 + 通道输电价) × 段前系数] + 区域电网费 + 受端省网输配电价 + 政府性基金及附加'}</div>
       <div class="txt">段前电量 = 1 / Π(该段及之后各段的通过率)。每段导体上都流着下游全部损耗之后的电量，因此越靠送端的段，承担的电量与损耗越多。</div>
     </div>
   </div></details>`;
@@ -895,6 +908,7 @@ function readInputs(){
   state.pNet=+g('i-pnet').value||0; state.fund=+g('i-fund').value||0;
   state.lossBearer=+g('i-bearer').value;
   state.includeRegion=g('i-region').value==='1';
+  state.includeDstCost=g('i-dstcost').value==='1';
 }
 /* 送端省变化：只影响送端出清价 */
 function applyFromProv(){
@@ -1378,7 +1392,7 @@ document.addEventListener('change',e=>{
     state.sel=0; saveLast(); state._res=solve(); renderCalc();
     return;
   }
-  if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region'].indexOf(id)>=0){
+  if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region','i-dstcost'].indexOf(id)>=0){
     if(id==='i-degrade') state.degrade=+e.target.value;
     state.sel=0; doSolve();
   }
