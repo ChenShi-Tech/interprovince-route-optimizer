@@ -188,8 +188,10 @@ const BUILD_TIME = builtAt.slice(0, 16).replace('T', ' ');
 const json = (o) => JSON.stringify(o);
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
-// 价格数据的版本指纹：只要 fixed-prices.json 变了，这个值就变
-const priceVersion = sha(fs.readFileSync(path.join(root, 'data/fixed-prices.json'), 'utf8')).slice(0, 16);
+// 价格数据的版本指纹：只要 fixed-prices.json 变了，这个值就变。
+// 哈希前归一化换行（CRLF→LF），指纹只随数据内容变化；与部署版（96078954f87aff52，
+// LF 口径）在任何机器的 autocrlf 设置下都一致，见 test-data-share.mjs 同口径校验。
+const priceVersion = sha(fs.readFileSync(path.join(root, 'data/fixed-prices.json'), 'utf8').replace(/\r\n?/g, '\n')).slice(0, 16);
 
 // (a) Web：自包含单文件，离线可用
 // 内联顺序：常量 → 格式化 → 数据 → 状态 → 算法 → 界面 → 启动（boot 有顶层执行语句，必须最后）

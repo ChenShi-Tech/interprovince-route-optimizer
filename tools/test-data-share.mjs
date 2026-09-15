@@ -53,7 +53,8 @@ ok(JSON.stringify(minAd) === JSON.stringify(ad), 'app-data.min.json 与 app-data
 console.log('\n══ 四、载荷指纹自校验 ══');
 const payload = { ST: ad.ST, CH: ad.CH, SEC: ad.SEC, PV: ad.PV, RG: ad.RG, RGOF: ad.RGOF };
 ok(sha(JSON.stringify(payload)) === ad.dataHash, 'dataHash 与载荷内容吻合，数据未被篡改');
-const fixedHash = sha(fs.readFileSync(path.join(root, p.fixed), 'utf8')).slice(0, 16);
+// 与 build.mjs 同口径：哈希前归一化换行，避免 autocrlf 检出差异造成假性版本不一致
+const fixedHash = sha(fs.readFileSync(path.join(root, p.fixed), 'utf8').replace(/\r\n?/g, '\n')).slice(0, 16);
 ok(fixedHash === ad.priceVersion, 'priceVersion 与 data/fixed-prices.json 当前内容吻合');
 
 console.log('\n══ 五、Web 端内联数据与手机端一致 ══');
