@@ -110,7 +110,7 @@ function renderRouteList(res){
   let out=`<div class="card tight">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}</span></div>
     <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
-    <p class="note" style="margin:-4px 0 9px">「候选」是 ${state.maxHops} 段以内、绕行度不超过 ${state.maxDetour>=9?'不限':state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。专项工程只按核定方向计入，省间联络线可双向，放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
+    <p class="note" style="margin:-4px 0 9px">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。专项工程只按核定方向计入，省间联络线可双向，放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
     <div class="seg small">
       ${[['A',costName],['B','过网费'],['C','送端收益']].map(([k,t])=>
         `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
