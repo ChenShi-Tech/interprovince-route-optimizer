@@ -224,7 +224,7 @@ function topoSVG(){
     });
   }
 
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">
 <title>跨省电网拓扑图</title><desc>按站点经纬度投影的节点连线图，仅示拓扑不绘制行政区划边界。</desc>
 <rect x="0" y="0" width="${W}" height="${H}" fill="#F7F8FA" rx="10"/>
 ${edges}${segs}${nodes}${sts}${labels}
@@ -289,9 +289,10 @@ function renderMap(){
 
   document.getElementById('v-map').innerHTML=out;
   setTimeout(()=>{
+    if(state.mapProvider!==mode) return; // 80ms 内用户已切换底图则放弃本次注入，避免迟到回调污染新容器
     if(mode==='svg'){
       const box=document.getElementById('map-view');
-      if(box){ box.className=''; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='10px'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
+      if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='10px'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
       const fb=document.getElementById('fallback'); if(fb) fb.style.display='none';
     } else if(mode==='qq'){
       if(!drawMapQQ()) showMapFallback();
