@@ -99,7 +99,8 @@ function renderRouteList(res){
   // 口径A 的主指标随「费用边界」换名；口径B/C 本就不含受端省内费用，不受开关影响
   const costName=isDst?'落地成本':'省界成本';
   const sortName={A:'按'+costName,B:'按过网费',C:'按送端净收益'}[state.sortBy];
-  const bestPrice=rows.length?rows[0].landed:0;
+  // 阈值基准取列表中最低的落地价：按过网费 / 送端收益排序时首条并不是落地价最低者
+  const bestPrice=rows.length?Math.min(...rows.map(r=>r.landed)):0;
   const thr=bestPrice*(1+(state.degrade??0.10));
   const inThr=rows.filter(r=>r.landed<=thr);
   const shown=state.showAll?rows:inThr;
@@ -205,7 +206,7 @@ function renderDetail(res,r){
           <div class="tl-seg-g">
             <div>长度<b>${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}</b></div>
             <div>容量<b>${e.cap?e.cap+' MW':'待补'}</b></div>
-            <div>输电价<b>${fmt(e.t)} 元/MWh</b></div>
+            <div>输电价<b>${fmt(s.t)} 元/MWh</b></div>
             <div>线损率<b>${fmt(e.loss,2)}%</b></div>
             <div>段入口功率<b>${fmt(s.inMW,0)} MW</b></div>
             <div>段损耗电量<b>${fmt(s.lossMwh,2)} MWh</b></div>
@@ -273,7 +274,8 @@ function renderDetail(res,r){
       <div class="src" style="margin-top:4px;padding-top:0;border-top:0">
         ${tierTag(e.tier)}　${e.doc?esc(e.doc):'无发改委文号'}${e.eff?'　生效 '+esc(e.eff):(e.pubDate?'　发布 '+esc(e.pubDate):'')}<br>
         ${e.docTitle?esc(e.docTitle)+'<br>':''}
-        计费口径：${esc(e.bill)}${e.incLoss?'（含输电环节线损）':'（不含线损，线损另计）'}${e.tax?'　含税':'　不含税'}<br>
+        计费口径：${esc(e.bill)}${e.incLoss?'（含输电环节线损，输电费按段后电量计）':'（不含线损，线损另计）'}${e.tax?'　含税':'　不含税'}<br>
+        ${s.t!==e.t?`本段反向行进：按送端 ${esc(N(s.a))} 的送出省输电价格 ${fmt(s.t)} 元/MWh 计（存储方向 ${esc(N(e.from))}→${esc(N(e.to))} 为 ${fmt(e.t)}）<br>`:''}
         ${e.status?'状态：'+esc(e.status)+'<br>':''}
         ${e.fn&&e.fn!==e.n?'别名：'+esc(e.fn)+'<br>':''}
         ${e.stFrom?`送端 ${esc(stName(e.stFrom))} @ ${esc(stAddr(e.stFrom))}<br>`:''}
@@ -295,9 +297,9 @@ function renderDetail(res,r){
 
     <div class="sub">口径位置<em>三个口径下的排名与差距</em></div>
     <div class="g3">
-      <div class="mc"><div class="l">${costName}</div><div class="v">#${r.rankA}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankA===1?'最优':'高 '+fmt(r.landed-res.bestA.landed)+' 元/MWh'}</div></div>
-      <div class="mc"><div class="l">过网费</div><div class="v">#${r.rankB}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankB===1?'最低':'高 '+fmt(r.channelOnly-res.bestB.channelOnly)+' 元/MWh'}</div></div>
-      <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.bestC.senderNet-r.senderNet)+' 元/MWh'}</div></div>
+      <div class="mc"><div class="l">${costName}</div><div class="v">#${r.rankA}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankA===1?'最优':'高 '+fmt(r.landed-res.byA[0].landed)+' 元/MWh'}</div></div>
+      <div class="mc"><div class="l">过网费</div><div class="v">#${r.rankB}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankB===1?'最低':'高 '+fmt(r.channelOnly-res.byB[0].channelOnly)+' 元/MWh'}</div></div>
+      <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.byC[0].senderNet-r.senderNet)+' 元/MWh'}</div></div>
     </div>
     <div class="formula" style="margin-top:12px">
       <div class="mono">${state.includeDstCost===false

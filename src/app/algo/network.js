@@ -7,15 +7,23 @@
  *            provLngLat(provinceCode)        -> [lng,lat] | null }
  */
 
-/** 由通道数组构建无向邻接表。同一条通道会以两个方向各挂一次。 */
+/** 由通道数组构建邻接表。
+ *
+ *  专项工程（bidir=false）只按核定的送受端方向挂一次：发改价格规〔2025〕1490号附件4第二条，
+ *  专项工程是「送受端相对明确、潮流方向相对固定」的工程，反向交易在省间现货中不存在。
+ *  省间联络线（bidir=true）可双向通行，以两个方向各挂一次。 */
 function buildAdj(edges){
   const adj={};
   edges.forEach(e=>{
     (adj[e.from]||(adj[e.from]=[])).push({to:e.to,e});
-    (adj[e.to]||(adj[e.to]=[])).push({to:e.from,e});
+    if(e.bidir) (adj[e.to]||(adj[e.to]=[])).push({to:e.from,e});
   });
   return adj;
 }
+
+/** 边 e 位于省 code 一侧的端点坐标。
+ *  按「实际行进方向」取端：反向行进的联络线，其存储的 from 端在对侧省，不能直接用存储方向。 */
+function sideOf(e, code, geo){ return geo.lngLatOf(e, e.from===code?'from':'to'); }
 
 /** 路径的唯一标识。
  *  ⚠️ 必须用节点序列，不能用边对象的 from/to —— 对向通行的边，
@@ -46,6 +54,8 @@ function detourOf(nodes, edges, geo){
     const a=geo.lngLatOf(edges[i],'from'), b=geo.lngLatOf(edges[i],'to');
     if(a&&b) d+=distDeg(a,b);
   }
-  const s=distDeg(geo.lngLatOf(edges[0],'from')||geo.provLngLat(nodes[0]), geo.provLngLat(nodes[nodes.length-1]));
+  // 起点取首段在出发省一侧的端点（按实际行进方向），终点取目的省中心
+  const origin=sideOf(edges[0],nodes[0],geo)||geo.provLngLat(nodes[0]);
+  const s=distDeg(origin, geo.provLngLat(nodes[nodes.length-1]));
   return s<1e-6?1:d/s;
 }

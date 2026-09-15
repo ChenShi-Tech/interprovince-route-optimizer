@@ -75,8 +75,14 @@ ok(/function enumPaths\(adj,\s*src,\s*dst,\s*maxHops,\s*cap,\s*weightOf\)/.test(
    /function enumPaths\(adj,\s*src,\s*dst,\s*maxHops,\s*cap,\s*weightOf\)/.test(strip(fs.readFileSync(path.join(root, 'src/app/algo/paths.js'), 'utf8'))),
   'enumPaths 接收显式的权重函数');
 const costSrc = strip(fs.readFileSync(path.join(root, 'src/app/algo/cost.js'), 'utf8'));
-ok(/function regionFee\(env,\s*fromCode,\s*toCode\)/.test(costSrc),
-  'regionFee(env, from, to) 显式接收方向（反向通行收错区域的修复不会被回退）');
+const netSrc = strip(fs.readFileSync(path.join(root, 'src/app/algo/network.js'), 'utf8'));
+ok(/function regionFee\(env,\s*e,\s*toCode\)/.test(costSrc),
+  'regionFee(env, e, to) 按段判断是否计收，并显式接收行进方向的到达节点');
+ok(/\.regional\)/.test(costSrc), 'regionFee 只对 regional（联络线）段计收，专项工程段不收');
+ok(/function tariffOf\(e,\s*fromCode\)/.test(costSrc) && /tRev/.test(costSrc), 'tariffOf(e, from) 按行进方向取联络线的输电价（反向取 tRev）');
+ok(/e\.incLoss\s*\?\s*qOut\s*:\s*q/.test(costSrc), '含线损的专项工程价按段后电量计费（1490号附件4第九条、第十八条）');
+ok(/if\s*\(\s*e\.bidir\s*\)/.test(netSrc), 'buildAdj 只对 bidir 边挂反向（专项工程单向通行）');
+ok(/sideOf\(edges\[0\],\s*nodes\[0\]/.test(netSrc), 'detourOf 按实际行进方向取起点');
 
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);
 process.exit(fail ? 1 : 0);
