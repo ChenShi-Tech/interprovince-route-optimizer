@@ -10,8 +10,8 @@
 
 const AI_PRESETS = {
   deepseek: { name: 'DeepSeek', base: 'https://api.deepseek.com', model: 'deepseek-v4-flash' },
-  zhipu:    { name: '智谱 GLM',  base: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
-  moonshot: { name: 'Moonshot Kimi', base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-32k' },
+  zhipu:    { name: '智谱 GLM',  base: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.3-flash' },
+  moonshot: { name: 'Moonshot Kimi', base: 'https://api.moonshot.cn/v1', model: 'kimi-k3' },
   openai:   { name: 'OpenAI',   base: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom:   { name: '自定义（OpenAI 兼容）', base: '', model: '' },
 };

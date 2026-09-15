@@ -78,9 +78,10 @@ function renderCalc(){
   if(res&&res.err){
     out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`;
   } else if(res&&res.rows&&res.rows.length){
-    // 智能推荐放在右侧主栏顶部：左栏的路线列表展开后很长，放在它下面要滚很远才看得到
+    // 三栏：左＝路线列表，中＝方案详情，右＝智能推荐（宽屏）；窄屏退为两栏、手机端纵向堆叠，布局由 .layout 的 CSS 决定
     out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+'</div>'
-       + '<div class="col-main">'+renderAI(res)+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+'</div></div>';
+       + '<div class="col-ai">'+renderAI(res)+'</div>'
+       + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+'</div></div>';
   } else {
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }

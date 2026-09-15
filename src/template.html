@@ -231,6 +231,9 @@ details.adv.boxed summary{font-size:12.5px}
 
 /* ==================== 桌面端适配 ==================== */
 .topbar{margin-bottom:0}
+/* 手机端：路线列表 → 方案详情 → 智能推荐 纵向堆叠（DOM 顺序是 列表、推荐、详情，用 order 调整） */
+.layout{display:flex;flex-direction:column}
+.col-side{order:1}.col-main{order:2}.col-ai{order:3}
 @media (min-width:900px){
   #app{max-width:1320px}
   header{order:0;padding:14px 24px 12px}
@@ -252,11 +255,13 @@ details.adv.boxed summary{font-size:12.5px}
   .bar-params{margin-bottom:0}
   details.adv.boxed{margin-bottom:10px}
 
+  /* 两栏（900～1279px）：左＝路线列表；右列上方＝智能推荐、下方＝方案详情 */
   .layout{display:grid;grid-template-columns:348px minmax(0,1fr);gap:16px;align-items:start}
-  .col-side{position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
-  .col-side::-webkit-scrollbar{width:5px}
-  .col-side::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
-  .col-main{min-width:0}
+  .col-side{grid-column:1;grid-row:1;order:0;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
+  .col-side::-webkit-scrollbar,.col-ai::-webkit-scrollbar{width:5px}
+  .col-side::-webkit-scrollbar-thumb,.col-ai::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .col-ai{grid-column:2;grid-row:1;order:0;min-width:0}
+  .col-main{grid-column:2;grid-row:2;order:0;min-width:0}
 
   .rlist{flex-direction:column;overflow:visible;gap:6px;padding:0}
   .rlist-foot{margin-top:6px}
@@ -295,7 +300,10 @@ details.adv.boxed summary{font-size:12.5px}
 }
 @media (min-width:1280px){
   #app{max-width:1480px}
-  .layout{grid-template-columns:392px minmax(0,1fr);gap:20px}
+  /* 三栏：左＝路线列表，中＝方案详情，右＝智能推荐；左右两栏各自粘性滚动 */
+  .layout{grid-template-columns:360px minmax(0,1fr) 340px;gap:18px}
+  .col-main{grid-column:2;grid-row:1}
+  .col-ai{grid-column:3;grid-row:1;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
   .libgrid{gap:0 32px}
 }
 </style>

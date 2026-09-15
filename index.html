@@ -231,6 +231,9 @@ details.adv.boxed summary{font-size:12.5px}
 
 /* ==================== 桌面端适配 ==================== */
 .topbar{margin-bottom:0}
+/* 手机端：路线列表 → 方案详情 → 智能推荐 纵向堆叠（DOM 顺序是 列表、推荐、详情，用 order 调整） */
+.layout{display:flex;flex-direction:column}
+.col-side{order:1}.col-main{order:2}.col-ai{order:3}
 @media (min-width:900px){
   #app{max-width:1320px}
   header{order:0;padding:14px 24px 12px}
@@ -252,11 +255,13 @@ details.adv.boxed summary{font-size:12.5px}
   .bar-params{margin-bottom:0}
   details.adv.boxed{margin-bottom:10px}
 
+  /* 两栏（900～1279px）：左＝路线列表；右列上方＝智能推荐、下方＝方案详情 */
   .layout{display:grid;grid-template-columns:348px minmax(0,1fr);gap:16px;align-items:start}
-  .col-side{position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
-  .col-side::-webkit-scrollbar{width:5px}
-  .col-side::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
-  .col-main{min-width:0}
+  .col-side{grid-column:1;grid-row:1;order:0;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
+  .col-side::-webkit-scrollbar,.col-ai::-webkit-scrollbar{width:5px}
+  .col-side::-webkit-scrollbar-thumb,.col-ai::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .col-ai{grid-column:2;grid-row:1;order:0;min-width:0}
+  .col-main{grid-column:2;grid-row:2;order:0;min-width:0}
 
   .rlist{flex-direction:column;overflow:visible;gap:6px;padding:0}
   .rlist-foot{margin-top:6px}
@@ -295,7 +300,10 @@ details.adv.boxed summary{font-size:12.5px}
 }
 @media (min-width:1280px){
   #app{max-width:1480px}
-  .layout{grid-template-columns:392px minmax(0,1fr);gap:20px}
+  /* 三栏：左＝路线列表，中＝方案详情，右＝智能推荐；左右两栏各自粘性滚动 */
+  .layout{grid-template-columns:360px minmax(0,1fr) 340px;gap:18px}
+  .col-main{grid-column:2;grid-row:1}
+  .col-ai{grid-column:3;grid-row:1;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
   .libgrid{gap:0 32px}
 }
 </style>
@@ -329,7 +337,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-15 13:05';
+const BUILD_TIME='2026-09-15 13:10';
 const PRICE_VERSION='216025451a007ec2';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -833,9 +841,10 @@ function renderCalc(){
   if(res&&res.err){
     out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`;
   } else if(res&&res.rows&&res.rows.length){
-    // 智能推荐放在右侧主栏顶部：左栏的路线列表展开后很长，放在它下面要滚很远才看得到
+    // 三栏：左＝路线列表，中＝方案详情，右＝智能推荐（宽屏）；窄屏退为两栏、手机端纵向堆叠，布局由 .layout 的 CSS 决定
     out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+'</div>'
-       + '<div class="col-main">'+renderAI(res)+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+'</div></div>';
+       + '<div class="col-ai">'+renderAI(res)+'</div>'
+       + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+'</div></div>';
   } else {
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
@@ -1572,8 +1581,8 @@ function applyTk(){ const el=document.getElementById('i-tk'); state.tiandituKey=
 
 const AI_PRESETS = {
   deepseek: { name: 'DeepSeek', base: 'https://api.deepseek.com', model: 'deepseek-v4-flash' },
-  zhipu:    { name: '智谱 GLM',  base: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
-  moonshot: { name: 'Moonshot Kimi', base: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-32k' },
+  zhipu:    { name: '智谱 GLM',  base: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-5.3-flash' },
+  moonshot: { name: 'Moonshot Kimi', base: 'https://api.moonshot.cn/v1', model: 'kimi-k3' },
   openai:   { name: 'OpenAI',   base: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
   custom:   { name: '自定义（OpenAI 兼容）', base: '', model: '' },
 };
