@@ -157,6 +157,39 @@ G('state.includeDstCost=true;state._res=solve();renderCalc();');
 const hIn = G("document.getElementById('v-calc').innerHTML");
 ok(hIn.includes('元/MWh 落地') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
 
+console.log('══ 七、区域电网费按「实际行进方向」取价（反向通行不得收错区域）══');
+{
+  const RGOF = G('REGION_OF'), RG = G('RG');
+  // 反向通行的典型：长南荆存为 山西→湖北，行进方向 湖北→山西 应取华北而非华中
+  const back = G("CH.filter(c=>(c.from==='HB'&&c.to==='SX')||(c.from==='SX'&&c.to==='HB'))");
+  ok(back.length > 0, '存在 湖北-山西 通道（长南荆）');
+  const ch = back[0];
+  const storedRegion = RGOF[ch.to];           // 按存储方向的到达区
+  const travelRegion = RGOF[ch.from];         // 实际行进 湖北→山西，到达华北
+  ok(storedRegion !== travelRegion, `该通道存储方向(${ch.from}→${ch.to})与实际行进方向跨区结果不同`);
+  G('state.includeRegion=true;');
+  const feeCorrect = G(`regionFee('HB','SX')`);
+  const feeWrong = G(`regionFee('${ch.from}','${ch.to}')`);
+  ok(feeCorrect === RG['华北'] * 1000, `regionFee('HB','SX') = ${feeCorrect}，取华北 10.8 ✅`);
+  ok(feeWrong === RG['华中'] * 1000 && feeWrong !== feeCorrect,
+    `若误用存储方向会得 ${feeWrong}（华中 25.6），差 ${(feeWrong - feeCorrect).toFixed(1)} 元/MWh`);
+
+  // 逐条核对：任意路径的区域费必须等于「按行进方向逐跨区段累加」
+  let bad = 0, checked = 0;
+  for (const [f, t] of [['HB', 'JS'], ['SX', 'JS'], ['SC', 'JS'], ['GS', 'SD'], ['HB', 'HE'], ['CQ', 'JS'], ['SN', 'HB']]) {
+    G(`state.from='${f}';state.to='${t}';state.maxHops=2;state.includeRegion=true;state.includeDstCost=true;applyBothProv();state._res=solve();`);
+    const r = G('state._res');
+    if (r.err) continue;
+    for (const x of r.rows) {
+      const expect = x.segs.filter((s) => RGOF[s.a] !== RGOF[s.b])
+        .reduce((a, s) => a + (RG[RGOF[s.b]] || 0) * 1000 * s.q, 0);
+      checked++;
+      if (Math.abs(x.comp.reg - expect) > 1e-6) { bad++; }
+    }
+  }
+  ok(bad === 0, `${checked} 条路线的区域电网费均等于逐跨区段累加值`, bad ? `${bad} 条不符` : '');
+}
+
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);
 if (fail) { console.log('未通过项：'); problems.forEach((p) => console.log('  · ' + p)); }
 process.exit(fail ? 1 : 0);
