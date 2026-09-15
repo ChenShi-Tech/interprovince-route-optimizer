@@ -28,7 +28,7 @@ function renderCalc(){
   </div>
 
   <div class="bar-params">
-    <label><span>电量</span><input id="i-qty" type="number" value="${state.qty}" step="100" min="1"></label>
+    <label><span>电量 MWh</span><input id="i-qty" type="number" value="${state.qty}" step="100" min="1"></label>
     <label><span>时长 h</span><input id="i-hours" type="number" value="${state.hours}" step="0.25" min="0.25"></label>
     <label><span>跳数</span><select id="i-hops">
       ${[1,2,3,4,5,6].map(v=>`<option value="${v}" ${state.maxHops==v?'selected':''}>${v===6?'6（上限）':v}</option>`).join('')}
