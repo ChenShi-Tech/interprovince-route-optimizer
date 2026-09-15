@@ -334,11 +334,15 @@ function lngLatOf(ch,side){
   const c = side==='from'?ch.from:ch.to;
   return (s&&ST[s]) ? [ST[s].lng,ST[s].lat] : provLngLat(c);
 }
-function regionFee(ch){
+/* 区域电网输电费。
+   ⚠️ 必须传入「实际行进方向」的起止节点，不能用边对象的 from/to ——
+   对向通行的边，其存储方向与行进方向相反，用 from/to 会收错区域。
+   曾因此在「湖北→山西」（长南荆存为山西→湖北）上错收华中 25.6 而非华北 10.8。 */
+function regionFee(fromCode, toCode){
   if(!state.includeRegion) return 0;
-  const rf=REGION_OF[ch.from], rt=REGION_OF[ch.to];
-  if(!rf||!rt||rf===rt) return 0;
-  return (RG[rt]||0)*1000;   // 元/kWh → 元/MWh
+  const rf=REGION_OF[fromCode], rt=REGION_OF[toCode];
+  if(!rf||!rt||rf===rt) return 0;          // 同区域内的省间交易不收区域电网费
+  return (RG[rt]||0)*1000;                 // 元/kWh → 元/MWh，取到达区域的价格
 }
 
 /* ================= 算法 ================= */
@@ -347,51 +351,9 @@ function buildAdj(edges){
   edges.forEach(e=>{ (adj[e.from]||(adj[e.from]=[])).push({to:e.to,e}); (adj[e.to]||(adj[e.to]=[])).push({to:e.from,e}); });
   return adj;
 }
-function approxW(e){ return e.t+(e.loss||0)/100*state.pGen+regionFee(e); }
-function dijkstra(adj,src,dst,bannedE,bannedN){
-  if(src===dst) return {edges:[],nodes:[src],cost:0};
-  const dist={src:0}, prev={}, seen={}, Q=[src];
-  while(Q.length){
-    let bi=0; for(let i=1;i<Q.length;i++) if(dist[Q[i]]<dist[Q[bi]]) bi=i;
-    const u=Q.splice(bi,1)[0]; if(seen[u]) continue; seen[u]=true;
-    if(u===dst) break;
-    for(const {to,e} of (adj[u]||[])){
-      if(seen[to]||bannedE.has(e.id)||bannedN.has(to)) continue;
-      const nd=dist[u]+approxW(e);
-      if(dist[to]===undefined||nd<dist[to]){ dist[to]=nd; prev[to]={u,e}; Q.push(to); }
-    }
-  }
-  if(dist[dst]===undefined) return null;
-  const edges=[],nodes=[dst]; let cur=dst;
-  while(cur!==src){ const p=prev[cur]; if(!p) return null; edges.unshift(p.e); nodes.unshift(p.u); cur=p.u; }
-  return {edges,nodes,cost:dist[dst]};
-}
+/* 近似权重：只用于枚举顺序，不参与最终计价 */
+function approxW(e, fromCode, toCode){ return e.t+(e.loss||0)/100*state.pGen+regionFee(fromCode, toCode); }
 function keyOf(nodes){ return nodes.join('>'); }
-function yenK(adj,src,dst,K){
-  const first=dijkstra(adj,src,dst,new Set(),new Set());
-  if(!first) return [];
-  const A=[first],B=[],seen=new Set([keyOf(first.nodes)]);
-  while(A.length<K){
-    const prev=A[A.length-1];
-    for(let i=0;i<prev.edges.length;i++){
-      const spurNode=prev.nodes[i], rootE=prev.edges.slice(0,i), rootN=prev.nodes.slice(0,i+1);
-      const bannedE=new Set(), bannedN=new Set();
-      for(const p of A) if(p.edges.length>i && p.nodes.slice(0,i+1).join()===rootN.join()) bannedE.add(p.edges[i].id);
-      for(let j=0;j<rootN.length-1;j++) bannedN.add(rootN[j]);
-      const spur=dijkstra(adj,spurNode,dst,bannedE,bannedN);
-      if(!spur) continue;
-      const tot={edges:rootE.concat(spur.edges),nodes:rootN.concat(spur.nodes.slice(1)),
-        cost:rootE.reduce((s,e)=>s+approxW(e),0)+spur.cost};
-      const kk=keyOf(tot.nodes);
-      if(seen.has(kk)||B.some(b=>keyOf(b.nodes)===kk)) continue;
-      B.push(tot);
-    }
-    if(!B.length) break;
-    B.sort((a,b)=>a.cost-b.cost);
-    const nx=B.shift(); seen.add(keyOf(nx.nodes)); A.push(nx);
-  }
-  return A;
-}
 function distDeg(a,b){
   const dx=(a[0]-b[0])*Math.cos((a[1]+b[1])/2*Math.PI/180), dy=a[1]-b[1];
   return Math.sqrt(dx*dx+dy*dy);
@@ -426,7 +388,7 @@ function evalPath(path,ctx){
   const vset=new Set(), tset=new Set(), rset=new Set(), stset=new Set();
   const segs=edges.map((e,i)=>{
     const q=1/suf[i], qOut=1/suf[i+1];
-    const fee=e.t*q, rg=regionFee(e)*q, sf=(e.sendFee||0)*q;
+    const fee=e.t*q, rg=regionFee(nodes[i],nodes[i+1])*q, sf=(e.sendFee||0)*q;
     trans+=fee; regFee+=rg; sendTotal+=sf;
     const a=lngLatOf(e,'from'), b=lngLatOf(e,'to');
     const crow=havKm(a,b);
@@ -505,7 +467,7 @@ function evalPath(path,ctx){
 function enumPaths(adj,src,dst,maxHops,cap){
   const out=[], visited=new Set([src]), nodes=[src], edges=[];
   const ord={};
-  for(const k in adj) ord[k]=adj[k].slice().sort((a,b)=>approxW(a.e)-approxW(b.e));
+  for(const k in adj) ord[k]=adj[k].slice().sort((a,b)=>approxW(a.e,k,a.to)-approxW(b.e,k,b.to));
   (function dfs(u){
     if(out.length>=cap) return;
     if(u===dst){ out.push({nodes:nodes.slice(),edges:edges.slice()}); return; }
