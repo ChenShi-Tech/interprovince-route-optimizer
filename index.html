@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-page-node-id="ZzuOoz03yMAdc3GYH4vxPE">
-<head data-page-node-id="EeFQymmmVFpDrr13dG92c7">
-<meta charset="utf-8" data-page-node-id="nXrMXaVsa0O4d6OsyJ5cFF">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1" data-page-node-id="hxN1bk1kfPx7OcUB5qYEYC">
-<meta name="theme-color" content="#ffffff" data-page-node-id="BoB5Nz089gdJ0JAjRNVIK2">
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#ffffff">
 <title>省间路径优选测算 v2</title>
 <script type="text/javascript">
 window._TMapSecurityConfig = {
@@ -35,8 +35,11 @@ h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
-/* 末尾卡片的外边距属于尾部留白，由页脚间距接管 */
-main section>:last-child{margin-bottom:0}
+/* 末尾卡片的外边距属于尾部留白，由页脚间距接管。
+   深层选择器：各 Tab 内容末尾的 margin 在任意嵌套层泄漏会导致
+   「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），
+   统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
+main section>:last-child,main section :last-child{margin-bottom:0}
 nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
@@ -357,28 +360,28 @@ details.adv.boxed summary{font-size:12.5px}
 }
 </style>
 </head>
-<body data-page-node-id="FtJGBHtRCZedFGLjsFFdU6">
-<div id="app" data-page-node-id="p8DJTpZmVOap4eduLx2eZx">
-  <header data-page-node-id="9Pr9LIl48Njc6iadgwfUcH">
-    <div class="hd-top" data-page-node-id="sF8KnscVItGizCjluFCIqT">
-      <h1 data-page-node-id="QfBD7bRl0AGvHlis3SerVa">省间路径优选测算</h1>
-      <span class="badge" id="verBadge" data-page-node-id="VkOMWkGCrGgLGQOLmrvF3C">真实数据 · 2026 第四监管周期</span>
+<body>
+<div id="app">
+  <header>
+    <div class="hd-top">
+      <h1>省间路径优选测算</h1>
+      <span class="badge" id="verBadge">真实数据 · 2026 第四监管周期</span>
     </div>
   </header>
-  <main data-page-node-id="XESrIqiFWHwj4G7HQDyhCS">
-    <section id="v-calc" data-page-node-id="JN8MrnXE3mdOpj5XjHLP8F"></section>
-    <section id="v-map" hidden data-page-node-id="ZZdywbQZCkA9m5aVFt8dYP"></section>
-    <section id="v-lib" hidden data-page-node-id="32hlT4zE782ivEegbqWDm0"></section>
+  <main>
+    <section id="v-calc"></section>
+    <section id="v-map" hidden></section>
+    <section id="v-lib" hidden></section>
   </main>
   <!-- REQ-307：页脚定位声明，三 Tab 共用；样式见 .disclaim（移动端贴固定导航条上方，桌面端沉底） -->
-  <footer class="disclaim" data-page-node-id="FEFWqgA2KW49m6WFUvvBog">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
-  <nav data-page-node-id="RNi6FLlSjp7vjq1q2lrEhc">
-    <button id="t-calc" class="on" onclick="go('calc')" data-page-node-id="hca2SMWxlIz79zfN1uD3LA">
-      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="sdALfEJmAkiJHFfwJE9OJW"><path d="M4 15l4-5 3 3 5-7" data-page-node-id="T6fIDIqWtMWYKpzi7VcIw0"/><path d="M3 17h14" data-page-node-id="9EdWsRE5FwhaTAMDLDzKVG"/></svg>测算</button>
-    <button id="t-map" onclick="go('map')" data-page-node-id="eLWes3zTZNP6bgS2UAnuqq">
-      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="GV9pXPGWTKqditgrFPCZB0"><path d="M3 5.5l4.5-2 5 2 4.5-2v11l-4.5 2-5-2-4.5 2z" data-page-node-id="PzLWVLmArBhOIy8sloeVQo"/><path d="M7.5 3.5v11M12.5 5.5v11" data-page-node-id="8jRIemXubXsMDHUWa1zBDb"/></svg>网架图</button>
-    <button id="t-lib" onclick="go('lib')" data-page-node-id="9HxEPpvpY3EKXD5LCkDK2l">
-      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" data-page-node-id="jL9ZXHrqgERNmEIuCWR2Vj"><rect x="3" y="3" width="14" height="14" rx="2" data-page-node-id="3XTFxiQY2f270L6oBFGWpw"/><path d="M3 8h14M8 8v9" data-page-node-id="Ih3h4fBrH5Fj60N2xBP5C4"/></svg>费率库</button>
+  <footer class="disclaim">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
+  <nav>
+    <button id="t-calc" class="on" onclick="go('calc')">
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
+    <button id="t-map" onclick="go('map')">
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5l4.5-2 5 2 4.5-2v11l-4.5 2-5-2-4.5 2z"/><path d="M7.5 3.5v11M12.5 5.5v11"/></svg>网架图</button>
+    <button id="t-lib" onclick="go('lib')">
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>费率库</button>
   </nav>
 </div>
 <script>
@@ -388,7 +391,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-16 10:11';
+const BUILD_TIME='2026-09-16 10:43';
 const PRICE_VERSION='5ead949e5845a53c';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器

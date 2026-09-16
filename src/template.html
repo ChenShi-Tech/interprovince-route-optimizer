@@ -35,8 +35,11 @@ h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
-/* 末尾卡片的外边距属于尾部留白，由页脚间距接管 */
-main section>:last-child{margin-bottom:0}
+/* 末尾卡片的外边距属于尾部留白，由页脚间距接管。
+   深层选择器：各 Tab 内容末尾的 margin 在任意嵌套层泄漏会导致
+   「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），
+   统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
+main section>:last-child,main section :last-child{margin-bottom:0}
 nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
