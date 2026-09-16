@@ -16,10 +16,11 @@
  */
 function enumPaths(adj,src,dst,maxHops,cap,weightOf){
   const out=[], visited=new Set([src]), nodes=[src], edges=[];
+  let hitCap=false;   // REQ-601：区分「提前截断」与「自然枚举完恰好 cap 条」
   const ord={};
   for(const k in adj) ord[k]=adj[k].slice().sort((a,b)=>weightOf(a,k)-weightOf(b,k));
   (function dfs(u){
-    if(out.length>=cap) return;
+    if(out.length>=cap){ hitCap=true; return; }
     if(u===dst){ out.push({nodes:nodes.slice(),edges:edges.slice()}); return; }
     if(edges.length>=maxHops) return;
     for(const nb of ord[u]||[]){
@@ -27,8 +28,9 @@ function enumPaths(adj,src,dst,maxHops,cap,weightOf){
       visited.add(nb.to); nodes.push(nb.to); edges.push(nb.e);
       dfs(nb.to);
       edges.pop(); nodes.pop(); visited.delete(nb.to);
-      if(out.length>=cap) return;
+      if(out.length>=cap){ hitCap=true; return; }
     }
   })(src);
+  out.hitCap=hitCap;
   return out;
 }

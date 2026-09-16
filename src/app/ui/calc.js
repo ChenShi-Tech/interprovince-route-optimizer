@@ -66,10 +66,19 @@ function renderCalc(){
         <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
       </select></label>
     </div>
+    <div class="row2">
+      <label class="f"><span>可交易性（REQ-203）</span><select id="i-tradable">
+        <option value="0" ${!state.tradableOnly?'selected':''}>全部通道 —— 含未确认联络线</option>
+        <option value="1" ${state.tradableOnly?'selected':''}>仅按已确认可交易通道</option>
+      </select></label>
+      <label class="f"><span>中长期占用 %（容量校验扣减）</span><input id="i-zyocc" type="number" value="${state.occPct||0}" step="5" min="0" max="90"></label>
+    </div>
+    <details class="explain"><summary>政策口径与取值依据<em>区域电网费 · 网损承担方 · 自动带入值</em></summary><div class="inner">
     <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。口径二（过网费）与口径三（送端净收益）不含受端省内费用，因此不受「费用边界」开关影响。</p>
     <p class="note"><b>区域电网输电价格</b>是国网华北、华东、华中、东北、西北五个区域分部运营的区域共用输电网络（跨省 500kV / 1000kV 联络网架）的电量电价，由国家发改委核定（发改价格〔2026〕1077号附件2），随区域电网实际交易结算电量向购电方收取。按《省间电力现货交易规则》(2026年4月，发改办体改〔2026〕275号复函) 3.4.2(a)，经营主体购电时<b>统一计入买方节点所在区域电网的输电价格</b>，与路径是否跨区、是否走专项工程无关；发改价格规〔2020〕1441号第二条亦规定通过区域电网共用网络交易的用户购电价格应包括区域电网电量电价及损耗。本工具按买方所在区域计一次，路径过境其它区域的联络线段再按该区域计一次；区域电网自身网损率未公开，暂按 0 计。</p>
     <p class="note"><b>网损承担方</b>的政策口径是<b>受端（购电方）承担</b>：规则 4.3.1 把买方价格按 Π(1−线损率) 折算到卖方节点，即买方为送端电量付费；1490号附件4第十八条，线损率偏差损益由购电方承担或享有。「两端各半」与「送端承担」用于模拟中长期双边谈判条款，送端承担实质是送端把线损折入报价。各段线损率一律按核定值计。规则 3.3.2：<b>输电价格已包含网损的段不再另行收取网损</b>，9 条「含输电环节线损」通道的线损只体现在物理功率与容量占用上，不进买方费用。送端省内的「送省外上网环节线损」由卖方承担（规则 7.3(a)），只计入口径三；受端省内的「上网环节线损费用」在输配电价外单列（1077号附件1 注3），计入完整落地价。</p>
     <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
+    </div></details>
   </div></details>`;
 
   // REQ-401 容量电费测算器：独立折叠卡，不参与路径比选（发改价格〔2020〕1441号 / 〔2023〕532号口径）
@@ -82,11 +91,15 @@ function renderCalc(){
 
   if(res&&res.err){
     out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`;
+    // 组件筛选把候选筛空时，选择器必须留在页面上，否则用户没法取消已选组件
+    if(res.availChannels&&res.availChannels.length){
+      out+=`<div class="card tight">${renderCompPicker(res)}</div>`;
+    }
   } else if(res&&res.rows&&res.rows.length){
     // 三栏：左＝路线列表，中＝方案详情，右＝智能推荐（宽屏）；窄屏退为两栏、手机端纵向堆叠，布局由 .layout 的 CSS 决定
     out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+'</div>'
        + '<div class="col-ai">'+renderAI(res)+'</div>'
-       + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+'</div></div>';
+       + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+renderSensitivity(res)+'</div></div>';
   } else {
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
@@ -115,13 +128,18 @@ function renderRouteList(res){
   const inThr=rows.filter(r=>r.landed<=thr);
   const shown=state.showAll?rows:inThr;
   const cut=rows.length-inThr.length;
+  const mustN=(res.mustHave||[]).length;
   let out=`<div class="card tight">
-    <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}</span></div>
-    <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
-    <p class="note" style="margin:-4px 0 9px">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。单向送电直流只按核定方向计入，互济型工程（德宝、青藏、长南荆等）与省间联络线双向。放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
+    <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}${mustN?' · 按 '+mustN+' 个组件筛选':''}</span></div>
+    <details class="explain"><summary>候选与可行的定义<em>费用边界：${isDst?'完整落地价':'只算到受端省界'}</em></summary><div class="inner">
+    <p class="note">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
+    <p class="note">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。单向送电直流只按核定方向计入，互济型工程（德宝、青藏、长南荆等）与省间联络线双向。放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
+    </div></details>
+    ${res.truncated?'<div class="warn">候选集已达枚举上限（800 条），排序仅基于已枚举部分，结果偏乐观——建议收紧跳数 / 绕行上限后重算。</div>':''}
+    ${renderCompPicker(res)}
     <div class="seg small">
       ${[['A',costName],['B','过网费'],['C','送端收益']].map(([k,t])=>
-        `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
+        `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')" ${k==='C'?'title="口径三：受端价折回估算，非结算口径"':''}>${t}</button>`).join('')}
     </div>
     <div class="rlist">`;
   rows.forEach((r,i)=>{
@@ -153,6 +171,37 @@ function renderRouteList(res){
   out+=`</div>`;
   return out;
 }
+/* ---------- 通道组件：把直流（专项工程）等通道当作可选组件来筛方案 ----------
+   语义：选中的通道必须出现在方案里（不区分行进方向，方向由通道自身的 bidir 决定）。
+   候选清单来自绕行度筛选后的完整候选集，所以选中一条后其余组件仍然可选、可取消。 */
+function renderCompPicker(res){
+  const list=res.availChannels||[];
+  if(!list.length) return '';
+  const sel=res.mustHave||[];
+  const dcN=list.filter(c=>c.type==='DC'||c.type==='AC/DC').length;
+  let out=`<div class="comp-box">
+    <div class="comp-hd"><span>通道组件</span><em>${list.length} 个可选 · 直流 ${dcN} 个${sel.length?' · 已选 '+sel.length+' 条':''}</em></div>
+    <p class="comp-tip">点选通道即把它设为<b>必经组件</b>，只列出包含它的方案；不选则显示全部候选。直流排在最前。</p>
+    <div class="chips comps">`;
+  list.forEach(c=>{
+    const on=sel.indexOf(c.id)>=0;
+    const dc=(c.type==='DC'||c.type==='AC/DC');
+    out+=`<button class="chip ${dc?'dc':''}${on?' on':''}" onclick="toggleComp('${c.id}')" title="${esc(c.n)} · ${esc(c.type)} · ${c.bidir?'双向':'仅核定方向'} · 出现在 ${c.count} 条候选路径里">${esc(c.n)}<em>${esc(c.type)} ${c.bidir?'双向':'单向'}</em></button>`;
+  });
+  out+=`</div>`;
+  if(sel.length){
+    out+=`<button class="btn ghost" style="margin-top:8px;padding:7px;font-size:12px" onclick="clearComp()">清除全部组件${res.total!=null?'（当前筛出 '+res.total+' 条 / 全量 '+res.totalAll+' 条）':''}</button>`;
+  }
+  out+=`</div>`;
+  return out;
+}
+function toggleComp(id){
+  const a=state.mustHave||(state.mustHave=[]);
+  const i=a.indexOf(id);
+  if(i<0) a.push(id); else a.splice(i,1);
+  state.sel=0; doSolve();
+}
+function clearComp(){ state.mustHave=[]; state.sel=0; doSolve(); }
 function setSort(k){ state.sortBy=k; state.sel=0; doSolve(); }
 function pick(i){ state.sel=i; saveLast(); renderCalc();
   const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
@@ -165,6 +214,8 @@ function renderDetail(res,r){
   const comp=[['送端出清价',r.comp.gen],['送端省内段',r.comp.send],['跨省通道费',r.comp.trans],['区域电网费',r.comp.reg],
     ['网损折价',r.comp.loss],['受端上网环节线损',r.comp.inLoss],['受端输配电价',r.comp.net],['基金及附加',r.comp.fund]].filter(c=>c[1]>0);
   const tot=comp.reduce((s,c)=>s+c[1],0);
+  // REQ-201：未确认属于省间现货交易网络的交流联络线段
+  const ntSegs=r.edges.filter(e=>e.tradable===false);
 
   let out=`<div class="card">
     <div class="sec-title">方案 #${state.sel+1}<span class="hint">${r.feasible?'<span style="color:var(--teal)">容量与断面均通过</span>':'<span style="color:var(--red)">存在越限</span>'}</span></div>
@@ -173,6 +224,7 @@ function renderDetail(res,r){
       ${r.edges.map(e=>`<span class="ln ${e.type==='DC'?'dc':'ac'}">${esc(e.n)}</span>`).join('<span class="plus">+</span>')}
     </div>
     <div class="big">${fmt(r.landed)}<span class="u">元/MWh ${state.includeDstCost===false?'送到受端省界':'落地'}</span></div>
+    <p class="note" style="margin:-2px 0 8px">单时点测算：省间现货按 D 日 96 时段（每 15 分钟一段，S14 规则 4.1）组织出清，时段价差与通道功率爬坡未建模。</p>
     ${state.includeDstCost===false?'<p class="note" style="margin:-4px 0 8px">当前口径<b>不含</b>受端省网输配电价与政府性基金及附加，仅为送到受端省界的价格。</p>':''}
     <div class="bar">${comp.map((c,j)=>`<div style="width:${(c[1]/tot*100).toFixed(2)}%;background:${colors[j%6]}"></div>`).join('')}</div>
     <div class="lg">${comp.map((c,j)=>`<span><i style="background:${colors[j%6]}"></i>${c[0]} ${fmt(c[1])}</span>`).join('')}</div>
@@ -185,10 +237,13 @@ function renderDetail(res,r){
       <span class="chip">占用 ${fmt(r.maxLoad*100,0)}%</span>
       <span class="chip ${r.unverified?'warn':'ok'}">${r.unverified? r.unverified+' 段非核定':'全部发改委核定'}</span>
     </div>
-    ${!r.feasible?`<div class="warn bad" style="margin-top:11px">${r.overSeg.length?'通道超容：'+r.overSeg.map(s=>esc(s.name)+' '+fmt(s.mw,0)+'/'+s.cap+' MW').join('；')+'<br>':''}${r.secOver.length?'断面越限：'+r.secOver.map(h=>esc(h.sec.n)+' '+fmt(h.mw,0)+'/'+h.sec.limit+' MW').join('；'):''}</div>`:''}
+    <p class="note" style="margin:-2px 0 0">容量校验：${state.occPct>0?`按核定容量×(1−中长期占用 ${state.occPct}%) 扣减；`:''}非可用输电能力（ATC），未扣检修等其它占用，结果偏乐观。</p>
+    ${!r.feasible?`<div class="warn bad" style="margin-top:11px">${r.overSeg.length?'通道超容：'+r.overSeg.map(s=>esc(s.name)+' '+fmt(s.mw,0)+'/'+(s.effCap!=null?fmt(s.effCap,0):s.cap)+' MW').join('；')+'<br>':''}${r.secOver.length?'断面越限：'+r.secOver.map(h=>esc(h.sec.n)+' '+fmt(h.mw,0)+'/'+h.sec.limit+' MW').join('；'):''}</div>`:''}
+    ${ntSegs.length?`<div class="warn" style="margin-top:8px">⚠ 本方案含 <b>${ntSegs.length}</b> 段未确认属于省间现货交易网络的交流联络线（${esc(ntSegs.slice(0,3).map(e=>e.n).join('、'))}${ntSegs.length>3?' 等 '+ntSegs.length+' 段':''}），实际可交易性待交易中心确认。</div>`:''}
     <div class="row2" style="margin-top:12px">
       <button class="btn ghost" onclick="go('map')">在网架图上查看</button>
       <button class="btn ghost" onclick="document.getElementById('d-detail').open=true;document.getElementById('d-detail').scrollIntoView({behavior:'smooth'})">展开完整明细</button>
+      <button class="btn ghost" onclick="exportReport()">导出报告</button>
     </div>
   </div>`;
 
@@ -213,7 +268,7 @@ function renderDetail(res,r){
       out+=`<div class="tl-seg">
         <div class="tl-seg-line"></div>
         <div class="tl-seg-card">
-          <div class="tl-seg-hd"><span>${esc(e.n)}</span><span class="pill ${e.type==='DC'?'':'g'}">${esc(e.type)} ${esc(e.kv)}</span></div>
+          <div class="tl-seg-hd"><span>${esc(e.n)}</span><span class="pill ${e.type==='DC'?'':'g'}">${esc(e.type)} ${esc(e.kv)}</span>${e.tradable===false?'<span class="pill g" title="是否属于省间现货交易网络待交易中心确认">交易网络·待确认</span>':''}</div>
           <div class="tl-seg-g">
             <div>长度<b>${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}</b></div>
             <div>容量<b>${e.cap?e.cap+' MW':'待补'}</b></div>
@@ -317,14 +372,97 @@ function renderDetail(res,r){
       <div class="mc"><div class="l">过网费</div><div class="v">#${r.rankB}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankB===1?'最低':'高 '+fmt(r.channelOnly-res.byB[0].channelOnly)+' 元/MWh'}</div></div>
       <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.byC[0].senderNet-r.senderNet)+' 元/MWh'}</div></div>
     </div>
+    <p class="note" style="margin:4px 0 0">口径三（送端净收益）为<b>受端价折回估算，非结算口径</b>——实际卖方结算价按卖方节点边际价确定（S14 规则 4.3.3）。</p>
     <div class="formula" style="margin-top:12px">
       <div class="mono">${state.includeDstCost===false
         ? '送到省界价 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[送端省内段费 × 段前系数 + 通道输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价　—— 不含受端省内费用'
         : '落地成本 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[送端省内段费 × 段前系数 + 通道输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价 + 受端上网环节线损费用 + 受端省网输配电价 + 政府性基金及附加'}</div>
       <div class="txt">段前系数 = 1 / Π(该段及之后各段的通过率)，段后系数 = 1 / Π(之后各段的通过率)。输电费按段后电量计，来自《省间电力现货交易规则》(2026-04) 4.3.1 的折算公式；「含输电环节线损」的段在计费链里线损按 0 计（3.3.2）。</div>
     </div>
+
+    <div class="sub">结算机制<em>《省间电力现货交易规则》(2026-04) 原文摘录</em></div>
+    <div class="segblk">
+      <div class="src" style="padding-top:8px">
+        <b>① 买方支出（S14 7.2.2）</b>：「省间电力现货交易支出=日前现货交易执行电量（买方节点）×折算后日前出清价格（买方节点，含输电价格和网损折价）+日内现货交易执行电量（买方节点）×折算后日内出清价格（买方节点，含输电价格和网损折价）」<br>
+        <b>② 卖方结算（S14 4.3.3）</b>：「卖方节点最后一笔成交交易对中买方折算后价格与卖方申报价格的平均值为该卖方节点的边际价格」<br>
+        <b>③ 执行顺序（S14 1.2 / 7.2.2）</b>：在落实省间中长期交易基础上，利用省间通道剩余输电能力开展省间日前、日内电能量交易；结算按日前、日内现货交易执行电量与出清价格<br>
+        <b>④ 日清月结（S14 7.2.1）</b>：「省间电力现货交易结算采用日清月结方式，D+5 日进行市场化交易结果清分，生成日清算结果。电力交易机构于每月第 5 个工作日前向相关经营主体、电网企业出具上月结算依据（核对版）」
+      </div>
+    </div>
+    <p class="note" style="margin-top:6px">以上为规则原文摘录（在库原件 docs/原始文件/S14），供结算口径对照；本工具输出为测算与比选参考。</p>
   </div></details>`;
   return out;
+}
+
+/* ---------- REQ-403 价差敏感性：对当前省对按送端出清价扫描 ---------- */
+function renderSensitivity(res){
+  if(!res||!res.rows) return '';
+  const P0=100,P1=800,STEP=20; let prev=null; const rowsA=[];
+  for(let p=P0;p<=P1;p+=STEP){
+    const R=solve(Object.assign({},state,{pGen:p}), algoData());
+    const best=R.err?null:(R.bestA||R.rows[0]||null);
+    const flip=!!(best&&prev&&prev.nodes.join('>')!==best.nodes.join('>'));
+    rowsA.push({p,best,flip});
+    if(best) prev=best;
+  }
+  const trs=rowsA.map(pt=>`<tr${pt.flip?' style="background:var(--amber-bg)"':''}>
+    <td>${pt.p}</td>
+    <td>${pt.best?esc(pt.best.nodes.map(N).join(' → ')):'—'}</td>
+    <td>${pt.best?fmt(pt.best.landed):'—'}</td>
+    <td>${pt.best?fmt(pt.best.channelOnly):'—'}</td>
+    <td>${pt.flip?'★ 最优切换':''}</td></tr>`).join('');
+  return `<details class="adv boxed" id="d-sens"><summary>价差敏感性：送端出清价 ${P0}~${P1} 元/MWh 扫描（步长 ${STEP}）<em>★ 为最优路线切换点</em></summary><div class="inner">
+    <table><tr><th>出清价 元/MWh</th><th>最优路线（口径一）</th><th>落地成本</th><th>过网费</th><th>翻转</th></tr>${trs}</table>
+    <p class="note">纯前端复用 solve() 重算；金额为对应出清价下的口径一最优方案。切换点表示该价格档起另一条路线成为最优。</p>
+  </div></details>`;
+}
+
+/* ---------- REQ-404 方案报告导出（Markdown） ---------- */
+function exportReport(){
+  const res=state._res; if(!res||!res.rows||!res.rows.length) return;
+  const r=res.rows[Math.min(state.sel,res.rows.length-1)];
+  const L=[];
+  L.push('# 省间路径测算报告');
+  L.push('');
+  L.push('- 生成时间：'+new Date().toLocaleString('zh-CN'));
+  L.push('- priceVersion：'+PRICE_VERSION+'（BUILD_TIME '+BUILD_TIME+'）');
+  L.push('- 路径：'+r.nodes.map(N).join(' → ')+'（'+r.hops+' 段）');
+  L.push('- 电量：'+state.qty+' MWh / '+state.hours+' h　网损承担：'+(state.lossBearer==1?'受端':state.lossBearer==0.5?'两端各半':'送端'));
+  L.push('- 价格参数：出清价 '+state.pGen+' / 受端结算价 '+state.pDst+' / 受端输配电价 '+state.pNet+' / 基金及附加 '+state.fund+' 元/MWh');
+  L.push('- 口径：'+(state.includeDstCost===false?'只算到受端省界':'完整落地价')+'　区域电网费：'+(state.includeRegion?'计入':'不计入'));
+  L.push('');
+  L.push('## 三口径结果');
+  L.push('- 落地成本：'+fmt(r.landed)+' 元/MWh（全局排名 #'+r.rankA+'）');
+  L.push('- 过网费：'+fmt(r.channelOnly)+' 元/MWh（排名 #'+r.rankB+'）');
+  L.push('- 送端净收益：'+fmt(r.senderNet)+' 元/MWh（排名 #'+r.rankC+'，受端价折回估算，非结算口径）');
+  L.push('');
+  L.push('## 费用拆解（按 '+state.qty+' MWh 交付电量）');
+  L.push('| 费用项 | 单价 元/MWh | 总额 元 |');
+  L.push('|---|---|---|');
+  L.push('| 送端出清价购电 | '+fmt(r.comp.gen)+' | '+num(r.yuan.gen)+' |');
+  L.push('| 送端省内段（送出省输电价格） | '+fmt(r.comp.send)+' | '+num(r.yuan.send)+' |');
+  L.push('| 跨省专项工程输电费 | '+fmt(r.comp.trans)+' | '+num(r.yuan.trans)+' |');
+  if(r.comp.reg>0) L.push('| 区域电网输电费 | '+fmt(r.comp.reg)+' | '+num(r.yuan.reg)+' |');
+  L.push('| 网损折价 | '+fmt(r.comp.loss)+' | '+num(r.yuan.loss)+' |');
+  if(r.comp.inLoss>0) L.push('| 受端上网环节线损费用 | '+fmt(r.comp.inLoss)+' | '+num(r.yuan.inLoss)+' |');
+  if(r.comp.net>0) L.push('| 受端省网输配电价 | '+fmt(r.comp.net)+' | '+num(r.yuan.net)+' |');
+  if(r.comp.fund>0) L.push('| 政府性基金及附加 | '+fmt(r.comp.fund)+' | '+num(r.yuan.fund)+' |');
+  L.push('| **合计** | **'+fmt(r.landed)+'** | **'+num(r.yuan.total)+'** |');
+  L.push('');
+  L.push('## 逐段明细与溯源');
+  r.segs.forEach((s,i)=>{
+    const e=s.e;
+    L.push('');
+    L.push('### 第 '+(i+1)+' 段 '+N(s.a)+' → '+N(s.b)+'：'+e.n);
+    L.push('- 电压 '+e.kv+'　输电价 '+fmt(s.t)+' 元/MWh　线损率 '+fmt(e.loss,2)+'%　段入口 '+fmt(s.inMW,0)+' MW'+(e.cap?'　容量 '+e.cap+' MW':''));
+    L.push('- 文号：'+(e.doc||'无发改委文号')+(e.eff?'　生效 '+e.eff:''));
+    if(e.excerpt) L.push('- 原文摘录：'+e.excerpt);
+  });
+  L.push('');
+  L.push('> 本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。');
+  const blob=new Blob([L.join('\n')],{type:'text/markdown;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='省间测算报告-'+N(r.nodes[0])+'-'+N(r.nodes[r.nodes.length-1])+'.md'; a.click();
 }
 
 function doSolve(){
@@ -346,6 +484,9 @@ function readInputs(){
   state.lossBearer=+g('i-bearer').value;
   state.includeRegion=g('i-region').value==='1';
   state.includeDstCost=g('i-dstcost').value==='1';
+  state.tradableOnly=g('i-tradable')?.value==='1';   // REQ-203
+  const _o=+g('i-zyocc')?.value||0;                  // REQ-302
+  state.occPct=Math.min(90,Math.max(0,_o));
 }
 /* 送端省变化：只影响送端出清价 */
 function applyFromProv(){

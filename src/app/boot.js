@@ -16,7 +16,7 @@ document.addEventListener('change',e=>{
     state.sel=0; saveLast(); state._res=solve(state, algoData()); renderCalc();
     return;
   }
-  if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region','i-dstcost'].indexOf(id)>=0){
+  if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region','i-dstcost','i-tradable','i-zyocc'].indexOf(id)>=0){
     if(id==='i-degrade') state.degrade=+e.target.value;
     state.sel=0; doSolve();
     return;

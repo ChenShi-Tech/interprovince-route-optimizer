@@ -523,6 +523,33 @@ const tests = [
     viewport: { width: 1440, height: 900 },
     async run(page, set) { await respCheck(page, set, false, true); },
   },
+  {
+    id: 'R-04', section: '响应式', title: '两栏 900–1279px：智能推荐与方案之间不得留大片空白',
+    steps: '以 900 / 1100 / 1279 视口打开测算页，量 .col-ai 底边到 .col-main 顶边的垂直距离',
+    expected: '均落在两栏布局（348px + 剩余）；该距离等于正常 grid gap，而不是被左栏撑成整屏高',
+    viewport: { width: 1100, height: 900 },
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const out = [];
+      for (const w of [900, 1100, 1279]) {
+        await page.setViewportSize({ width: w, height: 900 });
+        await page.waitForSelector('.layout', { timeout: 15000 });
+        const m = await page.evaluate(() => {
+          const box = (s) => document.querySelector(s).getBoundingClientRect();
+          const cs = getComputedStyle(document.querySelector('.layout'));
+          return { cols: cs.gridTemplateColumns.split(' ').length, gap: cs.gap,
+            d: box('.col-main').top - box('.col-ai').bottom,
+            sideCross: getComputedStyle(document.querySelector('.col-side')).gridRow };
+        });
+        // 回归背景（2026-09-16 修复）：左栏 sticky + max-height 只占 grid-row:1 时会把第一行撑满整屏，
+        // 而智能推荐也在第一行 —— 推荐卡片下方于是空出几百像素，方案详情被推到屏幕外。
+        ok(m.cols === 2, `${w}px 应为两栏布局，实际 ${m.cols} 栏`);
+        ok(m.d >= -2 && m.d <= 40, `${w}px：推荐底边到方案顶边应等于正常行距，实际 ${m.d.toFixed(1)}px（gap ${m.gap}）`);
+        out.push(`${w}px gap=${m.d.toFixed(1)}px`);
+      }
+      set(out.join('；'));
+    },
+  },
 
   /* ================= PRD-IPRO-2026-001 ================= */
   {
@@ -718,6 +745,357 @@ const tests = [
       const xzTxt = await card.locator('.warn').innerText();
       ok(xzTxt.includes('暂无数据'), `西藏应显示暂无数据，实际「${xzTxt.slice(0, 40)}」`);
       set(`默认档预选=1~10（20）千伏；BJ 容量 396,000/33.00、需量 624,000/52.00；切档 336,000；年电量0→—；XZ→暂无数据`);
+    },
+  },
+  {
+    id: 'RQ-705', section: 'PRD-IPRO', title: 'REQ-705：通道组件（直流）作为必经组件筛方案 + 说明文字可折叠',
+    steps: '检查 details.explain 默认收起；放宽跳数/绕行让候选含多条直流；点选一个直流组件，再清除',
+    expected: '长段说明默认收起、点击可展开；直流组件排在最前；点选后列表只保留含该通道的方案，且组件清单仍为完整候选集（其余组件仍可取消）；清除后恢复全量',
+    viewport: { width: 1440, height: 900 },
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.layout', { timeout: 15000 });
+      // 长段解释文字默认收起（原来是整段摊在卡片里）
+      const ex = await page.evaluate(() => [...document.querySelectorAll('details.explain')]
+        .map((d) => ({ open: d.open, len: (d.querySelector('.inner') || {}).textContent.trim().length })));
+      ok(ex.length >= 2, `应有多处可折叠说明，实际 ${ex.length} 处`);
+      ok(ex.every((d) => !d.open), '说明区应默认收起');
+      ok(ex.every((d) => d.len > 60), '折叠区应有实际内容，不是空壳');
+      await page.click('details.explain > summary');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.querySelector('details.explain').open), '点击标题应能展开');
+
+      // 放宽条件，让候选里出现多条直流
+      await page.evaluate(() => { state.from = 'SC'; state.to = 'SH'; state.maxHops = 6; state.maxDetour = 9;
+        state.showBad = true; state.mustHave = []; state.sel = 0; applyBothProv(); doSolve(); });
+      await page.waitForTimeout(200);
+      const b = await page.evaluate(() => {
+        const av = state._res.availChannels || [];
+        const firstAc = av.findIndex((c) => c.type !== 'DC' && c.type !== 'AC/DC');
+        return { n: av.length, chips: document.querySelectorAll('.comps button.chip').length,
+          dcFirst: av.slice(0, firstAc < 0 ? av.length : firstAc).every((c) => c.type === 'DC' || c.type === 'AC/DC'),
+          rows: state._res.rows.length };
+      });
+      ok(b.n > 0 && b.chips === b.n, `组件选择器应列出全部可选通道（${b.chips}/${b.n}）`);
+      ok(b.dcFirst, '直流（专项工程）组件应排在最前');
+
+      await page.click('.comps button.chip');
+      await page.waitForTimeout(250);
+      const a = await page.evaluate(() => ({
+        must: state.mustHave.slice(), rows: (state._res.rows || []).length,
+        allOk: (state._res.rows || []).every((r) => state.mustHave.every((id) => r.edges.some((e) => e.id === id))),
+        avail: (state._res.availChannels || []).length,
+        hint: (document.querySelector('.sec-title .hint') || {}).textContent || '',
+      }));
+      ok(a.must.length === 1, `点选后应记为必经组件，实际 ${a.must.length} 个`);
+      ok(a.rows > 0 && a.allOk, `筛出的 ${a.rows} 条方案应全部包含该组件`);
+      ok(a.avail === b.n, `组件清单不得被筛选收窄（${a.avail}/${b.n}），否则其余组件再也点不回来`);
+      ok(/按 1 个组件筛选/.test(a.hint), `标题应提示已按组件筛选，实际「${a.hint.trim()}」`);
+
+      await page.click('button:has-text("清除全部组件")');
+      await page.waitForTimeout(250);
+      const c = await page.evaluate(() => ({ must: state.mustHave.length, rows: state._res.rows.length }));
+      ok(c.must === 0 && c.rows === b.rows, `清除后应恢复全量 ${b.rows} 条候选，实际 ${c.rows} 条`);
+      set(`说明区 ${ex.length} 处默认收起；组件 ${b.chips} 个（直流优先）；筛出 ${a.rows}/${b.rows} 条；清除后恢复`);
+    },
+  },
+  {
+    id: 'RQ-602', section: 'PRD-IPRO', title: 'REQ-602：本地价格覆盖 priceVersion 校验',
+    steps: '预置旧版本地费率覆盖（pv=0000）后加载页面，自动「确定」丢弃',
+    expected: '出现提示并丢弃旧覆盖，CH 恢复当前核定值（64 条且内容非占位）',
+    async run(page, set) {
+      await page.addInitScript(() => {
+        window.__dialogSeen = false;
+        localStorage.setItem('iproute.v2.lib', JSON.stringify({
+          pv: '0000dead', at: 'old',
+          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+        }));
+      });
+      page.on('dialog', d => { page.__dialogSeen = true; d.accept(); });
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const seen = page.__dialogSeen === true;
+      const ch = await page.evaluate(() => ({ n: CH.length, first: CH[0].n, stale: !!state._libStale }));
+      ok(seen, '应弹出旧版本提示（confirm）');
+      ok(ch.n === 64 && !String(ch.first).includes('占位'), `旧覆盖应被丢弃恢复核定值，实际 CH[0].n=${ch.first}`);
+      set(`提示出现=${seen}；本地覆盖已丢弃，CH 恢复核定值（${ch.n} 条）`);
+    },
+  },
+  {
+    id: 'RQ-602b', section: 'PRD-IPRO', title: 'REQ-602b：保留旧版价格覆盖时费率库出现核对横幅',
+    steps: '预置旧版本地费率覆盖后加载，confirm 选「取消」暂保留，进入费率库；再点「恢复检索原始值」',
+    expected: '费率库顶部出现「旧版价格数据」核对横幅；恢复原始值后横幅消失',
+    async run(page, set) {
+      await page.addInitScript(() => {
+        window.__keepSeen = false;
+        localStorage.setItem('iproute.v2.lib', JSON.stringify({
+          pv: '0000dead', at: 'old',
+          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+        }));
+      });
+      let acceptNext = false;   // 第一个弹框=加载时旧版提示（dismiss=暂保留），第二个=resetLib 确认（accept）
+      page.on('dialog', async d => {
+        page.__keepSeen = true;
+        if (acceptNext) { acceptNext = false; await d.accept(); } else { await d.dismiss(); }
+      });
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const kept = await page.evaluate(() => ({ stale: !!state._libStale, first: CH[0].n }));
+      ok(page.__keepSeen === true, '应弹出旧版本提示（confirm）');
+      ok(kept.stale && String(kept.first).includes('占位'), '「取消」后应暂保留旧覆盖（_libStale=true）');
+      await page.click('#t-lib');
+      await page.waitForTimeout(150);
+      const banner = await page.evaluate(() => {
+        const w = [...document.querySelectorAll('#v-lib .warn')].find(x => x.textContent.includes('旧版价格数据'));
+        return w ? w.textContent.trim().slice(0, 40) : '';
+      });
+      ok(banner.includes('旧版价格数据'), `费率库应出现核对横幅，实际「${banner}」`);
+      acceptNext = true;
+      await page.locator('#v-lib button', { hasText: '恢复检索原始值' }).click();
+      await page.waitForTimeout(200);
+      const after = await page.evaluate(() => ({ stale: !!state._libStale, banner: [...document.querySelectorAll('#v-lib .warn')].some(x => x.textContent.includes('旧版价格数据')) }));
+      ok(!after.stale && !after.banner, '恢复原始值后横幅应消失');
+      set(`暂保留时横幅出现：「${banner}…」；恢复后横幅消失`);
+    },
+  },
+  {
+    id: 'RQ-02a', section: 'PRD-IPRO', title: 'REQ-201：方案含未确认联络线黄条',
+    steps: '江苏→上海 测算，查看方案区告警',
+    expected: '默认方案含苏沪联络线（tradable=false）时出现「未确认属于省间现货交易网络」黄条',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.selectOption('#i-to', 'SH');     // 先改受端，避免「江苏」作为当前受端被互斥禁用
+      await page.selectOption('#i-from', 'JS');
+      await page.waitForTimeout(150);
+      const hit = await page.evaluate(() =>
+        [...document.querySelectorAll('.col-main .warn')].some(w => w.textContent.includes('未确认属于省间现货交易网络')));
+      const viaSuhu = await page.evaluate(() => state._res.rows[0].edges.some(e => e.tradable === false));
+      ok(hit && viaSuhu, `黄条应出现（默认方案含未确认联络线=${viaSuhu}），实际黄条=${hit}`);
+      set(`JS→SH 默认方案含 tradable=false 段；黄条出现=${hit}`);
+    },
+  },
+  {
+    id: 'RQ-02b', section: 'PRD-IPRO', title: 'REQ-202：通道交易网络徽标',
+    steps: '费率库搜索「苏沪联络线」，展开卡片',
+    expected: '卡片摘要可见「交易网络·待确认」徽标；时间轴同款',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.fill('#lib-q', '苏沪');
+      await page.waitForTimeout(100);
+      const n = await page.locator('.libcard').count();
+      ok(n >= 1, '应至少匹配 1 条');
+      await page.locator('.libcard summary').first().click();
+      const badge = await page.evaluate(() => document.body.innerHTML.includes('交易网络·待确认'));
+      ok(badge, '应可见「交易网络·待确认」徽标');
+      set(`匹配 ${n} 条，徽标可见`);
+    },
+  },
+  {
+    id: 'RQ-02c', section: 'PRD-IPRO', title: 'REQ-203：仅按已确认可交易通道开关',
+    steps: '出发地北京、跳数 1，开启「仅按已确认可交易通道」',
+    expected: '北京相连通道均为未确认联络线，开启后为空态引导文案（非脚本报错）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.selectOption('#i-from', 'BJ');
+      await page.selectOption('#i-hops', '1');
+      await page.selectOption('#i-tradable', '1');
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => ({ err: state._res.err || '', empty: document.querySelector('.empty')?.textContent || '' }));
+      ok(!!r.err && r.empty.length > 0, `应为空态引导，实际 err=${r.err} empty=${r.empty.slice(0, 30)}`);
+      set(`空态：${r.err.slice(0, 40)}`);
+    },
+  },
+  {
+    id: 'RQ-03a', section: 'PRD-IPRO', title: 'REQ-301：容量校验口径声明',
+    steps: '查看方案区容量口径固定小字',
+    expected: '声明存在且含「ATC」',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const ok1 = await page.evaluate(() => document.getElementById('v-calc').innerText.includes('ATC'));
+      ok(ok1, '方案区应含 ATC 口径声明');
+      set('ATC 声明可见');
+    },
+  },
+  {
+    id: 'RQ-03b', section: 'PRD-IPRO', title: 'REQ-302：中长期占用扣减容量校验',
+    steps: '中长期占用填 30 后失焦',
+    expected: '方案区占用按 cap×(1−0.3) 放大约 1/(1−0.3) 倍，越限判定联动',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const m0 = await page.evaluate(() => state._res.rows[0].maxLoad);
+      await page.fill('#i-zyocc', '30');
+      await page.locator('#i-zyocc').blur();
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => ({ m1: state._res.rows[0].maxLoad, occ: state.occPct }));
+      const ratio = r.m1 / m0;
+      ok(r.occ === 30 && Math.abs(ratio - 1 / 0.7) < 1e-6, `占用应放大约 ${1 / 0.7} 倍，实际 ${ratio}`);
+      set(`occ=30；maxLoad ${m0.toFixed(4)}→${r.m1.toFixed(4)}（×${ratio.toFixed(4)}）`);
+    },
+  },
+  {
+    id: 'RQ-04', section: 'PRD-IPRO', title: 'REQ-303：单时点测算声明',
+    steps: '查看方案区落地价下方声明',
+    expected: '声明存在且含「96 时段」',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const ok1 = await page.evaluate(() => document.getElementById('v-calc').innerText.includes('96 时段'));
+      ok(ok1, '应含 96 时段单时点声明');
+      set('单时点声明可见');
+    },
+  },
+  {
+    id: 'RQ-05', section: 'PRD-IPRO', title: 'REQ-304：口径三非结算口径标注',
+    steps: '查看「送端收益」按钮提示与⑦口径位置标注',
+    expected: '按钮 title 含「非结算口径」；⑦口径位置旁有同义标注',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const r = await page.evaluate(() => ({
+        btn: document.querySelector('#v-calc .seg.small button[title]')?.getAttribute('title') || '',
+        note: (document.getElementById('v-calc').textContent || '').includes('非结算口径'),
+      }));
+      ok(r.btn.includes('非结算口径') && r.note, `按钮 title=${r.btn}，标注=${r.note}`);
+      set(`title="${r.btn}"；⑦标注可见`);
+    },
+  },
+  {
+    id: 'RQ-06', section: 'PRD-IPRO', title: 'REQ-305：区域电网费适用性标注',
+    steps: '查看②区区域电网输电价格说明',
+    expected: '说明含 S14 3.4.2(a) 统一计入口径（新语义）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      // 说明文字已改为默认收起的 details.explain（RQ-705），innerText 不含未渲染内容，须先展开再断言
+      await page.evaluate(() => { document.querySelectorAll('details.explain').forEach(d => d.open = true); });
+      await page.waitForTimeout(80);
+      const r = await page.evaluate(() => {
+        const t = document.getElementById('v-calc').innerText;
+        return t.includes('3.4.2(a)') && t.includes('买方节点所在区域');
+      });
+      ok(r, '应含新口径说明（3.4.2(a) 统一计入买方区域）');
+      set('新口径说明可见');
+    },
+  },
+  {
+    id: 'RQ-306', section: 'PRD-IPRO', title: 'REQ-306：结算机制折叠区',
+    steps: '展开完整明细，查看「结算机制」',
+    expected: '折叠块存在且四条齐备（买方支出/卖方边际价/执行顺序/日清月结 D+5）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.evaluate(() => { document.getElementById('d-detail').open = true; });
+      await page.waitForTimeout(80);
+      const t = await page.evaluate(() => document.getElementById('d-detail').innerText);
+      ok(t.includes('结算机制') && t.includes('边际价格') && t.includes('D+5') && t.includes('执行电量'), '四条内容应齐备');
+      set('结算机制四条齐备');
+    },
+  },
+  {
+    id: 'RQ-307', section: 'PRD-IPRO', title: 'REQ-307：页脚定位声明',
+    steps: '任意 Tab 滚到底',
+    expected: '页脚存在「不构成交易建议」声明',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('footer');
+      const t = await page.evaluate(() => document.querySelector('footer')?.textContent || '');
+      ok(t.includes('不构成交易建议') && t.includes('电力交易中心公布'), `页脚文案=${t.slice(0, 40)}`);
+      set('页脚声明可见');
+    },
+  },
+  {
+    id: 'RQ-405', section: 'PRD-IPRO', title: 'REQ-405：费率库筛选扩展',
+    steps: '点击「含线损」「落地端计费」chips',
+    expected: '匹配计数与列表正确（当前数据各 9 条）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      const out = [];
+      for (const label of ['含线损', '落地端计费']) {
+        await page.locator('.seg.small button', { hasText: label }).click();
+        await page.waitForTimeout(80);
+        const cnt = await page.evaluate(() => parseInt(document.querySelector('.libcount')?.textContent.replace(/[^0-9]/g, '')) || 0);
+        const cards = await page.locator('#lib-list .libcard').count();
+        ok(cnt === 9 && cards === cnt, `${label} 应匹配 9 条，实际计数=${cnt} 卡片=${cards}`);
+        out.push(`${label}:${cnt}`);
+      }
+      set(out.join('；'));
+    },
+  },
+  {
+    id: 'RQ-402', section: 'PRD-IPRO', title: 'REQ-402：价格时效徽标',
+    steps: '费率库搜索「灵绍」，查看摘要徽标',
+    expected: '显示「现行」徽标含 558 号；展开可见 2 条调价历史',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.fill('#lib-q', '灵绍');
+      await page.waitForTimeout(100);
+      const sum = await page.locator('.libcard summary').first().innerText();
+      ok(sum.includes('现行') && sum.includes('558'), `徽标应含 现行/558，实际「${sum.replace(/\\s+/g, ' ').slice(0, 60)}」`);
+      await page.locator('.libcard summary').first().click();
+      await page.waitForTimeout(80);
+      const hist = await page.evaluate(() => (document.body.innerText.match(/调价历史/g) || []).length);
+      ok(hist >= 1, '展开后应含调价历史');
+      set(`徽标含 现行/558；调价历史区块=${hist}`);
+    },
+  },
+  {
+    id: 'RQ-404', section: 'PRD-IPRO', title: 'REQ-404：方案报告导出',
+    steps: '测算页点「导出报告」',
+    expected: '触发 Markdown 下载，含三口径、费用拆解、逐段文号与 priceVersion',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const [dl] = await Promise.all([
+        page.waitForEvent('download', { timeout: 5000 }),
+        page.locator('button', { hasText: '导出报告' }).click(),
+      ]);
+      const p = path.join(SHOTS, 'export-report.md');
+      await dl.saveAs(p);
+      const t = fs.readFileSync(p, 'utf8');
+      ok(t.includes('priceVersion') && t.includes('文号') && t.includes('落地成本') && t.includes('不构成交易建议'),
+        `报告应含 priceVersion/文号/落地成本/声明，实际长度 ${t.length}`);
+      set(`下载 ${dl.suggestedFilename()}，${t.length} 字符，含全部关键段`);
+    },
+  },
+  {
+    id: 'RQ-403', section: 'PRD-IPRO', title: 'REQ-403：价差敏感性分析',
+    steps: '展开「价差敏感性」折叠卡',
+    expected: '36 个价格档（100~800 步长 20）全量输出，含最优路线与落地成本列',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => { const d = document.getElementById('d-sens'); if (d) d.open = true; });
+      await page.waitForTimeout(80);
+      const r = await page.evaluate(() => {
+        const d = document.getElementById('d-sens');
+        return { rows: d ? d.querySelectorAll('table tr').length : 0, txt: d ? d.innerText : '' };
+      });
+      ok(r.rows === 37, `应 36 档 + 表头 = 37 行，实际 ${r.rows}`);
+      ok(r.txt.includes('100') && r.txt.includes('800'), '应覆盖 100~800 价格区间');
+      set(`敏感性表 ${r.rows - 1} 档`);
+    },
+  },
+  {
+    id: 'RQ-703', section: 'PRD-IPRO', title: 'REQ-703：底图切换不可用时弹框反馈',
+    steps: '非代理环境点击「腾讯地图」',
+    expected: '弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），不再静默',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      let dialogMsg = '';
+      page.on('dialog', async d => { dialogMsg = d.message(); await d.dismiss(); });
+      await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
+        await page.evaluate(() => go('map'));
+        await page.locator('#v-map button', { hasText: '腾讯地图' }).click();
+      });
+      await page.waitForTimeout(200);
+      const r = await page.evaluate(() => ({ p: state.mapProvider, on: document.querySelector('#v-map .seg.small button.on')?.textContent }));
+      ok(dialogMsg.includes('腾讯地图') && dialogMsg.includes('不可用'), `应弹框说明，实际「${dialogMsg.slice(0, 30)}」`);
+      ok(r.p === 'svg' && r.on === '拓扑图', '取消后应保持拓扑图');
+      set(`弹框="${dialogMsg.slice(0, 24)}…"；provider=${r.p}（原 svg）`);
     },
   },
 ];

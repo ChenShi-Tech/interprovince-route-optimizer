@@ -70,6 +70,19 @@ details.adv summary::before{content:"+ ";font-weight:600}
 details.adv[open] summary::before{content:"− "}
 details.adv .inner{padding-top:11px}
 .note{font-size:11.5px;color:var(--ink3);line-height:1.6;margin:8px 0 0}
+/* 长段说明文字的折叠容器：默认收起只留一行可点的标题，免得正文被注释淹没。
+   与 details.adv（表单项的高级区）区分开：这个是纯阅读内容，所以用更轻的灰底细边。 */
+details.explain{margin:8px 0 9px;border:.5px solid var(--line2);border-radius:9px;background:#FCFCFB}
+details.explain>summary{font-size:11.5px;color:var(--blue);cursor:pointer;list-style:none;font-weight:500;padding:8px 11px;display:flex;align-items:center;gap:6px;line-height:1.5}
+details.explain>summary::-webkit-details-marker{display:none}
+details.explain>summary::before{content:"＋";font-weight:600;font-size:11px;flex:0 0 auto}
+details.explain[open]>summary::before{content:"－"}
+details.explain[open]>summary{border-bottom:.5px solid var(--line2)}
+details.explain>summary em{font-style:normal;color:var(--ink3);font-weight:400;font-size:11px;margin-left:auto;white-space:nowrap}
+details.explain .inner{padding:9px 11px 10px}
+details.explain .note{margin:0}
+details.explain .note+.note{margin-top:7px}
+details.explain .note:last-child{margin-bottom:0}
 .warn{background:var(--amber-bg);color:var(--amber);font-size:11.5px;padding:9px 11px;border-radius:9px;line-height:1.55;margin-bottom:12px}
 .warn.ok{background:var(--teal-bg);color:var(--teal)}
 .warn.bad{background:var(--red-bg);color:var(--red)}
@@ -95,6 +108,19 @@ details.adv .inner{padding-top:11px}
 .chip.bad{background:var(--red-bg);color:var(--red)}
 .chip.info{background:var(--blue-bg);color:var(--blue-ink)}
 .chip.warn{background:var(--amber-bg);color:var(--amber)}
+/* 通道组件：可点选的 chip —— 灰＝普通、蓝底＝直流、反白＝已选（必经）。
+   区域限高滚动，免得候选通道多时把路线列表挤下去。 */
+.comp-box{margin:0 0 9px;border-top:.5px solid var(--line2);padding-top:9px}
+.comp-hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--ink2)}
+.comp-hd em{font-style:normal;font-weight:400;font-size:10.5px;color:var(--ink3);text-align:right}
+.comp-tip{font-size:10.5px;color:var(--ink3);line-height:1.5;margin:4px 0 0}
+.chips.comps{max-height:118px;overflow-y:auto;margin-top:8px;padding-right:2px}
+.chips.comps::-webkit-scrollbar{width:5px}
+.chips.comps::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+button.chip{font-family:inherit;cursor:pointer;border:.5px solid rgba(0,0,0,.08);line-height:1.5}
+button.chip.dc{background:var(--blue-bg);color:var(--blue-ink)}
+button.chip.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+button.chip em{font-style:normal;font-size:9.5px;opacity:.7;margin-left:4px}
 table{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
 th,td{padding:6px 4px;text-align:right;border-bottom:.5px solid var(--line2);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -263,9 +289,13 @@ details.adv.boxed summary{font-size:12.5px}
   .bar-params{margin-bottom:0}
   details.adv.boxed{margin-bottom:10px}
 
-  /* 两栏（900～1279px）：左＝路线列表；右列上方＝智能推荐、下方＝方案详情 */
+  /* 两栏（900～1279px）：左＝路线列表；右列上方＝智能推荐、下方＝方案详情
+     ⚠️ 左栏必须 merge 跨两行（grid-row:1/3）。它带 sticky + max-height:calc(100vh - 106px)，
+        若只占 grid-row:1，第一行会被它撑到整屏高，而智能推荐也在第一行 ——
+        于是推荐卡片下方留出几百像素空白，方案详情（第二行）被推到屏幕外。
+        跨行后行高由右列两张卡片决定，推荐与方案之间只剩正常的 grid gap。 */
   .layout{display:grid;grid-template-columns:348px minmax(0,1fr);gap:16px;align-items:start}
-  .col-side{grid-column:1;grid-row:1;order:0;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
+  .col-side{grid-column:1;grid-row:1/3;order:0;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
   .col-side::-webkit-scrollbar,.col-ai::-webkit-scrollbar{width:5px}
   .col-side::-webkit-scrollbar-thumb,.col-ai::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
   .col-ai{grid-column:2;grid-row:1;order:0;min-width:0}
@@ -310,6 +340,7 @@ details.adv.boxed summary{font-size:12.5px}
   #app{max-width:1480px}
   /* 三栏：左＝路线列表，中＝方案详情，右＝智能推荐；左右两栏各自粘性滚动 */
   .layout{grid-template-columns:360px minmax(0,1fr) 340px;gap:18px}
+  .col-side{grid-row:1}
   .col-main{grid-column:2;grid-row:1}
   .col-ai{grid-column:3;grid-row:1;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
   .libgrid{gap:0 32px}
@@ -329,6 +360,8 @@ details.adv.boxed summary{font-size:12.5px}
     <section id="v-map" hidden></section>
     <section id="v-lib" hidden></section>
   </main>
+  <!-- REQ-307：页脚定位声明，三 Tab 共用 -->
+  <footer style="padding:10px 16px 4px;text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
