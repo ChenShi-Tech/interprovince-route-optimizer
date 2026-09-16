@@ -159,6 +159,7 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 2. **价格数据只有一处来源**：`data/fixed-prices.json`。改价格只改这个文件，然后 `node tools/build.mjs`。
 3. **费率必须分档标注来源**，不得把报备价与发改委核定价混为一谈。2024 年后新投运的金永、中衡、坤渝、庆东、宝合与吉泉、昭沂目前只有国网报备价（昭沂的还有被追溯清算的可能）。
 4. **改动算法后必须跑基线**，`693/693` 通过才算完成。
+5. **新功能开发必须开新 worktree + 新分支**，不在 `main` 工作区直接改。`git worktree add .worktrees/<名字> -b feat/<名字> origin/main`（`.worktrees/` 已在 `.gitignore`），做完推分支开 PR，合并后回主工作区 `git pull`。**不在功能分支上跑 `release.mjs`**——它末尾的 `tools/push-github.mjs` 把分支写死为 `main`，会把未合并的改动直接推到远端。详见 `docs/开发约定与操作手册.md` 纪律 5。
 
 ## 底图与合规
 
@@ -171,11 +172,16 @@ enumPaths(adj, src, dst, maxHops, cap, weightOf)   // 展开顺序由调用方�
 
 `tools/baseline2.mjs` 末尾的「底图合规检查」会守住这些约束。
 
-## 推送机制（为什么不用 git push）
+## 推送机制
 
-本机所有流量走本地代理（`127.0.0.1:60205`），该代理放行 `api.github.com`，但对 `github.com` 返回 502。**`git push` / `git pull` / `git ls-remote` 均不可用**，`gh` CLI 正常。因此推送走 GitHub Git Data API，脚本在 `tools/push-github.mjs`。
+**2026-09-16 实测：`git push` / `git pull` / `git ls-remote` 已恢复可用**（代理策略放宽），常规推送与 PR 直接用 git：功能分支 `git push -u origin <branch>` → `gh pr create`，合并后主工作区 `git pull`。
+
+`tools/push-github.mjs`（GitHub Git Data API）**保留作兜底**：代理再次挡住 `github.com` 时使用。注意它把目标分支写死为 `main`，**不能在功能分支上跑**（`release.mjs` 末尾会调它）。
+
+兜底脚本的注意事项：
 
 - 它用 `base_tree` **在远端现有树上叠加本地文件**，而不是用本地文件重建整棵树——后者会在多会话并行时删掉别人推送的内容（2026-09-14 真实发生过，误删 18 个文件）
+- API 推送会把本地多个提交压成远端**单个提交**（取 `git log -1` 信息），历史粒度不如 git push
 - **改文件名 = 新增 + 遗留旧文件**。`base_tree` 会保留远端旧名文件形成重复；确认新旧 blob sha 相同后用 `--allow-delete` 清理
 - 推送前会列出「远端有、本地没有」的文件，默认保留；确实要删须显式加 `--allow-delete`
 - `git ls-files` 默认对中文路径做八进制转义，脚本读文件会 ENOENT，**必须用 `git -c core.quotepath=false ls-files`**
