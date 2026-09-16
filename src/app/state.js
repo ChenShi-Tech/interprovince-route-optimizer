@@ -5,6 +5,7 @@ let state={
   lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10, includeDstCost:true,
   sel:0, showBad:false, sortBy:'A', showAll:false,
   includeRegion:true,
+  mustHave:[], compOpen:false,
   mapProvider:'svg', tiandituKey:''
 };
 let stored=null;

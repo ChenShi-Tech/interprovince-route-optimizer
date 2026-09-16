@@ -70,6 +70,19 @@ details.adv summary::before{content:"+ ";font-weight:600}
 details.adv[open] summary::before{content:"− "}
 details.adv .inner{padding-top:11px}
 .note{font-size:11.5px;color:var(--ink3);line-height:1.6;margin:8px 0 0}
+/* 长段说明文字的折叠容器：默认收起只留一行可点的标题，免得正文被注释淹没。
+   与 details.adv（表单项的高级区）区分开：这个是纯阅读内容，所以用更轻的灰底细边。 */
+details.explain{margin:8px 0 9px;border:.5px solid var(--line2);border-radius:9px;background:#FCFCFB}
+details.explain>summary{font-size:11.5px;color:var(--blue);cursor:pointer;list-style:none;font-weight:500;padding:8px 11px;display:flex;align-items:center;gap:6px;line-height:1.5}
+details.explain>summary::-webkit-details-marker{display:none}
+details.explain>summary::before{content:"＋";font-weight:600;font-size:11px;flex:0 0 auto}
+details.explain[open]>summary::before{content:"－"}
+details.explain[open]>summary{border-bottom:.5px solid var(--line2)}
+details.explain>summary em{font-style:normal;color:var(--ink3);font-weight:400;font-size:11px;margin-left:auto;white-space:nowrap}
+details.explain .inner{padding:9px 11px 10px}
+details.explain .note{margin:0}
+details.explain .note+.note{margin-top:7px}
+details.explain .note:last-child{margin-bottom:0}
 .warn{background:var(--amber-bg);color:var(--amber);font-size:11.5px;padding:9px 11px;border-radius:9px;line-height:1.55;margin-bottom:12px}
 .warn.ok{background:var(--teal-bg);color:var(--teal)}
 .warn.bad{background:var(--red-bg);color:var(--red)}
@@ -95,6 +108,19 @@ details.adv .inner{padding-top:11px}
 .chip.bad{background:var(--red-bg);color:var(--red)}
 .chip.info{background:var(--blue-bg);color:var(--blue-ink)}
 .chip.warn{background:var(--amber-bg);color:var(--amber)}
+/* 通道组件：可点选的 chip —— 灰＝普通、蓝底＝直流、反白＝已选（必经）。
+   区域限高滚动，免得候选通道多时把路线列表挤下去。 */
+.comp-box{margin:0 0 9px;border-top:.5px solid var(--line2);padding-top:9px}
+.comp-hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--ink2)}
+.comp-hd em{font-style:normal;font-weight:400;font-size:10.5px;color:var(--ink3);text-align:right}
+.comp-tip{font-size:10.5px;color:var(--ink3);line-height:1.5;margin:4px 0 0}
+.chips.comps{max-height:118px;overflow-y:auto;margin-top:8px;padding-right:2px}
+.chips.comps::-webkit-scrollbar{width:5px}
+.chips.comps::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+button.chip{font-family:inherit;cursor:pointer;border:.5px solid rgba(0,0,0,.08);line-height:1.5}
+button.chip.dc{background:var(--blue-bg);color:var(--blue-ink)}
+button.chip.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+button.chip em{font-style:normal;font-size:9.5px;opacity:.7;margin-left:4px}
 table{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
 th,td{padding:6px 4px;text-align:right;border-bottom:.5px solid var(--line2);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -263,9 +289,13 @@ details.adv.boxed summary{font-size:12.5px}
   .bar-params{margin-bottom:0}
   details.adv.boxed{margin-bottom:10px}
 
-  /* 两栏（900～1279px）：左＝路线列表；右列上方＝智能推荐、下方＝方案详情 */
+  /* 两栏（900～1279px）：左＝路线列表；右列上方＝智能推荐、下方＝方案详情
+     ⚠️ 左栏必须 merge 跨两行（grid-row:1/3）。它带 sticky + max-height:calc(100vh - 106px)，
+        若只占 grid-row:1，第一行会被它撑到整屏高，而智能推荐也在第一行 ——
+        于是推荐卡片下方留出几百像素空白，方案详情（第二行）被推到屏幕外。
+        跨行后行高由右列两张卡片决定，推荐与方案之间只剩正常的 grid gap。 */
   .layout{display:grid;grid-template-columns:348px minmax(0,1fr);gap:16px;align-items:start}
-  .col-side{grid-column:1;grid-row:1;order:0;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
+  .col-side{grid-column:1;grid-row:1/3;order:0;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
   .col-side::-webkit-scrollbar,.col-ai::-webkit-scrollbar{width:5px}
   .col-side::-webkit-scrollbar-thumb,.col-ai::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
   .col-ai{grid-column:2;grid-row:1;order:0;min-width:0}
@@ -310,6 +340,7 @@ details.adv.boxed summary{font-size:12.5px}
   #app{max-width:1480px}
   /* 三栏：左＝路线列表，中＝方案详情，右＝智能推荐；左右两栏各自粘性滚动 */
   .layout{grid-template-columns:360px minmax(0,1fr) 340px;gap:18px}
+  .col-side{grid-row:1}
   .col-main{grid-column:2;grid-row:1}
   .col-ai{grid-column:3;grid-row:1;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
   .libgrid{gap:0 32px}
@@ -345,7 +376,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-16 02:31';
+const BUILD_TIME='2026-09-16 05:39';
 const PRICE_VERSION='5ead949e5845a53c';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -408,6 +439,7 @@ let state={
   lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10, includeDstCost:true,
   sel:0, showBad:false, sortBy:'A', showAll:false,
   includeRegion:true,
+  mustHave:[], compOpen:false,
   mapProvider:'svg', tiandituKey:''
 };
 let stored=null;
@@ -728,6 +760,7 @@ function enumPaths(adj,src,dst,maxHops,cap,weightOf){
  *   includeRegion       是否计入区域电网费
  *   includeDstCost      是否计入受端省内费用（false = 只算到受端省界）
  *   sortBy, showBad     排序口径（A/B/C）/ 是否显示越限方案
+ *   mustHave            必经通道 id 数组（「通道组件」筛选），空数组或缺失 = 不筛选
  *
  * data 契约（静态数据）：
  *   CH, PV, SEC, RG, REGION_OF, geo, name
@@ -770,7 +803,23 @@ function solve(input, data){
   const kept = raw.filter(p=>detourOf(p.nodes, p.edges, env.geo) <= maxDetour);
   if(!kept.length) return {err:'绕行度上限把所有候选都筛掉了，请放宽绕行度上限'};
 
-  const rows = kept.map(p=>evalPath(p, ctx, env));
+  // 「通道组件」候选集：取自绕行度筛选后的**完整候选**，不能用最终 rows。
+  // 否则用户选中某组件后其余组件会从选择器里消失、再也点不回来。
+  const availChannels = collectChannels(kept);
+
+  // 必经组件筛选：所选通道须全部出现在路径里（不区分行进方向，方向由通道自身 bidir 决定）
+  // 旧存档里的组件 id 可能已不存在，先按当前通道表过滤，避免筛出空结果。
+  const validIds = new Set(data.CH.map(c=>c.id));
+  const mustHave = (input.mustHave||[]).filter(id=>validIds.has(id));
+  const picked = mustHave.length
+    ? kept.filter(p=>mustHave.every(id=>p.edges.some(e=>e.id===id)))
+    : kept;
+  if(!picked.length){
+    return {err:'没有任何方案同时包含所选的 '+mustHave.length+' 个通道组件，请减少组件或放宽跳数上限',
+      availChannels, mustHave, totalAll:kept.length};
+  }
+
+  const rows = picked.map(p=>evalPath(p, ctx, env));
   rows.forEach(r=>{ r.tagLabel = tagOf(r, N); });
 
   // 三口径各自排名（在任何过滤之前算，保证「与最优差多少」是全局口径）
@@ -794,7 +843,33 @@ function solve(input, data){
   if(!shown.length){
     return {err:'全部 '+total+' 条候选路线均超出通道容量或断面限额，可勾选「显示越限方案」查看'};
   }
-  return {rows:shown,byA,byB,byC,bestA,bestB,bestC,n:shown.length,total,feasibleCount,truncated};
+  return {rows:shown,byA,byB,byC,bestA,bestB,bestC,n:shown.length,total,feasibleCount,truncated,
+    availChannels,mustHave,totalAll:kept.length};
+}
+
+/** 「通道组件」选择器的候选清单：候选路径里出现过的通道，每条只列一项。
+ *  直流（专项工程）排在前，同类按出现次数降序 —— 出现得多说明它是绕不开的主干通道。
+ *  dirs 记录该通道在候选里出现过的行进方向，供界面提示「仅单向」还是「两方向都有」。
+ *  直流可直接作为组件挑选（用户要求的用法），交流联络线同样可挑，语义一致。 */
+function collectChannels(paths){
+  const byId = new Map();
+  for(const p of paths){
+    for(let i=0;i<p.edges.length;i++){
+      const e = p.edges[i];
+      let rec = byId.get(e.id);
+      if(!rec){
+        rec = { id:e.id, n:e.n, type:e.type, kv:e.kv, from:e.from, to:e.to,
+                tier:e.tier, bidir:!!e.bidir, count:0, dirs:[] };
+        byId.set(e.id, rec);
+      }
+      rec.count++;
+      const d = p.nodes[i]+'>'+p.nodes[i+1];
+      if(rec.dirs.indexOf(d) < 0) rec.dirs.push(d);
+    }
+  }
+  const rank = (t)=> t==='DC' ? 0 : (t==='AC/DC' ? 1 : 2);
+  return [...byId.values()].sort((a,b)=>
+    rank(a.type)!==rank(b.type) ? rank(a.type)-rank(b.type) : b.count-a.count);
 }
 
 /** 方案的短标签：单段用线路名，多段用途经省。 */
@@ -872,10 +947,12 @@ function renderCalc(){
         <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
       </select></label>
     </div>
+    <details class="explain"><summary>政策口径与取值依据<em>区域电网费 · 网损承担方 · 自动带入值</em></summary><div class="inner">
     <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。口径二（过网费）与口径三（送端净收益）不含受端省内费用，因此不受「费用边界」开关影响。</p>
     <p class="note"><b>区域电网输电价格</b>是国网华北、华东、华中、东北、西北五个区域分部运营的区域共用输电网络（跨省 500kV / 1000kV 联络网架）的电量电价，由国家发改委核定（发改价格〔2026〕1077号附件2），随区域电网实际交易结算电量向购电方收取。按《省间电力现货交易规则》(2026年4月，发改办体改〔2026〕275号复函) 3.4.2(a)，经营主体购电时<b>统一计入买方节点所在区域电网的输电价格</b>，与路径是否跨区、是否走专项工程无关；发改价格规〔2020〕1441号第二条亦规定通过区域电网共用网络交易的用户购电价格应包括区域电网电量电价及损耗。本工具按买方所在区域计一次，路径过境其它区域的联络线段再按该区域计一次；区域电网自身网损率未公开，暂按 0 计。</p>
     <p class="note"><b>网损承担方</b>的政策口径是<b>受端（购电方）承担</b>：规则 4.3.1 把买方价格按 Π(1−线损率) 折算到卖方节点，即买方为送端电量付费；1490号附件4第十八条，线损率偏差损益由购电方承担或享有。「两端各半」与「送端承担」用于模拟中长期双边谈判条款，送端承担实质是送端把线损折入报价。各段线损率一律按核定值计。规则 3.3.2：<b>输电价格已包含网损的段不再另行收取网损</b>，9 条「含输电环节线损」通道的线损只体现在物理功率与容量占用上，不进买方费用。送端省内的「送省外上网环节线损」由卖方承担（规则 7.3(a)），只计入口径三；受端省内的「上网环节线损费用」在输配电价外单列（1077号附件1 注3），计入完整落地价。</p>
     <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
+    </div></details>
   </div></details>`;
 
   const _toPV=PV[state.to];
@@ -885,6 +962,10 @@ function renderCalc(){
 
   if(res&&res.err){
     out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`;
+    // 组件筛选把候选筛空时，选择器必须留在页面上，否则用户没法取消已选组件
+    if(res.availChannels&&res.availChannels.length){
+      out+=`<div class="card tight">${renderCompPicker(res)}</div>`;
+    }
   } else if(res&&res.rows&&res.rows.length){
     // 三栏：左＝路线列表，中＝方案详情，右＝智能推荐（宽屏）；窄屏退为两栏、手机端纵向堆叠，布局由 .layout 的 CSS 决定
     out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+'</div>'
@@ -917,10 +998,14 @@ function renderRouteList(res){
   const inThr=rows.filter(r=>r.landed<=thr);
   const shown=state.showAll?rows:inThr;
   const cut=rows.length-inThr.length;
+  const mustN=(res.mustHave||[]).length;
   let out=`<div class="card tight">
-    <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}</span></div>
-    <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
-    <p class="note" style="margin:-4px 0 9px">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。单向送电直流只按核定方向计入，互济型工程（德宝、青藏、长南荆等）与省间联络线双向。放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
+    <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}${mustN?' · 按 '+mustN+' 个组件筛选':''}</span></div>
+    <details class="explain"><summary>候选与可行的定义<em>费用边界：${isDst?'完整落地价':'只算到受端省界'}</em></summary><div class="inner">
+    <p class="note">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
+    <p class="note">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。单向送电直流只按核定方向计入，互济型工程（德宝、青藏、长南荆等）与省间联络线双向。放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
+    </div></details>
+    ${renderCompPicker(res)}
     <div class="seg small">
       ${[['A',costName],['B','过网费'],['C','送端收益']].map(([k,t])=>
         `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
@@ -955,6 +1040,37 @@ function renderRouteList(res){
   out+=`</div>`;
   return out;
 }
+/* ---------- 通道组件：把直流（专项工程）等通道当作可选组件来筛方案 ----------
+   语义：选中的通道必须出现在方案里（不区分行进方向，方向由通道自身的 bidir 决定）。
+   候选清单来自绕行度筛选后的完整候选集，所以选中一条后其余组件仍然可选、可取消。 */
+function renderCompPicker(res){
+  const list=res.availChannels||[];
+  if(!list.length) return '';
+  const sel=res.mustHave||[];
+  const dcN=list.filter(c=>c.type==='DC'||c.type==='AC/DC').length;
+  let out=`<div class="comp-box">
+    <div class="comp-hd"><span>通道组件</span><em>${list.length} 个可选 · 直流 ${dcN} 个${sel.length?' · 已选 '+sel.length+' 条':''}</em></div>
+    <p class="comp-tip">点选通道即把它设为<b>必经组件</b>，只列出包含它的方案；不选则显示全部候选。直流排在最前。</p>
+    <div class="chips comps">`;
+  list.forEach(c=>{
+    const on=sel.indexOf(c.id)>=0;
+    const dc=(c.type==='DC'||c.type==='AC/DC');
+    out+=`<button class="chip ${dc?'dc':''}${on?' on':''}" onclick="toggleComp('${c.id}')" title="${esc(c.n)} · ${esc(c.type)} · ${c.bidir?'双向':'仅核定方向'} · 出现在 ${c.count} 条候选路径里">${esc(c.n)}<em>${esc(c.type)} ${c.bidir?'双向':'单向'}</em></button>`;
+  });
+  out+=`</div>`;
+  if(sel.length){
+    out+=`<button class="btn ghost" style="margin-top:8px;padding:7px;font-size:12px" onclick="clearComp()">清除全部组件${res.total!=null?'（当前筛出 '+res.total+' 条 / 全量 '+res.totalAll+' 条）':''}</button>`;
+  }
+  out+=`</div>`;
+  return out;
+}
+function toggleComp(id){
+  const a=state.mustHave||(state.mustHave=[]);
+  const i=a.indexOf(id);
+  if(i<0) a.push(id); else a.splice(i,1);
+  state.sel=0; doSolve();
+}
+function clearComp(){ state.mustHave=[]; state.sel=0; doSolve(); }
 function setSort(k){ state.sortBy=k; state.sel=0; doSolve(); }
 function pick(i){ state.sel=i; saveLast(); renderCalc();
   const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }

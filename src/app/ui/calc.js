@@ -64,10 +64,12 @@ function renderCalc(){
         <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
       </select></label>
     </div>
+    <details class="explain"><summary>政策口径与取值依据<em>区域电网费 · 网损承担方 · 自动带入值</em></summary><div class="inner">
     <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。口径二（过网费）与口径三（送端净收益）不含受端省内费用，因此不受「费用边界」开关影响。</p>
     <p class="note"><b>区域电网输电价格</b>是国网华北、华东、华中、东北、西北五个区域分部运营的区域共用输电网络（跨省 500kV / 1000kV 联络网架）的电量电价，由国家发改委核定（发改价格〔2026〕1077号附件2），随区域电网实际交易结算电量向购电方收取。按《省间电力现货交易规则》(2026年4月，发改办体改〔2026〕275号复函) 3.4.2(a)，经营主体购电时<b>统一计入买方节点所在区域电网的输电价格</b>，与路径是否跨区、是否走专项工程无关；发改价格规〔2020〕1441号第二条亦规定通过区域电网共用网络交易的用户购电价格应包括区域电网电量电价及损耗。本工具按买方所在区域计一次，路径过境其它区域的联络线段再按该区域计一次；区域电网自身网损率未公开，暂按 0 计。</p>
     <p class="note"><b>网损承担方</b>的政策口径是<b>受端（购电方）承担</b>：规则 4.3.1 把买方价格按 Π(1−线损率) 折算到卖方节点，即买方为送端电量付费；1490号附件4第十八条，线损率偏差损益由购电方承担或享有。「两端各半」与「送端承担」用于模拟中长期双边谈判条款，送端承担实质是送端把线损折入报价。各段线损率一律按核定值计。规则 3.3.2：<b>输电价格已包含网损的段不再另行收取网损</b>，9 条「含输电环节线损」通道的线损只体现在物理功率与容量占用上，不进买方费用。送端省内的「送省外上网环节线损」由卖方承担（规则 7.3(a)），只计入口径三；受端省内的「上网环节线损费用」在输配电价外单列（1077号附件1 注3），计入完整落地价。</p>
     <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
+    </div></details>
   </div></details>`;
 
   const _toPV=PV[state.to];
@@ -77,6 +79,10 @@ function renderCalc(){
 
   if(res&&res.err){
     out+=`<div class="card"><div class="empty">${esc(res.err)}</div></div>`;
+    // 组件筛选把候选筛空时，选择器必须留在页面上，否则用户没法取消已选组件
+    if(res.availChannels&&res.availChannels.length){
+      out+=`<div class="card tight">${renderCompPicker(res)}</div>`;
+    }
   } else if(res&&res.rows&&res.rows.length){
     // 三栏：左＝路线列表，中＝方案详情，右＝智能推荐（宽屏）；窄屏退为两栏、手机端纵向堆叠，布局由 .layout 的 CSS 决定
     out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+'</div>'
@@ -109,10 +115,14 @@ function renderRouteList(res){
   const inThr=rows.filter(r=>r.landed<=thr);
   const shown=state.showAll?rows:inThr;
   const cut=rows.length-inThr.length;
+  const mustN=(res.mustHave||[]).length;
   let out=`<div class="card tight">
-    <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}</span></div>
-    <p class="note" style="margin:-4px 0 9px">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
-    <p class="note" style="margin:-4px 0 9px">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。单向送电直流只按核定方向计入，互济型工程（德宝、青藏、长南荆等）与省间联络线双向。放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
+    <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 可行 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}${mustN?' · 按 '+mustN+' 个组件筛选':''}</span></div>
+    <details class="explain"><summary>候选与可行的定义<em>费用边界：${isDst?'完整落地价':'只算到受端省界'}</em></summary><div class="inner">
+    <p class="note">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
+    <p class="note">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。单向送电直流只按核定方向计入，互济型工程（德宝、青藏、长南荆等）与省间联络线双向。放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
+    </div></details>
+    ${renderCompPicker(res)}
     <div class="seg small">
       ${[['A',costName],['B','过网费'],['C','送端收益']].map(([k,t])=>
         `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
@@ -147,6 +157,37 @@ function renderRouteList(res){
   out+=`</div>`;
   return out;
 }
+/* ---------- 通道组件：把直流（专项工程）等通道当作可选组件来筛方案 ----------
+   语义：选中的通道必须出现在方案里（不区分行进方向，方向由通道自身的 bidir 决定）。
+   候选清单来自绕行度筛选后的完整候选集，所以选中一条后其余组件仍然可选、可取消。 */
+function renderCompPicker(res){
+  const list=res.availChannels||[];
+  if(!list.length) return '';
+  const sel=res.mustHave||[];
+  const dcN=list.filter(c=>c.type==='DC'||c.type==='AC/DC').length;
+  let out=`<div class="comp-box">
+    <div class="comp-hd"><span>通道组件</span><em>${list.length} 个可选 · 直流 ${dcN} 个${sel.length?' · 已选 '+sel.length+' 条':''}</em></div>
+    <p class="comp-tip">点选通道即把它设为<b>必经组件</b>，只列出包含它的方案；不选则显示全部候选。直流排在最前。</p>
+    <div class="chips comps">`;
+  list.forEach(c=>{
+    const on=sel.indexOf(c.id)>=0;
+    const dc=(c.type==='DC'||c.type==='AC/DC');
+    out+=`<button class="chip ${dc?'dc':''}${on?' on':''}" onclick="toggleComp('${c.id}')" title="${esc(c.n)} · ${esc(c.type)} · ${c.bidir?'双向':'仅核定方向'} · 出现在 ${c.count} 条候选路径里">${esc(c.n)}<em>${esc(c.type)} ${c.bidir?'双向':'单向'}</em></button>`;
+  });
+  out+=`</div>`;
+  if(sel.length){
+    out+=`<button class="btn ghost" style="margin-top:8px;padding:7px;font-size:12px" onclick="clearComp()">清除全部组件${res.total!=null?'（当前筛出 '+res.total+' 条 / 全量 '+res.totalAll+' 条）':''}</button>`;
+  }
+  out+=`</div>`;
+  return out;
+}
+function toggleComp(id){
+  const a=state.mustHave||(state.mustHave=[]);
+  const i=a.indexOf(id);
+  if(i<0) a.push(id); else a.splice(i,1);
+  state.sel=0; doSolve();
+}
+function clearComp(){ state.mustHave=[]; state.sel=0; doSolve(); }
 function setSort(k){ state.sortBy=k; state.sel=0; doSolve(); }
 function pick(i){ state.sel=i; saveLast(); renderCalc();
   const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
