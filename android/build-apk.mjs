@@ -27,7 +27,7 @@ fs.mkdirSync(assetDir, { recursive: true });
 fs.copyFileSync(path.join(root, 'index.html'), path.join(assetDir, 'index.html'));
 
 console.log('③ gradle assembleDebug（首次运行会下载依赖，需数分钟）…');
-run(`"${gradleBin}" assembleDebug --no-daemon`, path.join(root, 'android'));
+run(`"${gradleBin}" clean assembleDebug --no-daemon`, path.join(root, 'android'));
 
 const apk = path.join(root, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 console.log(`\n✅ APK 已生成: ${apk} (${(fs.statSync(apk).size / 1024 / 1024).toFixed(2)} MB)`);
