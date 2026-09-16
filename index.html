@@ -378,7 +378,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-16 06:46';
+const BUILD_TIME='2026-09-16 07:34';
 const PRICE_VERSION='5ead949e5845a53c';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -471,7 +471,7 @@ function loadStored(){
     const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
   }catch(e){}
 }
-function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,pv:PRICE_VERSION,at:BUILD_TIME}));}catch(e){} }
+function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,pv:PRICE_VERSION,at:BUILD_TIME})); state._libStale=false; }catch(e){} }
 function saveLast(){
   try{
     // tradableOnly（REQ-203）与 occPct（REQ-302）为会话内口径，按 PRD 不持久化
@@ -1514,7 +1514,9 @@ function renderLibList(){
   </details>`).join('');
 }
 function renderLib(){
-  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`;
+  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`
+  // REQ-602：加载时用户选择「暂保留」旧版价格覆盖（state.js 置 _libStale），费率库必须给出常驻提示
+  +(state._libStale?`<div class="warn" style="margin-top:8px">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
   out+=`<div class="card tight seg">
     <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
     <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
@@ -1644,7 +1646,10 @@ function drawMapQQ(){
 
 /* tdTried：同一密钥只自动尝试一次，失败后不再自动重发（每次渲染都重发会形成请求风暴，
    触发天地图 CloudWAF 风控临时拦截）；点「应用密钥」或换密钥才重新尝试。 */
-let tdTried='', tdAttempted=false, tdFailKind='server';
+let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
+/* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
+   冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
+const TD_COOLDOWN_MS=10*60*1000;
 function loadTianditu(cb){
   tdAttempted=false;
   if(tdReady) return cb(true);
@@ -1892,9 +1897,16 @@ function switchMap(p){
 }
 function applyTk(){
   const el=document.getElementById('i-tk');
-  state.tiandituKey=(el?el.value:'').trim(); tdReady=false; tdTried=''; saveMap(); renderMap();
-  // 点击后立刻给出可见反馈（REQ-703 同理：不得静默无响应），随后的加载结果再覆盖
-  tkMsg(state.tiandituKey?'loading':'empty');
+  const k=(el?el.value:'').trim();
+  const changed=(k!==state.tiandituKey);
+  state.tiandituKey=k; tdReady=false; saveMap();
+  const cooling=(!changed && k && Date.now()<tdCooldownUntil);
+  if(changed){ tdTried=''; tdCooldownUntil=0; }
+  if(!cooling) tdTried='';
+  renderMap();
+  // 点击后立刻给出可见反馈（REQ-703 同理：不得静默无响应），随后的加载结果再覆盖；
+  // 冷却期内不发请求，80ms 后由 tkFailShow 给出剩余等待时间
+  if(!cooling) tkMsg(k?'loading':'empty');
 }
 /* 密钥应用的各阶段反馈：loading/ok/empty/loadfail/drawfail。
    script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
@@ -1914,18 +1926,22 @@ function tkFailDiagnose(el){
     el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 API 加载失败。</span>file:// 直开发不出 Referer，请改为 http 访问。已降级为网架清单。';
     return;
   }
-  if(!tdAttempted){ tkFailShow(el, tdFailKind); return; }  // 本次未发新请求：沿用上次诊断，不额外探测
+  if(!tdAttempted){ tkFailShow(el, tdFailKind, false); return; }  // 本次未发新请求：沿用上次诊断，不额外探测
   el.innerHTML='<span style="color:var(--ink2)">✗ 天地图 API 加载失败，正在区分原因…</span>';
   let probe;
   try{ probe=fetch('https://api.tianditu.gov.cn/api?v=4.0',{mode:'no-cors'}); }
   catch(e){ probe=Promise.reject(e); }
-  const done=k=>{ if(document.getElementById('tk-msg')===el) tkFailShow(el, k); };
-  probe.then(()=>{ tdFailKind='server'; done('server'); },()=>{ tdFailKind='net'; done('net'); });
+  const done=k=>{ if(document.getElementById('tk-msg')===el) tkFailShow(el, k, true); };
+  probe.then(()=>{ tdFailKind='server'; tdCooldownUntil=Date.now()+TD_COOLDOWN_MS; done('server'); },()=>{ tdFailKind='net'; done('net'); });
 }
-function tkFailShow(el, kind){
-  el.innerHTML = kind==='net'
-    ? '<span style="color:#B3261E;font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。'
-    : '<span style="color:#B3261E;font-weight:600">✗ 天地图密钥校验未通过。</span>若此前能正常加载，多为天地图风控临时拦截，等几分钟再点「应用密钥」即可重试；否则请确认密钥为「浏览器端」类型的 Key 本身。已降级为网架清单。';
+function tkFailShow(el, kind, fresh){
+  if(kind==='server'){
+    el.innerHTML = (!fresh && Date.now()<tdCooldownUntil)
+      ? '<span style="color:#B3261E;font-weight:600">✗ 天地图风控拦截仍未解除。</span>反复重试会延长封禁，请安静等待约 '+Math.ceil((tdCooldownUntil-Date.now())/60000)+' 分钟后再点「应用密钥」。已降级为网架清单。'
+      : '<span style="color:#B3261E;font-weight:600">✗ 天地图服务端拦截了本次请求（临时风控封禁）。</span>静置 30 分钟以上再点「应用密钥」重试一次，期间勿反复点击。已降级为网架清单。';
+    return;
+  }
+  el.innerHTML = '<span style="color:#B3261E;font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';
 }
 
 /* ===== src/app/ui/ai.js ===== */
