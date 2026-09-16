@@ -20,7 +20,7 @@ const ok = (c, l, d) => { if (c) { pass++; console.log('  ✅ ' + l); } else { f
 const APP_FILES = [
   'src/app/config.js', 'src/app/format.js', 'src/app/data.js', 'src/app/state.js',
   'src/app/algo/network.js', 'src/app/algo/cost.js', 'src/app/algo/paths.js', 'src/app/algo/solve.js',
-  'src/app/ui/calc.js', 'src/app/ui/lib.js', 'src/app/ui/map.js', 'src/app/boot.js',
+  'src/app/ui/calc.js', 'src/app/ui/lib.js', 'src/app/ui/map.js', 'src/app/ui/ai.js', 'src/app/boot.js',
 ];
 
 console.log('══ 一、模块齐全 ══');
@@ -75,8 +75,17 @@ ok(/function enumPaths\(adj,\s*src,\s*dst,\s*maxHops,\s*cap,\s*weightOf\)/.test(
    /function enumPaths\(adj,\s*src,\s*dst,\s*maxHops,\s*cap,\s*weightOf\)/.test(strip(fs.readFileSync(path.join(root, 'src/app/algo/paths.js'), 'utf8'))),
   'enumPaths 接收显式的权重函数');
 const costSrc = strip(fs.readFileSync(path.join(root, 'src/app/algo/cost.js'), 'utf8'));
-ok(/function regionFee\(env,\s*fromCode,\s*toCode\)/.test(costSrc),
-  'regionFee(env, from, to) 显式接收方向（反向通行收错区域的修复不会被回退）');
+const netSrc = strip(fs.readFileSync(path.join(root, 'src/app/algo/network.js'), 'utf8'));
+ok(/function regionRate\(env,\s*code\)/.test(costSrc) && /regBuyer\s*=\s*env\.includeRegion\s*\?\s*regionRate\(env,\s*nodes\[n\]\)/.test(costSrc),
+  '买方所在区域的区域电网电量电价在路径层面统一计一次（规则 3.4.2(a)）');
+ok(/e\.regional\s*&&\s*env\.REGION_OF\[nodes\[i\+1\]\]\s*!==\s*buyerRegion/.test(costSrc), '过境其它区域的联络线段再按该区域计一次，买方区域不重复');
+ok(/function tariffOf\(e,\s*fromCode\)/.test(costSrc) && /tRev/.test(costSrc), 'tariffOf(e, from) 按行进方向取联络线的输电价（反向取 tRev）');
+ok(/function sendFeeOf\(e,\s*fromCode\)/.test(costSrc) && /sendFeeRev/.test(costSrc), 'sendFeeOf(e, from) 双向专项工程反向时送端省内段取 sendFeeRev');
+ok(/const fee\s*=\s*t\s*\*\s*qOut/.test(costSrc), '所有段的输电费按段后电量计（规则 4.3.1）');
+ok(/sufT\[i\]\s*=\s*sufT\[i\+1\]\s*\*\s*\(edges\[i\]\.incLoss\s*\?\s*1\s*:/.test(costSrc), '含线损段在计费链里线损按 0 计（规则 3.3.2）');
+ok(/LOSS_OF/.test(costSrc) && /inLoss/.test(costSrc) && /exportLoss/.test(costSrc), '受端上网环节线损进买方落地价，送端省内线损进口径三');
+ok(/if\s*\(\s*e\.bidir\s*\)/.test(netSrc), 'buildAdj 只对 bidir 边挂反向（方向由数据逐条给定）');
+ok(/sideOf\(edges\[0\],\s*nodes\[0\]/.test(netSrc), 'detourOf 按实际行进方向取起点');
 
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);
 process.exit(fail ? 1 : 0);

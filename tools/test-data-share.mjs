@@ -35,7 +35,7 @@ if (fail) { console.log('\n产物缺失，先跑 node tools/build.mjs'); process
 
 console.log('\n══ 二、手机端数据结构 ══');
 const ad = JSON.parse(fs.readFileSync(path.join(root, p.full), 'utf8'));
-ok(ad.schema === 'iproute-app-data/v1', `schema = ${ad.schema}`);
+ok(ad.schema === 'iproute-app-data/v3', `schema = ${ad.schema}（v3：CH 新增 sendFeeRev / dirNote / marginalNote，PV 新增 inLoss / exportLoss）`);
 ok(typeof ad.priceVersion === 'string' && ad.priceVersion.length === 16, `priceVersion = ${ad.priceVersion}`);
 ok(typeof ad.dataHash === 'string' && ad.dataHash.length === 64, 'dataHash 长度正确');
 ok(ad.ST && Object.keys(ad.ST).length === ad.counts.stations, `ST 站点 ${ad.counts.stations} 个与 counts 一致`);
@@ -78,6 +78,24 @@ ok(ch.every((c) => typeof c.sendFee === 'number'), '每条通道都带 sendFee�
 ok(ch.every((c) => c.capBasis), '每条通道都带 capBasis（容量口径）');
 ok(ch.every((c) => c.priceType), '每条通道都带 priceType（计价方式）');
 ok(ch.every((c) => typeof c.tradable === 'boolean'), '每条通道都带 tradable 标记');
+ok(ch.every((c) => typeof c.bidir === 'boolean' && typeof c.regional === 'boolean'), '每条通道都带 bidir / regional 标记');
+const ties = ch.filter((c) => c.regional), projects = ch.filter((c) => !c.regional);
+ok(ties.length === 18 && ties.every((c) => c.bidir && typeof c.tRev === 'number' && !c.tradable && c.tier === 'region'),
+  `18 条省间联络线（24 条删去 6 条虚构交流联络，渝鄂改记背靠背）为双向、带反向输电价 tRev、tier=region（现 ${ties.length} 条）`);
+const biProj = projects.filter((c) => c.bidir).map((c) => c.n).sort();
+ok(biProj.length === 7 && ['云霄直流', '灵宝直流', '德宝直流', '青藏直流', '辛洹线', '长南荆特高压交流', '高岭直流'].sort().join() === biProj.join(),
+  `双向专项工程 7 条：${biProj.join('、')}`);
+ok(projects.filter((c) => c.bidir).every((c) => typeof c.sendFeeRev === 'number' && c.dirNote) && projects.filter((c) => !c.bidir).every((c) => c.sendFeeRev === null),
+  '双向专项工程带 sendFeeRev 与方向依据，单向工程为 null');
+ok(projects.every((c) => c.tRev === null), '专项工程 tRev 为 null（核定价与方向无关）');
+ok(!ch.some((c) => ['川陕联络线', '晋陕联络线', '高岭联络线', '青藏交流', '云贵联络线', '云桂联络线'].includes(c.n)), '7 条物理上不存在的交流联络已删除（渝鄂改记为背靠背）');
+ok(ch.find((c) => c.n === '渝鄂联络线').type === 'DC' && ch.find((c) => c.n === '渝鄂联络线').cap === 5000, '渝鄂联络线记为背靠背直流，容量 5000 MW');
+ok(ch.find((c) => c.n === '青藏直流').cap === 1200 && ch.find((c) => c.n === '高岭直流').cap === 3000, '青藏直流 1200 MW、高岭直流 3000 MW（扩建后）');
+ok(ch.find((c) => c.n === '辛洹线').t === 0 && ch.find((c) => c.n === '云霄直流').t === 25.6, '容量制工程边际输电价：辛洹 0、云霄 25.6');
+const pv = Object.values(ad.PV);
+ok(pv.filter((p) => typeof p.inLoss === 'number').length === 29 && pv.filter((p) => typeof p.exportLoss === 'number').length === 29,
+  '29 个省带省内 / 送省外上网环节线损率（西藏未获取）');
+ok(ad.PV.SC.exportLoss === 0.99 && ad.PV.HB.exportLoss === 0.82 && ad.PV.JS.inLoss === 2.83, '抽查：四川送省外 0.99%、湖北 0.82%、江苏省内 2.83%');
 ok(ch.filter((c) => c.priceType === 'capacity').length === 2, '容量制工程 2 条');
 ok(ch.filter((c) => c.capActual != null).length > 0, `有实际输送能力的通道 ${ch.filter((c) => c.capActual != null).length} 条`);
 const xz = ad.PV.XZ;
