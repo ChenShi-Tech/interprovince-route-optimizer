@@ -35,7 +35,9 @@ jobs:
 
       - name: 产物确认
         run: |
-          APP=$(find build -path "*iphonesimulator*" -name "InterprovinceRoute.app" | head -1)
+          echo "── 全工作区搜索 .app ──"
+          find "$GITHUB_WORKSPACE" -name "*.app" -path "*iphonesimulator*" -not -path "*/XCBuildData/*" 2>/dev/null
+          APP=$(find "$GITHUB_WORKSPACE" -name "*.app" -path "*iphonesimulator*" -not -path "*/XCBuildData/*" | head -1)
           test -n "$APP" || { echo "未找到 .app 产物"; exit 1; }
           echo "APP=$APP" >> "$GITHUB_ENV"
           ls "$APP"
