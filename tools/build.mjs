@@ -203,6 +203,8 @@ const payload = {
   PV: provinceOut,
   RG: prices.区域电网输电价格,
   RGOF: prices.区域电网分区,
+  // REQ-401：两部制容（需）量电价（月单价，按电压档多档），数据源 S11-附件1 省级电网输配电价表
+  CAP: prices.两部制容量需量电价,
 };
 
 const builtAt = new Date().toISOString();

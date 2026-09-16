@@ -8,6 +8,8 @@ function renderCalc(){
   const _host=document.getElementById('v-calc');
   const _ae=(typeof document.activeElement!=='undefined')?document.activeElement:null;
   const _fid=(_ae&&_ae.id&&_host&&_host.contains&&_host.contains(_ae))?_ae.id:null;
+  // REQ-401：重渲染前记住容量电费卡的展开态，重建后恢复（用户展开后不随任何重算收起）
+  const _capOpen=!!(_host&&_host.querySelector('#d-capfee[open]'));
   let _caret=null;
   if(_fid){ try{ _caret=[_ae.selectionStart,_ae.selectionEnd]; }catch(e){ /* number 型输入无 selection */ } }
   const opt=(sel,ex)=>Object.keys(PV).map(k=>
@@ -70,6 +72,9 @@ function renderCalc(){
     <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
   </div></details>`;
 
+  // REQ-401 容量电费测算器：独立折叠卡，不参与路径比选（发改价格〔2020〕1441号 / 〔2023〕532号口径）
+  out+=renderCapFee();
+
   const _toPV=PV[state.to];
   if(_toPV && (_toPV.fund===null || _toPV.fund===undefined)){
     out+=`<div class="warn">受端省「${esc(_toPV.n)}」的政府性基金及附加暂未获取官方标准，本次测算按 0 计，落地成本会被低估。</div>`;
@@ -86,6 +91,7 @@ function renderCalc(){
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
   document.getElementById('v-calc').innerHTML=out;
+  if(_capOpen){ const _cf=document.getElementById('d-capfee'); if(_cf) _cf.open=true; }
   if(_fid){
     const el=document.getElementById(_fid);
     if(el){
@@ -363,4 +369,64 @@ function resetOne(k){
   if(k==='pNet'&&t.net!=null) state.pNet=t.net;
   if(k==='fund'){ state.fundMissing=(t.fund===null||t.fund===undefined); state.fund=state.fundMissing?0:t.fund; }
   state._res=solve(state, algoData()); saveLast(); renderCalc();
+}
+
+/* ---------- REQ-401 容量电费测算器（独立折叠卡，不参与路径比选） ---------- */
+/* 默认预选档口径：优先「1~10（20）千伏」档；该省无此档别的取表内最低电压档（第一档）。 */
+function capProv(){ return (state.capProv&&PV[state.capProv])?state.capProv:state.to; }
+function capTiers(p){ const e=CAP[p]; return (e&&e.需量电价)?e.需量电价:[]; }
+function capDefaultTier(tiers){ return tiers.find(t=>/1~10（20）/.test(t.档别))||tiers[0]||null; }
+function capTier(p){
+  const tiers=capTiers(p);
+  if(!tiers.length) return null;
+  return tiers.find(t=>t.档别===state.capTier)||capDefaultTier(tiers);
+}
+function setCapMode(m){ state.capMode=m; saveLast(); renderCalc(); }
+function renderCapFee(){
+  const p=capProv(), entry=CAP[p], tiers=capTiers(p), tier=capTier(p);
+  const isCap=state.capMode==='cap';
+  const modeLbl=isCap?'按容量':'按需量';
+  const unit=isCap?'kVA':'kW';
+  const priceUnit=isCap?'元/千伏安·月':'元/千瓦·月';
+  let inner;
+  if(!entry||!tiers.length){
+    // 缺省省份（西藏 XZ）：暂无数据，不补估
+    inner=`<div class="warn">「${esc(PV[p].n)}」的两部制容量/需量电价暂无数据（数据源未收录该省输配电价表），本测算器不参与路径比选。</div>`;
+  } else {
+    const priceList=isCap?entry.容量电价:entry.需量电价;
+    const priceObj=tier?priceList.find(t=>t.档别===tier.档别):null;
+    const price=priceObj?priceObj.价:null;
+    const val=+state.capValue||0, qty=+state.capQty||0;
+    const annual=(price!=null&&val>0)?price*val*12:null;
+    const per=(annual!=null&&qty>0)?annual/qty:null;
+    inner=`
+    <div class="row2">
+      <label class="f"><span>省份</span><select id="i-capprov">
+        ${Object.keys(PV).map(k=>`<option value="${k}" ${k===p?'selected':''}>${esc(PV[k].n)}</option>`).join('')}
+      </select></label>
+      <label class="f"><span>电压档（默认预选项 = 1~10（20）千伏档，无此档取第一档）</span><select id="i-captier">
+        ${tiers.map(t=>`<option value="${esc(t.档别)}" ${tier&&t.档别===tier.档别?'selected':''}>${esc(t.档别)}</option>`).join('')}
+      </select></label>
+    </div>
+    <div class="sub">计费方式<em>二选一，互斥切换</em></div>
+    <div class="seg">
+      <button class="${isCap?'on':''}" onclick="setCapMode('cap')">按容量 kVA</button>
+      <button class="${!isCap?'on':''}" onclick="setCapMode('demand')">按需量 kW</button>
+    </div>
+    <div class="row2">
+      <label class="f"><span>${modeLbl} ${unit}</span><input id="i-capval" type="number" value="${state.capValue}" step="10" min="0"></label>
+      <label class="f"><span>年用电量 MWh</span><input id="i-capqty" type="number" value="${state.capQty}" step="100" min="0"></label>
+    </div>
+    <div class="g3" style="margin-top:2px">
+      <div class="mc"><div class="l">所选档单价</div><div class="v">${price!=null?fmt(price):'—'}<small>${priceUnit}</small></div></div>
+      <div class="mc"><div class="l">年容量电费</div><div class="v">${annual!=null?num(annual):'—'}<small>元/年</small></div></div>
+      <div class="mc"><div class="l">度电分摊额</div><div class="v">${per!=null?fmt(per,2):'—'}<small>元/MWh</small></div></div>
+    </div>
+    ${qty<=0?'<p class="note">年用电量为 0，度电分摊额不计算（显示 —）。</p>':''}
+    <div class="lib-src" style="margin-top:8px">当前取值依据：${esc(entry.省)} · ${esc(tier?tier.档别:'—')} · ${modeLbl}　${esc(entry.来源)}</div>`;
+  }
+  return `<details class="adv boxed" id="d-capfee"><summary>容量电费测算（两部制 · 独立参考）</summary><div class="inner">
+    ${inner}
+    <p class="note cap-note" style="margin-top:10px"><b>容量电费与电量来自省内或省外无关，不参与路径比选</b>（发改价格〔2020〕1441号 / 〔2023〕532号口径；年费用 = 单价 × ${isCap?'容量':'需量'} × 12，度电分摊 = 年费用 ÷ 年用电量）。</p>
+  </div></details>`;
 }

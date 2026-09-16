@@ -5,6 +5,8 @@ let state={
   lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10, includeDstCost:true,
   sel:0, showBad:false, sortBy:'A', showAll:false,
   includeRegion:true,
+  // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
+  capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
   mapProvider:'svg', tiandituKey:''
 };
 let stored=null;

@@ -19,6 +19,15 @@ document.addEventListener('change',e=>{
   if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region','i-dstcost'].indexOf(id)>=0){
     if(id==='i-degrade') state.degrade=+e.target.value;
     state.sel=0; doSolve();
+    return;
+  }
+  // REQ-401 容量电费测算器：独立重算，不触发路径求解
+  if(['i-capprov','i-captier','i-capval','i-capqty'].indexOf(id)>=0){
+    if(id==='i-capprov'){ state.capProv=e.target.value; state.capTier=null; }
+    if(id==='i-captier') state.capTier=e.target.value;
+    if(id==='i-capval'){ const v=parseFloat(e.target.value); state.capValue=v>0?v:0; }
+    if(id==='i-capqty'){ const v=parseFloat(e.target.value); state.capQty=v>0?v:0; }
+    saveLast(); renderCalc();
   }
 });
 loadStored();
