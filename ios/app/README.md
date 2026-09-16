@@ -1,6 +1,7 @@
 # app/ · Xcode 工程本体
 
-> **当前为空。** 工程在阶段 0 创建。
+> **2026-09-16 更新：路线 A 的 WKWebView 壳工程已建**——见 [`InterprovinceRoute/`](./InterprovinceRoute/)（含内嵌最新 index.html 与 Mac 端出 .ipa 说明）。
+> 原生 SwiftUI 工程（阶段 0 起）仍按下列规范创建；壳工程是过渡交付，不替代本规范。
 
 ---
 
