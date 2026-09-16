@@ -32,12 +32,23 @@ header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdro
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
-main{flex:1;padding:14px 16px 96px;overflow-x:hidden}
+/* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
+   声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
+main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
+/* 末尾卡片的外边距属于尾部留白，由页脚间距接管。
+   深层选择器：各 Tab 内容末尾的 margin 在任意嵌套层泄漏会导致
+   「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），
+   统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
+main section>:last-child,main section :last-child{margin-bottom:0}
+/* z-index 3000：地图图层（含 canvas/WebView 层叠上下文）不得盖住固定导航（底栏遮挡修复） */
 nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
 nav .ic{width:20px;height:20px;display:block}
 nav button.on .ic path,nav button.on .ic circle,nav button.on .ic rect{stroke:var(--blue)}
+/* REQ-307：页脚定位声明，三 Tab 共用。底部内边距 = 固定导航条高度(≈64px) + 4px 呼吸隙，
+   含 safe-area 适配（与 nav 的 max(6px,env(safe-area-inset-bottom)) 对应） */
+.disclaim{padding:6px 16px calc(68px + env(safe-area-inset-bottom));text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6}
 .card{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
 .card.tight{padding:12px}
 .sec-title{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -285,7 +296,10 @@ details.adv.boxed summary{font-size:12.5px}
     border-bottom:2px solid transparent;border-radius:0}
   nav button.on{color:var(--blue);border-bottom-color:var(--blue);background:none}
   nav .ic{width:16px;height:16px}
-  main{order:2;padding:16px 24px 56px}
+  main{order:2;padding:16px 24px 14px}
+  /* 桌面端导航条在页头下方（非固定悬浮），页脚沉到文档底部即可，无需大让位内边距；
+     用 footer.disclaim 提高特异性，压过移动端 .disclaim 的导航让位内边距 */
+  footer.disclaim{order:3;padding:6px 24px 10px}
 
   .topbar{display:grid;grid-template-columns:minmax(340px,460px) minmax(0,1fr);gap:12px;
     align-items:stretch;margin-bottom:10px}
@@ -364,8 +378,8 @@ details.adv.boxed summary{font-size:12.5px}
     <section id="v-map" hidden></section>
     <section id="v-lib" hidden></section>
   </main>
-  <!-- REQ-307：页脚定位声明，三 Tab 共用 -->
-  <footer style="padding:10px 16px 4px;text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
+  <!-- REQ-307：页脚定位声明，三 Tab 共用；样式见 .disclaim（移动端贴固定导航条上方，桌面端沉底） -->
+  <footer class="disclaim">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
