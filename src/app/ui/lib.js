@@ -46,14 +46,22 @@ function renderLibList(){
     if(flt==='region'&&c.tier!=='region') return false;
     if(flt==='capacity'&&c.priceType!=='capacity') return false;
     if(flt==='noCap'&&c.capActual!=null) return false;
+    if(flt==='incLoss'&&c.incLoss!==true) return false;                 // REQ-405
+    if(flt==='dd'&&!(c.bill||'').includes('落地端')) return false;      // REQ-405
     if(!q) return true;
     return (c.n+' '+(c.fn||'')+' '+N(c.from)+' '+N(c.to)+' '+(c.doc||'')+' '+(c.kv||'')+' '+(c.status||'')).toLowerCase().includes(q);
   };
   const list=CH.map((c,i)=>({c,i})).filter(x=>hit(x.c));
   if(!list.length) return '<p class="note">没有匹配的通道，试试其它关键词。</p>';
+  const TODAY=new Date().toISOString().slice(0,10);
+  const effBadge=c=>{                                   // REQ-402：价格时效徽标
+    const fut=(c.hist||[]).find(h=>/^\d{4}-\d{2}-\d{2}$/.test(h.effective_from||'') && h.effective_from>TODAY);
+    if(fut) return '<span class="lc-tag">即将生效 '+esc(fut.effective_from)+'</span>';
+    return c.doc?'<span class="lc-tag">现行 '+esc((c.doc||'').replace(/^.*(〔\d+〕\d+号).*$/,'$1'))+'</span>':'';
+  };
   return '<div class="libcount">匹配 '+list.length+' 条</div>'+list.map(({c,i})=>`<details class="libcard">
     <summary>
-      <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}</span>
+      <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}${effBadge(c)}${c.tradable===false?'<span class="lc-tag">交易网络·待确认</span>':''}</span>
       <span class="lc-p">${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
       <span class="lc-m">${esc(N(c.from))}→${esc(N(c.to))} · ${esc(c.kv)} · 线损 ${c.loss==null?'—':fmt(c.loss,2)+'%'} · ${c.capActual!=null?c.capActual+' MW':(c.cap!=null?'额定 '+c.cap+' MW':'容量待补')}</span>
       <span class="lc-b">${tierTag(c.tier)}</span>
@@ -88,7 +96,9 @@ function renderLibList(){
   </details>`).join('');
 }
 function renderLib(){
-  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`;
+  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`
+  // REQ-602：加载时用户选择「暂保留」旧版价格覆盖（state.js 置 _libStale），费率库必须给出常驻提示
+  +(state._libStale?`<div class="warn" style="margin-top:8px">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
   out+=`<div class="card tight seg">
     <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
     <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
@@ -100,7 +110,7 @@ function renderLib(){
       <div class="sec-title">通道费率<span class="hint">共 ${CH.length} 条</span></div>
       <input id="lib-q" type="search" placeholder="搜索通道名 / 别名 / 省份 / 文号…" value="${esc(state.libQ||'')}" oninput="libSearch(this.value)" style="margin-bottom:8px">
       <div class="seg small" style="flex-wrap:wrap">
-        ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量']].map(([k,t])=>
+        ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量'],['incLoss','含线损'],['dd','落地端计费']].map(([k,t])=>
           `<button class="${(state.libFilter||'all')===k?'on':''}" onclick="state.libFilter='${k}';state._libScr=window.scrollY;renderLib()">${t}</button>`).join('')}
       </div>
       <div id="lib-list">${renderLibList()}</div>

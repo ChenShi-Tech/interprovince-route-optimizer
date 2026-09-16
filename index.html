@@ -360,6 +360,8 @@ details.adv.boxed summary{font-size:12.5px}
     <section id="v-map" hidden></section>
     <section id="v-lib" hidden></section>
   </main>
+  <!-- REQ-307：页脚定位声明，三 Tab 共用 -->
+  <footer style="padding:10px 16px 4px;text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
@@ -376,7 +378,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-16 06:08';
+const BUILD_TIME='2026-09-16 07:34';
 const PRICE_VERSION='5ead949e5845a53c';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -447,7 +449,17 @@ let stored=null;
 function loadStored(){
   try{
     const a=localStorage.getItem(LS_LIB);
-    if(a){ const s=JSON.parse(a); if(s.ch&&s.ch.length===CH.length) CH=s.ch; }
+    if(a){
+      const s=JSON.parse(a);
+      // REQ-602：本地价格覆盖必须与当前价格数据同版本（priceVersion），
+      // 否则由用户决定丢弃或暂留——静默使用旧覆盖会算出过期结果
+      if(s.ch&&s.ch.length===CH.length){
+        if(s.pv&&s.pv===PRICE_VERSION){ CH=s.ch; }
+        else if(confirm('本地费率修改基于旧版价格数据（priceVersion 不一致），继续使用可能算出过期结果。\n\n「确定」丢弃本地修改，恢复当前核定值；「取消」暂保留（费率库会提示核对）。')){
+          localStorage.removeItem(LS_LIB);
+        } else { CH=s.ch; state._libStale=true; }
+      }
+    }
     const b=localStorage.getItem(LS_LAST);
     if(b){
       const s=JSON.parse(b);
@@ -459,8 +471,15 @@ function loadStored(){
     const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
   }catch(e){}
 }
-function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,at:BUILD_TIME}));}catch(e){} }
-function saveLast(){ try{localStorage.setItem(LS_LAST,JSON.stringify(Object.assign({},state,{_bt:BUILD_TIME})));}catch(e){} }
+function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,pv:PRICE_VERSION,at:BUILD_TIME})); state._libStale=false; }catch(e){} }
+function saveLast(){
+  try{
+    // tradableOnly（REQ-203）与 occPct（REQ-302）为会话内口径，按 PRD 不持久化
+    const s=Object.assign({},state,{_bt:BUILD_TIME});
+    delete s.tradableOnly; delete s.occPct;
+    localStorage.setItem(LS_LAST,JSON.stringify(s));
+  }catch(e){}
+}
 function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){} }
 
 /* ===== src/app/algo/network.js ===== */
@@ -607,6 +626,8 @@ function evalPath(path, ctx, env){
   const LOSS=env.LOSS_OF||{};
 
   let trans=0, regTransit=0, sendTotal=0, dist=0, segLossMwh=0, vsCount=0;
+  // REQ-302：中长期占用——容量校验按 cap×(1−占用比例) 扣减（默认 0，不持久化）
+  const occFactor=1-(ctx.occPct||0)/100;
   const vset=new Set(), tset=new Set(), rset=new Set([env.REGION_OF[nodes[0]]]), stset=new Set();
   const segs=edges.map((e,i)=>{
     const q=1/sufT[i], qOut=1/sufT[i+1];        // 计费链
@@ -634,8 +655,8 @@ function evalPath(path, ctx, env){
       billLossMwh:toMWh(q-qOut),
       lossCost:toMWh(q-qOut)*ctx.pGen,
       feeYuan:qty*fee, rgYuan:qty*rg, sfYuan:qty*sf,
-      util:e.cap? toMW(qP)/e.cap : null,
-      headroom:e.cap? e.cap-toMW(qP) : null,
+      util:e.cap? toMW(qP)/(e.cap*occFactor) : null,
+      headroom:e.cap? e.cap*occFactor-toMW(qP) : null,
     };
   });
   const regBuyer = env.includeRegion ? regionRate(env, nodes[n]) : 0;   // 买方区域电量电价 × 交付电量
@@ -659,8 +680,8 @@ function evalPath(path, ctx, env){
   const cExportLoss=cGen*exportLossQty;
   const senderNet=ctx.pDst*D-(cSend+cTrans+cReg)*D-netLossTotal*(1-g)*D-cExportLoss*D;
   const deliverMW=qty/h;
-  const segLd=segs.map(s=>({name:s.e.n,mw:s.inMW,cap:s.e.cap,over:s.e.cap? s.inMW>s.e.cap : false}));
-  const maxLoad=Math.max(...segLd.map(s=>s.cap?s.mw/s.cap:0));
+  const segLd=segs.map(s=>({name:s.e.n,mw:s.inMW,cap:s.e.cap,effCap:s.e.cap?s.e.cap*occFactor:null,over:s.e.cap? s.inMW>s.e.cap*occFactor : false}));
+  const maxLoad=Math.max(...segLd.map(s=>s.cap&&occFactor?s.mw/(s.cap*occFactor):0));
   const overSeg=segLd.filter(s=>s.over);
   // 断面校验：同一断面内各段入口功率之和与该断面限额比对
   const secHits=[];
@@ -725,10 +746,11 @@ function evalPath(path, ctx, env){
  */
 function enumPaths(adj,src,dst,maxHops,cap,weightOf){
   const out=[], visited=new Set([src]), nodes=[src], edges=[];
+  let hitCap=false;   // REQ-601：区分「提前截断」与「自然枚举完恰好 cap 条」
   const ord={};
   for(const k in adj) ord[k]=adj[k].slice().sort((a,b)=>weightOf(a,k)-weightOf(b,k));
   (function dfs(u){
-    if(out.length>=cap) return;
+    if(out.length>=cap){ hitCap=true; return; }
     if(u===dst){ out.push({nodes:nodes.slice(),edges:edges.slice()}); return; }
     if(edges.length>=maxHops) return;
     for(const nb of ord[u]||[]){
@@ -736,9 +758,10 @@ function enumPaths(adj,src,dst,maxHops,cap,weightOf){
       visited.add(nb.to); nodes.push(nb.to); edges.push(nb.e);
       dfs(nb.to);
       edges.pop(); nodes.pop(); visited.delete(nb.to);
-      if(out.length>=cap) return;
+      if(out.length>=cap){ hitCap=true; return; }
     }
   })(src);
+  out.hitCap=hitCap;
   return out;
 }
 
@@ -781,6 +804,7 @@ function solve(input, data){
     pGen: input.pGen, pDst: input.pDst, pNet: input.pNet, fund: input.fund,
     lossBearer: input.lossBearer, qty: input.qty, hours: input.hours,
     includeDstCost: input.includeDstCost !== false,
+    occPct: Math.min(90, Math.max(0, +input.occPct || 0)),   // REQ-302：中长期占用 %
   };
   const { from, to } = input;
   const N = data.name;
@@ -788,7 +812,9 @@ function solve(input, data){
   if(!data.PV[from] || !data.PV[to]) return {err:'省份代码无效'};
   if(from === to) return {err:'送端与受端不能相同'};
 
-  const adj = buildAdj(data.CH);
+  // REQ-203：仅按已确认可交易通道——开启后排除 tradable===false 的交流联络线
+  const CHpool = input.tradableOnly ? data.CH.filter(c=>c.tradable!==false) : data.CH;
+  const adj = buildAdj(CHpool);
   if(!adj[from]) return {err:N(from)+' 暂无接入的跨省通道'};
 
   const maxHops = input.maxHops;
@@ -797,7 +823,7 @@ function solve(input, data){
   if(!raw.length){
     return {err:'在 '+maxHops+' 段以内没有 '+N(from)+' 到 '+N(to)+' 的连通路径，请放宽跳数上限'};
   }
-  const truncated = raw.length >= ENUM_CAP;
+  const truncated = !!raw.hitCap;   // REQ-601：enumPaths 因 cap 提前返回时置位，消除「恰好满 800」歧义
 
   const maxDetour = input.maxDetour;
   const kept = raw.filter(p=>detourOf(p.nodes, p.edges, env.geo) <= maxDetour);
@@ -947,6 +973,13 @@ function renderCalc(){
         <option value="0" ${state.lossBearer==0?'selected':''}>送端承担</option>
       </select></label>
     </div>
+    <div class="row2">
+      <label class="f"><span>可交易性（REQ-203）</span><select id="i-tradable">
+        <option value="0" ${!state.tradableOnly?'selected':''}>全部通道 —— 含未确认联络线</option>
+        <option value="1" ${state.tradableOnly?'selected':''}>仅按已确认可交易通道</option>
+      </select></label>
+      <label class="f"><span>中长期占用 %（容量校验扣减）</span><input id="i-zyocc" type="number" value="${state.occPct||0}" step="5" min="0" max="90"></label>
+    </div>
     <details class="explain"><summary>政策口径与取值依据<em>区域电网费 · 网损承担方 · 自动带入值</em></summary><div class="inner">
     <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。口径二（过网费）与口径三（送端净收益）不含受端省内费用，因此不受「费用边界」开关影响。</p>
     <p class="note"><b>区域电网输电价格</b>是国网华北、华东、华中、东北、西北五个区域分部运营的区域共用输电网络（跨省 500kV / 1000kV 联络网架）的电量电价，由国家发改委核定（发改价格〔2026〕1077号附件2），随区域电网实际交易结算电量向购电方收取。按《省间电力现货交易规则》(2026年4月，发改办体改〔2026〕275号复函) 3.4.2(a)，经营主体购电时<b>统一计入买方节点所在区域电网的输电价格</b>，与路径是否跨区、是否走专项工程无关；发改价格规〔2020〕1441号第二条亦规定通过区域电网共用网络交易的用户购电价格应包括区域电网电量电价及损耗。本工具按买方所在区域计一次，路径过境其它区域的联络线段再按该区域计一次；区域电网自身网损率未公开，暂按 0 计。</p>
@@ -970,7 +1003,7 @@ function renderCalc(){
     // 三栏：左＝路线列表，中＝方案详情，右＝智能推荐（宽屏）；窄屏退为两栏、手机端纵向堆叠，布局由 .layout 的 CSS 决定
     out+='<div class="layout"><div class="col-side">'+renderRouteList(res)+'</div>'
        + '<div class="col-ai">'+renderAI(res)+'</div>'
-       + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+'</div></div>';
+       + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+renderSensitivity(res)+'</div></div>';
   } else {
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
@@ -1005,10 +1038,11 @@ function renderRouteList(res){
     <p class="note">按规则「优先选择节点间输电价格（含网损折价）最低的交易路径」，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
     <p class="note">「候选」是 ${state.maxHops} 段以内、${state.maxDetour>=9?'绕行度不限':'绕行度不超过 '+state.maxDetour+'x'}、不重复经过同一省的全部路径；「可行」是其中各段入口功率不超过通道容量且断面不越限者。单向送电直流只按核定方向计入，互济型工程（德宝、青藏、长南荆等）与省间联络线双向。放宽跳数与绕行会让候选数成倍增长，但排在前面的方案不受影响。</p>
     </div></details>
+    ${res.truncated?'<div class="warn">候选集已达枚举上限（800 条），排序仅基于已枚举部分，结果偏乐观——建议收紧跳数 / 绕行上限后重算。</div>':''}
     ${renderCompPicker(res)}
     <div class="seg small">
       ${[['A',costName],['B','过网费'],['C','送端收益']].map(([k,t])=>
-        `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')">${t}</button>`).join('')}
+        `<button class="${state.sortBy===k?'on':''}" onclick="setSort('${k}')" ${k==='C'?'title="口径三：受端价折回估算，非结算口径"':''}>${t}</button>`).join('')}
     </div>
     <div class="rlist">`;
   rows.forEach((r,i)=>{
@@ -1083,6 +1117,8 @@ function renderDetail(res,r){
   const comp=[['送端出清价',r.comp.gen],['送端省内段',r.comp.send],['跨省通道费',r.comp.trans],['区域电网费',r.comp.reg],
     ['网损折价',r.comp.loss],['受端上网环节线损',r.comp.inLoss],['受端输配电价',r.comp.net],['基金及附加',r.comp.fund]].filter(c=>c[1]>0);
   const tot=comp.reduce((s,c)=>s+c[1],0);
+  // REQ-201：未确认属于省间现货交易网络的交流联络线段
+  const ntSegs=r.edges.filter(e=>e.tradable===false);
 
   let out=`<div class="card">
     <div class="sec-title">方案 #${state.sel+1}<span class="hint">${r.feasible?'<span style="color:var(--teal)">容量与断面均通过</span>':'<span style="color:var(--red)">存在越限</span>'}</span></div>
@@ -1091,6 +1127,7 @@ function renderDetail(res,r){
       ${r.edges.map(e=>`<span class="ln ${e.type==='DC'?'dc':'ac'}">${esc(e.n)}</span>`).join('<span class="plus">+</span>')}
     </div>
     <div class="big">${fmt(r.landed)}<span class="u">元/MWh ${state.includeDstCost===false?'送到受端省界':'落地'}</span></div>
+    <p class="note" style="margin:-2px 0 8px">单时点测算：省间现货按 D 日 96 时段（每 15 分钟一段，S14 规则 4.1）组织出清，时段价差与通道功率爬坡未建模。</p>
     ${state.includeDstCost===false?'<p class="note" style="margin:-4px 0 8px">当前口径<b>不含</b>受端省网输配电价与政府性基金及附加，仅为送到受端省界的价格。</p>':''}
     <div class="bar">${comp.map((c,j)=>`<div style="width:${(c[1]/tot*100).toFixed(2)}%;background:${colors[j%6]}"></div>`).join('')}</div>
     <div class="lg">${comp.map((c,j)=>`<span><i style="background:${colors[j%6]}"></i>${c[0]} ${fmt(c[1])}</span>`).join('')}</div>
@@ -1103,10 +1140,13 @@ function renderDetail(res,r){
       <span class="chip">占用 ${fmt(r.maxLoad*100,0)}%</span>
       <span class="chip ${r.unverified?'warn':'ok'}">${r.unverified? r.unverified+' 段非核定':'全部发改委核定'}</span>
     </div>
-    ${!r.feasible?`<div class="warn bad" style="margin-top:11px">${r.overSeg.length?'通道超容：'+r.overSeg.map(s=>esc(s.name)+' '+fmt(s.mw,0)+'/'+s.cap+' MW').join('；')+'<br>':''}${r.secOver.length?'断面越限：'+r.secOver.map(h=>esc(h.sec.n)+' '+fmt(h.mw,0)+'/'+h.sec.limit+' MW').join('；'):''}</div>`:''}
+    <p class="note" style="margin:-2px 0 0">容量校验：${state.occPct>0?`按核定容量×(1−中长期占用 ${state.occPct}%) 扣减；`:''}非可用输电能力（ATC），未扣检修等其它占用，结果偏乐观。</p>
+    ${!r.feasible?`<div class="warn bad" style="margin-top:11px">${r.overSeg.length?'通道超容：'+r.overSeg.map(s=>esc(s.name)+' '+fmt(s.mw,0)+'/'+(s.effCap!=null?fmt(s.effCap,0):s.cap)+' MW').join('；')+'<br>':''}${r.secOver.length?'断面越限：'+r.secOver.map(h=>esc(h.sec.n)+' '+fmt(h.mw,0)+'/'+h.sec.limit+' MW').join('；'):''}</div>`:''}
+    ${ntSegs.length?`<div class="warn" style="margin-top:8px">⚠ 本方案含 <b>${ntSegs.length}</b> 段未确认属于省间现货交易网络的交流联络线（${esc(ntSegs.slice(0,3).map(e=>e.n).join('、'))}${ntSegs.length>3?' 等 '+ntSegs.length+' 段':''}），实际可交易性待交易中心确认。</div>`:''}
     <div class="row2" style="margin-top:12px">
       <button class="btn ghost" onclick="go('map')">在网架图上查看</button>
       <button class="btn ghost" onclick="document.getElementById('d-detail').open=true;document.getElementById('d-detail').scrollIntoView({behavior:'smooth'})">展开完整明细</button>
+      <button class="btn ghost" onclick="exportReport()">导出报告</button>
     </div>
   </div>`;
 
@@ -1131,7 +1171,7 @@ function renderDetail(res,r){
       out+=`<div class="tl-seg">
         <div class="tl-seg-line"></div>
         <div class="tl-seg-card">
-          <div class="tl-seg-hd"><span>${esc(e.n)}</span><span class="pill ${e.type==='DC'?'':'g'}">${esc(e.type)} ${esc(e.kv)}</span></div>
+          <div class="tl-seg-hd"><span>${esc(e.n)}</span><span class="pill ${e.type==='DC'?'':'g'}">${esc(e.type)} ${esc(e.kv)}</span>${e.tradable===false?'<span class="pill g" title="是否属于省间现货交易网络待交易中心确认">交易网络·待确认</span>':''}</div>
           <div class="tl-seg-g">
             <div>长度<b>${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}</b></div>
             <div>容量<b>${e.cap?e.cap+' MW':'待补'}</b></div>
@@ -1235,14 +1275,97 @@ function renderDetail(res,r){
       <div class="mc"><div class="l">过网费</div><div class="v">#${r.rankB}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankB===1?'最低':'高 '+fmt(r.channelOnly-res.byB[0].channelOnly)+' 元/MWh'}</div></div>
       <div class="mc"><div class="l">送端净收益</div><div class="v">#${r.rankC}</div><div style="font-size:10.5px;color:var(--ink3)">${r.rankC===1?'最高':'低 '+fmt(res.byC[0].senderNet-r.senderNet)+' 元/MWh'}</div></div>
     </div>
+    <p class="note" style="margin:4px 0 0">口径三（送端净收益）为<b>受端价折回估算，非结算口径</b>——实际卖方结算价按卖方节点边际价确定（S14 规则 4.3.3）。</p>
     <div class="formula" style="margin-top:12px">
       <div class="mono">${state.includeDstCost===false
         ? '送到省界价 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[送端省内段费 × 段前系数 + 通道输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价　—— 不含受端省内费用'
         : '落地成本 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[送端省内段费 × 段前系数 + 通道输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价 + 受端上网环节线损费用 + 受端省网输配电价 + 政府性基金及附加'}</div>
       <div class="txt">段前系数 = 1 / Π(该段及之后各段的通过率)，段后系数 = 1 / Π(之后各段的通过率)。输电费按段后电量计，来自《省间电力现货交易规则》(2026-04) 4.3.1 的折算公式；「含输电环节线损」的段在计费链里线损按 0 计（3.3.2）。</div>
     </div>
+
+    <div class="sub">结算机制<em>《省间电力现货交易规则》(2026-04) 原文摘录</em></div>
+    <div class="segblk">
+      <div class="src" style="padding-top:8px">
+        <b>① 买方支出（S14 7.2.2）</b>：「省间电力现货交易支出=日前现货交易执行电量（买方节点）×折算后日前出清价格（买方节点，含输电价格和网损折价）+日内现货交易执行电量（买方节点）×折算后日内出清价格（买方节点，含输电价格和网损折价）」<br>
+        <b>② 卖方结算（S14 4.3.3）</b>：「卖方节点最后一笔成交交易对中买方折算后价格与卖方申报价格的平均值为该卖方节点的边际价格」<br>
+        <b>③ 执行顺序（S14 1.2 / 7.2.2）</b>：在落实省间中长期交易基础上，利用省间通道剩余输电能力开展省间日前、日内电能量交易；结算按日前、日内现货交易执行电量与出清价格<br>
+        <b>④ 日清月结（S14 7.2.1）</b>：「省间电力现货交易结算采用日清月结方式，D+5 日进行市场化交易结果清分，生成日清算结果。电力交易机构于每月第 5 个工作日前向相关经营主体、电网企业出具上月结算依据（核对版）」
+      </div>
+    </div>
+    <p class="note" style="margin-top:6px">以上为规则原文摘录（在库原件 docs/原始文件/S14），供结算口径对照；本工具输出为测算与比选参考。</p>
   </div></details>`;
   return out;
+}
+
+/* ---------- REQ-403 价差敏感性：对当前省对按送端出清价扫描 ---------- */
+function renderSensitivity(res){
+  if(!res||!res.rows) return '';
+  const P0=100,P1=800,STEP=20; let prev=null; const rowsA=[];
+  for(let p=P0;p<=P1;p+=STEP){
+    const R=solve(Object.assign({},state,{pGen:p}), algoData());
+    const best=R.err?null:(R.bestA||R.rows[0]||null);
+    const flip=!!(best&&prev&&prev.nodes.join('>')!==best.nodes.join('>'));
+    rowsA.push({p,best,flip});
+    if(best) prev=best;
+  }
+  const trs=rowsA.map(pt=>`<tr${pt.flip?' style="background:var(--amber-bg)"':''}>
+    <td>${pt.p}</td>
+    <td>${pt.best?esc(pt.best.nodes.map(N).join(' → ')):'—'}</td>
+    <td>${pt.best?fmt(pt.best.landed):'—'}</td>
+    <td>${pt.best?fmt(pt.best.channelOnly):'—'}</td>
+    <td>${pt.flip?'★ 最优切换':''}</td></tr>`).join('');
+  return `<details class="adv boxed" id="d-sens"><summary>价差敏感性：送端出清价 ${P0}~${P1} 元/MWh 扫描（步长 ${STEP}）<em>★ 为最优路线切换点</em></summary><div class="inner">
+    <table><tr><th>出清价 元/MWh</th><th>最优路线（口径一）</th><th>落地成本</th><th>过网费</th><th>翻转</th></tr>${trs}</table>
+    <p class="note">纯前端复用 solve() 重算；金额为对应出清价下的口径一最优方案。切换点表示该价格档起另一条路线成为最优。</p>
+  </div></details>`;
+}
+
+/* ---------- REQ-404 方案报告导出（Markdown） ---------- */
+function exportReport(){
+  const res=state._res; if(!res||!res.rows||!res.rows.length) return;
+  const r=res.rows[Math.min(state.sel,res.rows.length-1)];
+  const L=[];
+  L.push('# 省间路径测算报告');
+  L.push('');
+  L.push('- 生成时间：'+new Date().toLocaleString('zh-CN'));
+  L.push('- priceVersion：'+PRICE_VERSION+'（BUILD_TIME '+BUILD_TIME+'）');
+  L.push('- 路径：'+r.nodes.map(N).join(' → ')+'（'+r.hops+' 段）');
+  L.push('- 电量：'+state.qty+' MWh / '+state.hours+' h　网损承担：'+(state.lossBearer==1?'受端':state.lossBearer==0.5?'两端各半':'送端'));
+  L.push('- 价格参数：出清价 '+state.pGen+' / 受端结算价 '+state.pDst+' / 受端输配电价 '+state.pNet+' / 基金及附加 '+state.fund+' 元/MWh');
+  L.push('- 口径：'+(state.includeDstCost===false?'只算到受端省界':'完整落地价')+'　区域电网费：'+(state.includeRegion?'计入':'不计入'));
+  L.push('');
+  L.push('## 三口径结果');
+  L.push('- 落地成本：'+fmt(r.landed)+' 元/MWh（全局排名 #'+r.rankA+'）');
+  L.push('- 过网费：'+fmt(r.channelOnly)+' 元/MWh（排名 #'+r.rankB+'）');
+  L.push('- 送端净收益：'+fmt(r.senderNet)+' 元/MWh（排名 #'+r.rankC+'，受端价折回估算，非结算口径）');
+  L.push('');
+  L.push('## 费用拆解（按 '+state.qty+' MWh 交付电量）');
+  L.push('| 费用项 | 单价 元/MWh | 总额 元 |');
+  L.push('|---|---|---|');
+  L.push('| 送端出清价购电 | '+fmt(r.comp.gen)+' | '+num(r.yuan.gen)+' |');
+  L.push('| 送端省内段（送出省输电价格） | '+fmt(r.comp.send)+' | '+num(r.yuan.send)+' |');
+  L.push('| 跨省专项工程输电费 | '+fmt(r.comp.trans)+' | '+num(r.yuan.trans)+' |');
+  if(r.comp.reg>0) L.push('| 区域电网输电费 | '+fmt(r.comp.reg)+' | '+num(r.yuan.reg)+' |');
+  L.push('| 网损折价 | '+fmt(r.comp.loss)+' | '+num(r.yuan.loss)+' |');
+  if(r.comp.inLoss>0) L.push('| 受端上网环节线损费用 | '+fmt(r.comp.inLoss)+' | '+num(r.yuan.inLoss)+' |');
+  if(r.comp.net>0) L.push('| 受端省网输配电价 | '+fmt(r.comp.net)+' | '+num(r.yuan.net)+' |');
+  if(r.comp.fund>0) L.push('| 政府性基金及附加 | '+fmt(r.comp.fund)+' | '+num(r.yuan.fund)+' |');
+  L.push('| **合计** | **'+fmt(r.landed)+'** | **'+num(r.yuan.total)+'** |');
+  L.push('');
+  L.push('## 逐段明细与溯源');
+  r.segs.forEach((s,i)=>{
+    const e=s.e;
+    L.push('');
+    L.push('### 第 '+(i+1)+' 段 '+N(s.a)+' → '+N(s.b)+'：'+e.n);
+    L.push('- 电压 '+e.kv+'　输电价 '+fmt(s.t)+' 元/MWh　线损率 '+fmt(e.loss,2)+'%　段入口 '+fmt(s.inMW,0)+' MW'+(e.cap?'　容量 '+e.cap+' MW':''));
+    L.push('- 文号：'+(e.doc||'无发改委文号')+(e.eff?'　生效 '+e.eff:''));
+    if(e.excerpt) L.push('- 原文摘录：'+e.excerpt);
+  });
+  L.push('');
+  L.push('> 本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。');
+  const blob=new Blob([L.join('\n')],{type:'text/markdown;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='省间测算报告-'+N(r.nodes[0])+'-'+N(r.nodes[r.nodes.length-1])+'.md'; a.click();
 }
 
 function doSolve(){
@@ -1264,6 +1387,9 @@ function readInputs(){
   state.lossBearer=+g('i-bearer').value;
   state.includeRegion=g('i-region').value==='1';
   state.includeDstCost=g('i-dstcost').value==='1';
+  state.tradableOnly=g('i-tradable')?.value==='1';   // REQ-203
+  const _o=+g('i-zyocc')?.value||0;                  // REQ-302
+  state.occPct=Math.min(90,Math.max(0,_o));
 }
 /* 送端省变化：只影响送端出清价 */
 function applyFromProv(){
@@ -1338,14 +1464,22 @@ function renderLibList(){
     if(flt==='region'&&c.tier!=='region') return false;
     if(flt==='capacity'&&c.priceType!=='capacity') return false;
     if(flt==='noCap'&&c.capActual!=null) return false;
+    if(flt==='incLoss'&&c.incLoss!==true) return false;                 // REQ-405
+    if(flt==='dd'&&!(c.bill||'').includes('落地端')) return false;      // REQ-405
     if(!q) return true;
     return (c.n+' '+(c.fn||'')+' '+N(c.from)+' '+N(c.to)+' '+(c.doc||'')+' '+(c.kv||'')+' '+(c.status||'')).toLowerCase().includes(q);
   };
   const list=CH.map((c,i)=>({c,i})).filter(x=>hit(x.c));
   if(!list.length) return '<p class="note">没有匹配的通道，试试其它关键词。</p>';
+  const TODAY=new Date().toISOString().slice(0,10);
+  const effBadge=c=>{                                   // REQ-402：价格时效徽标
+    const fut=(c.hist||[]).find(h=>/^\d{4}-\d{2}-\d{2}$/.test(h.effective_from||'') && h.effective_from>TODAY);
+    if(fut) return '<span class="lc-tag">即将生效 '+esc(fut.effective_from)+'</span>';
+    return c.doc?'<span class="lc-tag">现行 '+esc((c.doc||'').replace(/^.*(〔\d+〕\d+号).*$/,'$1'))+'</span>':'';
+  };
   return '<div class="libcount">匹配 '+list.length+' 条</div>'+list.map(({c,i})=>`<details class="libcard">
     <summary>
-      <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}</span>
+      <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}${effBadge(c)}${c.tradable===false?'<span class="lc-tag">交易网络·待确认</span>':''}</span>
       <span class="lc-p">${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
       <span class="lc-m">${esc(N(c.from))}→${esc(N(c.to))} · ${esc(c.kv)} · 线损 ${c.loss==null?'—':fmt(c.loss,2)+'%'} · ${c.capActual!=null?c.capActual+' MW':(c.cap!=null?'额定 '+c.cap+' MW':'容量待补')}</span>
       <span class="lc-b">${tierTag(c.tier)}</span>
@@ -1380,7 +1514,9 @@ function renderLibList(){
   </details>`).join('');
 }
 function renderLib(){
-  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`;
+  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`
+  // REQ-602：加载时用户选择「暂保留」旧版价格覆盖（state.js 置 _libStale），费率库必须给出常驻提示
+  +(state._libStale?`<div class="warn" style="margin-top:8px">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
   out+=`<div class="card tight seg">
     <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
     <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
@@ -1392,7 +1528,7 @@ function renderLib(){
       <div class="sec-title">通道费率<span class="hint">共 ${CH.length} 条</span></div>
       <input id="lib-q" type="search" placeholder="搜索通道名 / 别名 / 省份 / 文号…" value="${esc(state.libQ||'')}" oninput="libSearch(this.value)" style="margin-bottom:8px">
       <div class="seg small" style="flex-wrap:wrap">
-        ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量']].map(([k,t])=>
+        ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量'],['incLoss','含线损'],['dd','落地端计费']].map(([k,t])=>
           `<button class="${(state.libFilter||'all')===k?'on':''}" onclick="state.libFilter='${k}';state._libScr=window.scrollY;renderLib()">${t}</button>`).join('')}
       </div>
       <div id="lib-list">${renderLibList()}</div>
@@ -1508,13 +1644,24 @@ function drawMapQQ(){
   return true;
 }
 
+/* tdTried：同一密钥只自动尝试一次，失败后不再自动重发（每次渲染都重发会形成请求风暴，
+   触发天地图 CloudWAF 风控临时拦截）；点「应用密钥」或换密钥才重新尝试。 */
+let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
+/* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
+   冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
+const TD_COOLDOWN_MS=10*60*1000;
 function loadTianditu(cb){
+  tdAttempted=false;
   if(tdReady) return cb(true);
   if(typeof T!=='undefined'&&T.Map){ tdReady=true; return cb(true); }
   if(!state.tiandituKey) return cb(false);
+  const src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
+  if(tdTried===src) return cb(false);
+  tdTried=src; tdAttempted=true;
   const s=document.createElement('script');
-  s.src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
-  s.onload=()=>{ tdReady=true; cb(true); };
+  s.src=src;
+  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认 T 真正可用才算成功
+  s.onload=()=>{ tdReady=(typeof T!=='undefined'&&!!T.Map); cb(tdReady); };
   s.onerror=()=>cb(false);
   document.head.appendChild(s);
 }
@@ -1536,8 +1683,8 @@ function drawMapTD(){
         [s.e.stFrom,s.e.stTo].forEach(st=>{
           if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
           const p=ST[st];
-          tdMap.addOverLay(new T.Marker(new T.LngLat(p.lat,p.lng),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})}));
-          tdMap.addOverLay(new T.Label({text:p.n,position:new T.LngLat(p.lat,p.lng),offset:new T.Point(0,-14)}));
+          tdMap.addOverLay(new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})}));
+          tdMap.addOverLay(new T.Label({text:p.n,position:new T.LngLat(p.lng,p.lat),offset:new T.Point(0,-14)}));
         });
       });
     }
@@ -1556,7 +1703,9 @@ function showMapFallback(){
   fb.style.display='block';
   const r=state._res&&state._res.rows;
   let t='<div style="font-weight:600;color:#1F2328;margin-bottom:6px">底图未加载，已降级为网架清单</div>';
-  t+='<div style="margin-bottom:12px;line-height:1.7;font-size:11.5px">腾讯地图需运行环境支持；天地图需你自己的密钥。</div>';
+  t+='<div style="margin-bottom:12px;line-height:1.7;font-size:11.5px">'+(state.mapProvider==='td'
+    ?'天地图未加载：请确认密钥有效且网络可达 api.tianditu.gov.cn。'
+    :'腾讯地图需运行环境支持；天地图需你自己的密钥。')+'</div>';
   if(r&&r.length){
     const sel=Math.min(state.sel,r.length-1);
     t+=`<div style="font-weight:600;margin-bottom:6px">选中方案 #${sel+1}　${r[sel].nodes.map(N).join(' → ')}</div>`;
@@ -1687,6 +1836,7 @@ function renderMap(){
         <button class="btn ghost" onclick="applyTk()">应用密钥</button>
         <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
+      <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
       <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥仅存本机，代码中不内嵌任何有效密钥。</p>`;
   }
   if(mode==='svg'){
@@ -1728,12 +1878,71 @@ function renderMap(){
     } else if(mode==='qq'){
       if(!drawMapQQ()) showMapFallback();
     } else {
-      loadTianditu(ok=>{ if(ok){ if(!drawMapTD()) showMapFallback(); } else showMapFallback(); });
+      loadTianditu(ok=>{
+        if(ok&&drawMapTD()) tkMsg('ok');
+        else { showMapFallback(); tkMsg(ok?'drawfail':(state.tiandituKey?'loadfail':'empty')); }
+      });
     }
   },80);
 }
-function switchMap(p){ state.mapProvider=p; saveMap(); renderMap(); }
-function applyTk(){ const el=document.getElementById('i-tk'); state.tiandituKey=(el?el.value:'').trim(); tdReady=false; saveMap(); renderMap(); }
+function switchMap(p){
+  // REQ-703：不可用底图必须给出明确反馈，不得静默回退（真机 APK 以 file:// 加载，
+  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）
+  if(p==='qq'&&!isProxyEnv()){
+    if(confirm('腾讯地图需要本地代理环境，当前环境不可用。\n\n「确定」改用天地图（需自行填入密钥）；「取消」保持内置拓扑图。')){
+      state.mapProvider='td'; tdReady=false;
+    } else { state.mapProvider='svg'; }
+  } else state.mapProvider=p;
+  saveMap(); renderMap();
+}
+function applyTk(){
+  const el=document.getElementById('i-tk');
+  const k=(el?el.value:'').trim();
+  const changed=(k!==state.tiandituKey);
+  state.tiandituKey=k; tdReady=false; saveMap();
+  const cooling=(!changed && k && Date.now()<tdCooldownUntil);
+  if(changed){ tdTried=''; tdCooldownUntil=0; }
+  if(!cooling) tdTried='';
+  renderMap();
+  // 点击后立刻给出可见反馈（REQ-703 同理：不得静默无响应），随后的加载结果再覆盖；
+  // 冷却期内不发请求，80ms 后由 tkFailShow 给出剩余等待时间
+  if(!cooling) tkMsg(k?'loading':'empty');
+}
+/* 密钥应用的各阶段反馈：loading/ok/empty/loadfail/drawfail。
+   script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
+function tkMsg(kind){
+  const el=document.getElementById('tk-msg'); if(!el) return;
+  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; return; }
+  if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
+  if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
+  if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
+  tkFailDiagnose(el);
+}
+/* 加载失败二分诊断：script 标签拿不到状态码（天地图无 CORS 头），改用 no-cors fetch 探测——
+   fetch 成功＝服务端有响应（密钥/白名单/风控拒绝，ORB 拦掉了非 JS 内容）；
+   fetch 失败＝传输层不通（代理/防火墙/DNS）。 */
+function tkFailDiagnose(el){
+  if(typeof location!=='undefined'&&location.protocol==='file:'){
+    el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 API 加载失败。</span>file:// 直开发不出 Referer，请改为 http 访问。已降级为网架清单。';
+    return;
+  }
+  if(!tdAttempted){ tkFailShow(el, tdFailKind, false); return; }  // 本次未发新请求：沿用上次诊断，不额外探测
+  el.innerHTML='<span style="color:var(--ink2)">✗ 天地图 API 加载失败，正在区分原因…</span>';
+  let probe;
+  try{ probe=fetch('https://api.tianditu.gov.cn/api?v=4.0',{mode:'no-cors'}); }
+  catch(e){ probe=Promise.reject(e); }
+  const done=k=>{ if(document.getElementById('tk-msg')===el) tkFailShow(el, k, true); };
+  probe.then(()=>{ tdFailKind='server'; tdCooldownUntil=Date.now()+TD_COOLDOWN_MS; done('server'); },()=>{ tdFailKind='net'; done('net'); });
+}
+function tkFailShow(el, kind, fresh){
+  if(kind==='server'){
+    el.innerHTML = (!fresh && Date.now()<tdCooldownUntil)
+      ? '<span style="color:#B3261E;font-weight:600">✗ 天地图风控拦截仍未解除。</span>反复重试会延长封禁，请安静等待约 '+Math.ceil((tdCooldownUntil-Date.now())/60000)+' 分钟后再点「应用密钥」。已降级为网架清单。'
+      : '<span style="color:#B3261E;font-weight:600">✗ 天地图服务端拦截了本次请求（临时风控封禁）。</span>静置 30 分钟以上再点「应用密钥」重试一次，期间勿反复点击。已降级为网架清单。';
+    return;
+  }
+  el.innerHTML = '<span style="color:#B3261E;font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';
+}
 
 /* ===== src/app/ui/ai.js ===== */
 /* 智能推荐：把当前的可行路线与用户用自然语言写的额外考虑因素交给大模型，
@@ -1941,7 +2150,7 @@ document.addEventListener('change',e=>{
     state.sel=0; saveLast(); state._res=solve(state, algoData()); renderCalc();
     return;
   }
-  if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region','i-dstcost'].indexOf(id)>=0){
+  if(['i-qty','i-hours','i-hops','i-detour','i-degrade','i-pgen','i-pdst','i-pnet','i-fund','i-bearer','i-region','i-dstcost','i-tradable','i-zyocc'].indexOf(id)>=0){
     if(id==='i-degrade') state.degrade=+e.target.value;
     state.sel=0; doSolve();
   }

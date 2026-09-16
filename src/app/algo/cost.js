@@ -78,6 +78,8 @@ function evalPath(path, ctx, env){
   const LOSS=env.LOSS_OF||{};
 
   let trans=0, regTransit=0, sendTotal=0, dist=0, segLossMwh=0, vsCount=0;
+  // REQ-302：中长期占用——容量校验按 cap×(1−占用比例) 扣减（默认 0，不持久化）
+  const occFactor=1-(ctx.occPct||0)/100;
   const vset=new Set(), tset=new Set(), rset=new Set([env.REGION_OF[nodes[0]]]), stset=new Set();
   const segs=edges.map((e,i)=>{
     const q=1/sufT[i], qOut=1/sufT[i+1];        // 计费链
@@ -105,8 +107,8 @@ function evalPath(path, ctx, env){
       billLossMwh:toMWh(q-qOut),
       lossCost:toMWh(q-qOut)*ctx.pGen,
       feeYuan:qty*fee, rgYuan:qty*rg, sfYuan:qty*sf,
-      util:e.cap? toMW(qP)/e.cap : null,
-      headroom:e.cap? e.cap-toMW(qP) : null,
+      util:e.cap? toMW(qP)/(e.cap*occFactor) : null,
+      headroom:e.cap? e.cap*occFactor-toMW(qP) : null,
     };
   });
   const regBuyer = env.includeRegion ? regionRate(env, nodes[n]) : 0;   // 买方区域电量电价 × 交付电量
@@ -130,8 +132,8 @@ function evalPath(path, ctx, env){
   const cExportLoss=cGen*exportLossQty;
   const senderNet=ctx.pDst*D-(cSend+cTrans+cReg)*D-netLossTotal*(1-g)*D-cExportLoss*D;
   const deliverMW=qty/h;
-  const segLd=segs.map(s=>({name:s.e.n,mw:s.inMW,cap:s.e.cap,over:s.e.cap? s.inMW>s.e.cap : false}));
-  const maxLoad=Math.max(...segLd.map(s=>s.cap?s.mw/s.cap:0));
+  const segLd=segs.map(s=>({name:s.e.n,mw:s.inMW,cap:s.e.cap,effCap:s.e.cap?s.e.cap*occFactor:null,over:s.e.cap? s.inMW>s.e.cap*occFactor : false}));
+  const maxLoad=Math.max(...segLd.map(s=>s.cap&&occFactor?s.mw/(s.cap*occFactor):0));
   const overSeg=segLd.filter(s=>s.over);
   // 断面校验：同一断面内各段入口功率之和与该断面限额比对
   const secHits=[];
