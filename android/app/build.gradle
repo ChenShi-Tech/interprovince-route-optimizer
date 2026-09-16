@@ -10,8 +10,8 @@ android {
         applicationId "com.iproute.calc"
         minSdk 26          // 自适应图标 (adaptive icon) 需要 API 26+，覆盖 Android 8.0 (2017) 以上设备
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
     }
 
     buildTypes {
