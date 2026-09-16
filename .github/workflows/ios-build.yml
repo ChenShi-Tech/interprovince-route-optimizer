@@ -1,0 +1,43 @@
+name: ios-build
+# iOS 壳工程的 macOS 真机 xcodebuild 校验：证明 pbxproj 可被真实 Xcode 工具链解析、Swift 源码可编译。
+# 用模拟器 SDK + CODE_SIGNING_ALLOWED=NO，无需签名证书即可验证工程正确性。
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-build.yml'
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 工具链版本留档
+        run: |
+          xcodebuild -version
+          swift --version
+          xcodebuild -showsdks | grep -i iphonesimulator
+
+      - name: 解析工程（xcodebuild -list）
+        run: |
+          xcodebuild -list -project ios/app/InterprovinceRoute/InterprovinceRoute.xcodeproj
+
+      - name: 编译（模拟器 SDK，免签名）
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/app/InterprovinceRoute/InterprovinceRoute.xcodeproj \
+            -target InterprovinceRoute \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log | tail -30
+
+      - name: 产物确认
+        run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -path "*iphonesimulator*" -name "InterprovinceRoute.app" | head -1)
+          test -n "$APP" || { echo "未找到 .app 产物"; exit 1; }
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          ls "$APP"
+          test -f "$APP/index.html" && echo "✓ index.html 已打入 .app 包"
+          test -f "$APP/InterprovinceRoute" && echo "✓ 主二进制已产出"
