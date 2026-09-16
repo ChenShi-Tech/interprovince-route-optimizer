@@ -43,3 +43,10 @@ jobs:
           ls "$APP"
           test -f "$APP/index.html" && echo "✓ index.html 已打入 .app 包"
           test -f "$APP/InterprovinceRoute" && echo "✓ 主二进制已产出"
+
+      - name: 上传 .app 产物（模拟器版·免签名——仅模拟器可用，真机安装需另行签名）
+        uses: actions/upload-artifact@v4
+        with:
+          name: InterprovinceRoute-simulator-app
+          path: ${{ env.APP }}/
+          if-no-files-found: error
