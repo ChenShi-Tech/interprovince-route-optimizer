@@ -36,6 +36,7 @@ function solve(input, data){
     pGen: input.pGen, pDst: input.pDst, pNet: input.pNet, fund: input.fund,
     lossBearer: input.lossBearer, qty: input.qty, hours: input.hours,
     includeDstCost: input.includeDstCost !== false,
+    occPct: Math.min(90, Math.max(0, +input.occPct || 0)),   // REQ-302：中长期占用 %
   };
   const { from, to } = input;
   const N = data.name;
@@ -43,7 +44,9 @@ function solve(input, data){
   if(!data.PV[from] || !data.PV[to]) return {err:'省份代码无效'};
   if(from === to) return {err:'送端与受端不能相同'};
 
-  const adj = buildAdj(data.CH);
+  // REQ-203：仅按已确认可交易通道——开启后排除 tradable===false 的交流联络线
+  const CHpool = input.tradableOnly ? data.CH.filter(c=>c.tradable!==false) : data.CH;
+  const adj = buildAdj(CHpool);
   if(!adj[from]) return {err:N(from)+' 暂无接入的跨省通道'};
 
   const maxHops = input.maxHops;
@@ -52,7 +55,7 @@ function solve(input, data){
   if(!raw.length){
     return {err:'在 '+maxHops+' 段以内没有 '+N(from)+' 到 '+N(to)+' 的连通路径，请放宽跳数上限'};
   }
-  const truncated = raw.length >= ENUM_CAP;
+  const truncated = !!raw.hitCap;   // REQ-601：enumPaths 因 cap 提前返回时置位，消除「恰好满 800」歧义
 
   const maxDetour = input.maxDetour;
   const kept = raw.filter(p=>detourOf(p.nodes, p.edges, env.geo) <= maxDetour);
