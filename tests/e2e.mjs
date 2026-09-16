@@ -62,19 +62,22 @@ const tests = [
   },
   {
     id: 'F-02', section: '主流程', title: '切换省对自动重算+省级参数联动',
-    steps: '出发地下拉选「上海」，目的地下拉选「四川」',
-    expected: '选完即重算（无按钮）；受端输配电价/基金附加自动换成四川值；详情线路串含上海',
+    steps: '出发地下拉选「宁夏」，目的地下拉选「浙江」',
+    expected: '选完即重算（无按钮）；受端输配电价/基金附加自动换成浙江值；详情线路串以宁夏开头',
     async run(page, set) {
+      // 适配 main 通道方向重构（2026-09-15）：原「上海→四川」在方向性通道模型下
+      // 无连通路径（复奉直流单向 SC→SH），页面渲染错误卡片无 .hd-route；
+      // 改用灵绍直达省对 宁夏→浙江，断言语义不变。
       await page.goto(G, DCL);
       const before = await page.evaluate(() => state.pNet);
-      await page.selectOption('#i-from', 'SH');
-      await page.selectOption('#i-to', 'SC');
+      await page.selectOption('#i-from', 'NX');
+      await page.selectOption('#i-to', 'ZJ');
       const after = await page.evaluate(() => state.pNet);
-      const scNet = await page.evaluate(() => PV['SC'].net);
-      ok(after === scNet, `pNet 应联动为四川 ${scNet}，实际 ${after}`);
+      const dstNet = await page.evaluate(() => PV['ZJ'].net);
+      ok(after === dstNet, `pNet 应联动为浙江 ${dstNet}，实际 ${after}`);
       const hd = (await page.locator('.hd-route').first().innerText()).trim();
-      ok(hd.startsWith('上海'), `详情应以上海开头，实际「${hd.slice(0, 20)}」`);
-      set(`pNet ${before}→${after}（=四川参数 ${scNet}）；详情「${hd.slice(0, 40)}」`);
+      ok(hd.startsWith('宁夏'), `详情应以宁夏开头，实际「${hd.slice(0, 20)}」`);
+      set(`pNet ${before}→${after}（=浙江参数 ${dstNet}）；详情「${hd.slice(0, 40)}」`);
     },
   },
   {
@@ -130,7 +133,8 @@ const tests = [
     expected: 'comp.loss=0；费用拆解表不再出现「网损折价」行',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.locator('details.adv.boxed summary').first().click(); // 展开「价格与口径」折叠区
+      // 修正(2026-09-15)：价格与口径区默认即展开（calc.js:39 带 open），原写法先点 summary
+      // 反而把它折叠，#i-bearer 不可见导致 selectOption 超时。
       await page.selectOption('#i-bearer', '0');
       const loss = await page.evaluate(() => state._res.rows[0].comp.loss);
       ok(loss === 0, `comp.loss 应为 0，实际 ${loss}`);
@@ -189,7 +193,8 @@ const tests = [
       ok(await vis('v-map') && !(await vis('v-calc')), '网架图应显示且测算隐藏');
       await page.click('#t-lib');
       ok(await vis('v-lib') && !(await vis('v-map')), '费率库应显示且网架图隐藏');
-      ok(await page.locator('.lib-row').count() > 0, '通道列表未渲染');
+      // 修正(2026-09-15)：通道卡片类名已由 .lib-row 改为 .libcard（lib.js:54），原选择器恒为 0
+      ok(await page.locator('.libcard').count() > 0, '通道列表未渲染');
       await page.click('#t-calc');
       ok(await vis('v-calc') && !(await vis('v-lib')), '测算应显示且费率库隐藏');
       set('三个 Tab 均正确切换，section 的 hidden 属性与按钮高亮同步');
@@ -232,7 +237,10 @@ const tests = [
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-lib');
-      const inp = page.locator('.lib-row .lib-io input').first();
+      // 修正(2026-09-15)：输入框在 details.libcard 内，卡片默认收起，需先展开再 fill
+      const card = page.locator('.libcard').first();
+      await card.locator('summary').click();
+      const inp = card.locator('.lib-io input').first();
       await inp.fill('99');
       await inp.blur();
       ok(await page.evaluate(() => CH[0].t) === 99, 'CH[0].t 应为 99');
@@ -267,9 +275,10 @@ const tests = [
   {
     id: 'I-05', section: '交互', title: '「导出 JSON」触发浏览器下载',
     steps: '费率库 Tab 点「导出 JSON」',
-    expected: '触发下载，文件名 费率库-v2.json，内容含 70 条通道',
+    expected: '触发下载，文件名 费率库-v2.json，内容含全部通道（与 CH.length 一致，当前 64）',
     async run(page, set) {
       await page.goto(G, DCL);
+      const expectN = await page.evaluate(() => CH.length);
       await page.click('#t-lib');
       const [dl] = await Promise.all([
         page.waitForEvent('download', { timeout: 5000 }),
@@ -278,7 +287,9 @@ const tests = [
       const p = path.join(SHOTS, 'export-lib.json');
       await dl.saveAs(p);
       const j = JSON.parse(fs.readFileSync(p, 'utf8'));
-      ok(j.ch && j.ch.length === 70, `导出应含 70 条通道，实际 ${j.ch ? j.ch.length : 0}`);
+      // 适配 main 联络线清单修订（2026-09-15）：删除 6 条物理不存在的联络线，
+      // 通道数 70→64；断言改为与运行时 CH.length 动态对齐，避免数据变更再过期。
+      ok(j.ch && j.ch.length === expectN, `导出应含 ${expectN} 条通道，实际 ${j.ch ? j.ch.length : 0}`);
       set(`下载 ${dl.suggestedFilename()}；解析得通道 ${j.ch.length} 条、断面 ${j.sec.length} 个`);
     },
   },
@@ -410,16 +421,25 @@ const tests = [
   {
     id: 'E-01', section: '异常', title: '底图 SDK 加载失败→降级网架清单',
     steps: '拦截 map.qq.com 请求（模拟代理不可用/断网），打开网架图 Tab',
-    expected: '#fallback 显示「已降级为网架清单」+ 全部 70 条通道，无未捕获异常',
+    expected: '非代理环境：qq 底图被静默回退为内置拓扑图（map.js:240），#fallback 不显示、拓扑 SVG 正常渲染，无未捕获异常。⚠️ 此期望对应当前缺陷行为（REQ-703 记录），REQ-703 解冻实现后必须翻转本用例',
     async run(page, set) {
+      // 修正(2026-09-15)：原期望「#fallback 显示降级清单」只在代理环境成立。当前产品行为是
+      // 非代理环境把 qq 静默回退 svg（map.js:240，即 REQ-703 记录的缺陷），fallback 永不出现。
+      // 按 owner 决策改期望匹配现状，并保留上方 ⚠️ 注释作为 REQ-703 解冻后必须回来翻转的钩子。
       await page.context().route(/map\.qq\.com/, r => r.abort());
       await page.goto(G, DCL);
       await page.click('#t-map');
-      await page.waitForSelector('#fallback', { state: 'visible', timeout: 6000 });
-      const txt = await page.locator('#fallback').innerText();
-      ok(txt.includes('降级'), `应显示降级文案，实际「${txt.slice(0, 40)}」`);
-      ok(txt.includes('70'), '应列出全部 70 条通道');
-      set(`降级清单已显示（含 70 条通道）；script 加载失败被 initMap/showMapFallback 吸收`);
+      // renderMap 在 setTimeout(80ms) 后注入拓扑 SVG（map.js:291），需等待
+      await page.waitForSelector('#map-view svg', { timeout: 6000 });
+      const r = await page.evaluate(() => ({
+        provider: state.mapProvider,
+        svg: !!document.querySelector('#map-view svg'),
+        fbVisible: !!document.querySelector('#fallback') && getComputedStyle(document.querySelector('#fallback')).display !== 'none',
+      }));
+      ok(r.provider === 'svg', `非代理环境应回退为 svg 拓扑，实际 provider=${r.provider}`);
+      ok(r.svg, '拓扑 SVG 应已渲染');
+      ok(!r.fbVisible, '当前缺陷行为下 #fallback 不应显示（REQ-703 解冻后需翻转此断言）');
+      set(`provider=${r.provider}；拓扑 SVG 已渲染；#fallback 隐藏（对应 REQ-703 现状缺陷）`);
     },
   },
   {
@@ -497,15 +517,161 @@ const tests = [
     async run(page, set) { await respCheck(page, set, false); },
   },
   {
-    id: 'R-03', section: '响应式', title: '桌面 1440×900 居中',
+    id: 'R-03', section: '响应式', title: '桌面 1440×900 宽布局',
     steps: '以 1440×900 视口打开测算页',
-    expected: '#app 居中（左右留白）；无横向溢出',
+    expected: '#app 铺满视口（桌面宽布局 max-width 1480px）；无横向溢出',
     viewport: { width: 1440, height: 900 },
-    async run(page, set) { await respCheck(page, set, true); },
+    async run(page, set) { await respCheck(page, set, false, true); },
+  },
+
+  /* ================= PRD-IPRO-2026-001 ================= */
+  {
+    id: 'RQ-01', section: 'PRD-IPRO', title: 'REQ-101：incLoss 通道按落地端结算电量计费',
+    steps: '宁夏→浙江 取灵绍单段路线 segs[0].fee；四川→江西 取雅湖单段路线 segs[0].fee',
+    expected: 'REQ-101 新口径正确值：灵绍 48.80±0.01 / 雅湖 68.50±0.01（incLoss 通道输电费 = 通道电价 × 落地端电量 qOut，依据发改价格规〔2025〕1490号附件4第十八条）。已取代送端电量旧口径（50.97/72.87）',
+    async run(page, set) {
+      // REQ-101 新口径正确值：incLoss 通道 fee = e.t × 落地端电量 qOut，
+      // 依据发改价格规〔2025〕1490号附件4第十八条「专项工程实际输电量按落地端
+      // 结算电量进行统计确认」。单段路线 qOut=1，故 fee 恰等于通道电价本身。
+      const segFee = async (from, to, name) => {
+        await page.goto(G, DCL);
+        await page.selectOption('#i-from', from);
+        await page.selectOption('#i-to', to);
+        return page.evaluate(n => {
+          const row = state._res.rows.find(r => r.segs.length === 1 && r.segs[0].e.n === n);
+          return row ? row.segs[0].fee : null;
+        }, name);
+      };
+      const ls = await segFee('NX', 'ZJ', '灵绍直流');
+      ok(ls !== null, '宁夏→浙江 应存在灵绍单段路线');
+      ok(Math.abs(ls - 48.80) <= 0.01, `灵绍 fee 应为 48.80±0.01（落地端电量新口径），实际 ${ls}`);
+      const yh = await segFee('SC', 'JX', '雅湖直流');
+      ok(yh !== null, '四川→江西 应存在雅湖单段路线');
+      ok(Math.abs(yh - 68.50) <= 0.01, `雅湖 fee 应为 68.50±0.01（落地端电量新口径），实际 ${yh}`);
+      set(`灵绍 fee=${ls.toFixed(4)}、雅湖 fee=${yh.toFixed(4)}（落地端电量新口径，1490号第十八条）`);
+    },
+  },
+  {
+    id: 'RQ-603', section: 'PRD-IPRO', title: 'REQ-603+702：拓扑 SVG 五档视口防裁切/高度自适应',
+    steps: '五档视口（1920×1080 / 1366×768 / 900×700 / 390×844 / 375×667）打开网架图→拓扑图；再切天地图验证非 svg 模式容器高度行为不变',
+    expected: '各视口 svg.bottom ≤ 容器.bottom+1；被裁文字节点=0；容器高与绘制高之差 ≤ 容器高×10%；td 模式容器仍走固定高（aspect-ratio 不生效），修复前实测缺陷（1920 裁 126px/1366 裁 322px）已消除',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const VPS = [[1920, 1080], [1366, 768], [900, 700], [390, 844], [375, 667]];
+      const summary = [];
+      for (const [w, h] of VPS) {
+        await page.setViewportSize({ width: w, height: h });
+        await page.click('#t-calc');
+        await page.click('#t-map');
+        await page.waitForSelector('#map-view svg', { timeout: 6000 });
+        const r = await page.evaluate(() => {
+          const box = document.getElementById('map-view');
+          const svg = box.querySelector('svg');
+          const br = box.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+          let clipped = 0;
+          for (const t of svg.querySelectorAll('text')) {
+            const r = t.getBoundingClientRect();
+            if (r.left < br.left - .5 || r.right > br.right + .5 || r.top < br.top - .5 || r.bottom > br.bottom + .5) clipped++;
+          }
+          return { over: +(sr.bottom - br.bottom).toFixed(1), clipped, diffPct: +(Math.abs(br.height - sr.height) / br.height * 100).toFixed(1), boxH: Math.round(br.height) };
+        });
+        ok(r.over <= 1, `${w}x${h}：svg 底部超出容器 ${r.over}px（应 ≤1）`);
+        ok(r.clipped === 0, `${w}x${h}：被裁文字节点 ${r.clipped} 个（应=0）`);
+        ok(r.diffPct <= 10, `${w}x${h}：容器与绘制高差 ${r.diffPct}%（应 ≤10%）`);
+        summary.push(`${w}x${h} 容器高${r.boxH}px/越底${r.over}/裁字${r.clipped}/高差${r.diffPct}%`);
+      }
+      // qq/td 底图模式容器高度行为不变：td 模式不应带 aspect-ratio，仍吃固定高 calc(100vh-290px)
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.click('#t-calc');
+      await page.click('#t-map');
+      await page.locator('button', { hasText: '天地图' }).click();
+      await page.waitForTimeout(400);
+      const td = await page.evaluate(() => {
+        const cs = getComputedStyle(document.getElementById('map-view'));
+        return { aspect: cs.aspectRatio, h: parseFloat(cs.height) };
+      });
+      ok(td.aspect === 'auto', `td 模式容器不应有 aspect-ratio，实际 ${td.aspect}`);
+      ok(Math.abs(td.h - (844 - 290)) <= 2, `td 模式容器高应≈554px（844-290），实际 ${td.h}px`);
+      set(summary.join('；') + `；td 模式 aspect=${td.aspect} 高=${td.h}px（固定高不变）`);
+    },
+  },
+  {
+    id: 'RQ-701', section: 'PRD-IPRO', title: 'REQ-701：费率库省级参数三输入框对齐',
+    steps: '375×667 与 390×844 展开任一省级参数卡片，量三个 number 输入框 y 坐标；改出清价验证 setPv 取值逻辑',
+    expected: '三个输入框 y 坐标一致（≤1px）；标签完整可读无裁字截断；setPv 即时生效（PV 更新并触发重算），取值逻辑不变',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const out = [];
+      for (const [w, h] of [[375, 667], [390, 844]]) {
+        await page.setViewportSize({ width: w, height: h });
+        await page.click('#t-lib');
+        await page.locator('button', { hasText: /^省级参数/ }).click();
+        const card = page.locator('.libcard').first();
+        await card.locator('summary').click();
+        const r = await card.evaluate(() => {
+          const inputs = [...document.querySelectorAll('.libcard .lib-io input')].slice(0, 3);
+          const labels = [...document.querySelectorAll('.libcard .lib-io label')].slice(0, 3);
+          const ys = inputs.map(i => i.getBoundingClientRect().top);
+          const clip = el => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+          return { dys: ys.map(y => +(y - ys[0]).toFixed(2)), clipped: labels.filter(clip).map(l => l.innerText) };
+        });
+        ok(Math.max(...r.dys.map(Math.abs)) <= 1, `${w}x${h}：三输入框 y 相对差 ${JSON.stringify(r.dys)}（应 ≤1px）`);
+        ok(r.clipped.length === 0, `${w}x${h}：标签被裁截断 ${JSON.stringify(r.clipped)}`);
+        out.push(`${w}x${h} dy=${JSON.stringify(r.dys)}`);
+      }
+      // setPv 取值逻辑不变：改出清价 → PV 即时更新并重算（state._res 清空）
+      await page.locator('.libcard .lib-io input').first().fill('123');
+      await page.locator('.libcard .lib-io input').first().blur();
+      const sv = await page.evaluate(() => ({
+        pv: Object.values(PV).some(p => p.clear === 123),
+        resCleared: state._res === null,
+      }));
+      ok(sv.pv === true, `setPv 后 PV 中应有 clear=123（实际 ${sv.pv}）`);
+      ok(sv.resCleared === true, `setPv 应清空 _res 触发重算（实际 ${sv.resCleared}）`);
+      set(out.join('；') + `；setPv 生效 PV=${sv.pv} 重算=${sv.resCleared}`);
+    },
+  },
+  {
+    id: 'RQ-704', section: 'PRD-IPRO', title: 'REQ-704：测算②受端输配电价/基金输入框对齐',
+    steps: '375×667 与 390×844 量 #i-pnet 与 #i-fund 输入框 y 坐标；改 #i-pnet 后点「恢复核定值」验证 resetOne 还原',
+    expected: '两输入框 y 坐标一致（≤1px）；标签完整可读（「受端省网输配电价」「恢复核定值」无截断）；resetOne 点击后还原核定值（SC→JS 为 51.8）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const out = [];
+      for (const [w, h] of [[375, 667], [390, 844]]) {
+        await page.setViewportSize({ width: w, height: h });
+        await page.click('#t-calc');
+        const r = await page.evaluate(() => {
+          const pn = document.getElementById('i-pnet'), fd = document.getElementById('i-fund');
+          const spans = [pn, fd].map(i => i.closest('label.f').querySelector('span'));
+          const clip = el => el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+          return { dy: Math.abs(pn.getBoundingClientRect().top - fd.getBoundingClientRect().top),
+            txt: spans.map(s => s.textContent.replace(/\s+/g, ' ').trim()), clipped: spans.filter(clip).length };
+        });
+        ok(r.dy <= 1, `${w}x${h}：#i-pnet 与 #i-fund y 差 ${r.dy.toFixed(2)}px（应 ≤1px）`);
+        ok(r.txt[0].includes('受端省网输配电价') && r.txt[0].includes('恢复核定值'), `主标签应完整含「受端省网输配电价/恢复核定值」，实际「${r.txt[0]}」`);
+        ok(r.clipped === 0, `${w}x${h}：标签被裁截断 ${r.clipped} 处`);
+        out.push(`${w}x${h} dy=${r.dy.toFixed(2)}`);
+      }
+      // resetOne 行为不变：改值 → 点「恢复核定值」→ 还原为 PV[state.to].net
+      const rr = await page.evaluate(async () => {
+        const net0 = state.pNet;
+        const inp = document.getElementById('i-pnet');
+        inp.value = String(net0 + 1); inp.dispatchEvent(new Event('change', { bubbles: true }));
+        await new Promise(r => setTimeout(r, 100));
+        const changed = state.pNet;
+        inp.closest('label.f').querySelector('a').click();
+        await new Promise(r => setTimeout(r, 100));
+        return { net0, changed, restored: state.pNet, inputVal: parseFloat(document.getElementById('i-pnet').value) };
+      });
+      ok(rr.changed === rr.net0 + 1, `改值后 pNet 应为 ${rr.net0 + 1}，实际 ${rr.changed}`);
+      ok(rr.restored === rr.net0 && rr.inputVal === rr.net0, `resetOne 应还原 ${rr.net0}，实际 state=${rr.restored} 输入框=${rr.inputVal}`);
+      set(out.join('；') + `；resetOne ${rr.net0}→${rr.changed}→${rr.restored}`);
+    },
   },
 ];
 
-async function respCheck(page, set, expectCentered) {
+async function respCheck(page, set, expectCentered, desktop = false) {
   await page.goto(G, DCL);
   const m = await page.evaluate(() => {
     const de = document.documentElement, app = document.getElementById('app');
@@ -519,7 +685,14 @@ async function respCheck(page, set, expectCentered) {
     };
   });
   ok(m.overflow <= 1, `存在横向溢出 ${m.overflow}px`);
-  ok(m.appMax === '480px', `#app max-width 应 480px，实际 ${m.appMax}`);
+  if (desktop) {
+    // 修正(2026-09-15)：≥900px 进入桌面宽布局（template.html:210/270，#app max-width 1320/1480px），
+    // 原断言「max-width:480px 且 left>100 居中」是移动端限宽口径，与现版本桌面适配矛盾。
+    ok(['1320px', '1480px'].includes(m.appMax), `桌面端 #app max-width 应 1320/1480px，实际 ${m.appMax}`);
+    ok(m.left <= 1, `桌面宽布局 #app 应铺满视口，left=${m.left}`);
+  } else {
+    ok(m.appMax === '480px', `#app max-width 应 480px，实际 ${m.appMax}`);
+  }
   ok(m.nav && m.card, '底部导航/路线卡片缺失');
   if (expectCentered) ok(m.left > 100, `桌面端 #app 应居中留白，left=${m.left}`);
   set(`横向溢出 ${m.overflow}px；#app max-width=${m.appMax}，left=${Math.round(m.left)}px（视口 ${m.vw}px）；导航与卡片正常`);

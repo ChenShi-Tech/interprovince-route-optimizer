@@ -59,7 +59,7 @@ ok(fixedHash === ad.priceVersion, 'priceVersion 与 data/fixed-prices.json 当�
 
 console.log('\n══ 五、Web 端内联数据与手机端一致 ══');
 const html = fs.readFileSync(path.join(root, p.html), 'utf8');
-const m = html.match(/const DATA=(\{.*?\});\n/s);
+const m = html.match(/const DATA=(\{.*?\});\r?\n/s);
 ok(!!m, 'index.html 含内联 DATA');
 if (m) {
   const web = JSON.parse(m[1]);

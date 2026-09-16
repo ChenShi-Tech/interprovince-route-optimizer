@@ -12,3 +12,6 @@ npm-debug.log*
 
 # 临时输出
 *.tmp
+
+# 本地运行时（便携 Node、会话产物，不入库）
+.runtime/
