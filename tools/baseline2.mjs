@@ -127,7 +127,7 @@ const checks = [
   ['renderLib() 省级页', "libTab='pv';renderLib();", 'v-lib', ['输配电价', '待补']],
   ['renderLib() 断面页', "libTab='sec';renderLib();", 'v-lib', ['川渝断面', 'GSDF']],
   ['renderMap() 腾讯底图', "state.mapProvider='qq';renderMap();", 'v-map', ['腾讯地图', '天地图', 'map-view']],
-  ['renderMap() 天地图分支', "state.mapProvider='td';renderMap();", 'v-map', ['天地图密钥', 'console.tianditu.gov.cn']],
+  ['renderMap() 天地图分支', "state.mapProvider='td';renderMap();", 'v-map', ['天地图密钥', 'cloudcenter.tianditu.gov.cn']],
 ];
 for (const [name, call, target, expects] of checks) {
   try {

@@ -254,9 +254,9 @@ function renderMap(){
       <input id="i-tk" type="text" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里"></label>
       <div class="row2" style="margin-bottom:10px">
         <button class="btn ghost" onclick="applyTk()">应用密钥</button>
-        <button class="btn ghost" onclick="window.open('https://console.tianditu.gov.cn/api/key','_blank')">去申请密钥</button>
+        <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
-      <p class="note">天地图密钥需你在 <b>天地图开放平台</b> 注册后自行申请，应用类型选「浏览器端」，并把本页面域名加入白名单。密钥仅存本机，代码中不内嵌任何有效密钥。</p>`;
+      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥仅存本机，代码中不内嵌任何有效密钥。</p>`;
   }
   if(mode==='svg'){
     out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
