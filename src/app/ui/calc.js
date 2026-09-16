@@ -9,7 +9,7 @@ function renderCalc(){
   const _ae=(typeof document.activeElement!=='undefined')?document.activeElement:null;
   const _fid=(_ae&&_ae.id&&_host&&_host.contains&&_host.contains(_ae))?_ae.id:null;
   // REQ-401：重渲染前记住容量电费卡的展开态，重建后恢复（用户展开后不随任何重算收起）
-  const _capOpen=!!(_host&&_host.querySelector('#d-capfee[open]'));
+  const _capOpen=!!(_host&&_host.querySelector&&_host.querySelector('#d-capfee[open]'));
   let _caret=null;
   if(_fid){ try{ _caret=[_ae.selectionStart,_ae.selectionEnd]; }catch(e){ /* number 型输入无 selection */ } }
   const opt=(sel,ex)=>Object.keys(PV).map(k=>
