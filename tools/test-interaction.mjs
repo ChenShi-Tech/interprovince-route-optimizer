@@ -303,6 +303,58 @@ console.log('══ 八、智能推荐：只在可行路线里选、密钥缺失
   delete ctx.fetch;
 }
 
+console.log('══ 九、通道组件：把直流作为组件来筛方案 ══');
+{
+  G("state.from='SC';state.to='SH';state.maxHops=6;state.maxDetour=9;state.showBad=true;state.mustHave=[];state.sel=0;applyBothProv();state._res=solve(state, algoData());renderCalc();");
+  const base = G('state._res');
+  const av = base.availChannels || [];
+  ok(av.length > 0, `候选里共 ${av.length} 个通道组件可选`);
+  ok(av.every((c) => c.id && c.n && typeof c.count === 'number'), '每个组件都带 id / 名称 / 出现次数');
+  const firstAc = av.findIndex((c) => c.type !== 'DC' && c.type !== 'AC/DC');
+  ok(av.slice(0, firstAc < 0 ? av.length : firstAc).every((c) => c.type === 'DC' || c.type === 'AC/DC'),
+    '直流（专项工程）组件排在交流联络线之前');
+
+  const dc = av.find((c) => c.type === 'DC');
+  G(`state.mustHave=['${dc.id}'];state._res=solve(state, algoData());`);
+  const r1 = G('state._res');
+  ok(r1.rows.length > 0 && r1.rows.every((r) => r.edges.some((e) => e.id === dc.id)),
+    `选中「${dc.n}」后 ${r1.rows.length} 条方案全部包含该通道`);
+  ok((r1.availChannels || []).length === av.length, '筛选后组件清单仍是完整候选集（其余组件仍可点选、取消）');
+  ok(r1.totalAll === base.totalAll && r1.mustHave.length === 1, '区分「筛出条数」与「全量候选条数」');
+
+  const second = av.find((c) => c.id !== dc.id);
+  G(`state.mustHave=['${dc.id}','${second.id}'];state._res=solve(state, algoData());`);
+  const r2 = G('state._res');
+  ok(r2.err ? true : r2.rows.every((r) => [dc.id, second.id].every((id) => r.edges.some((e) => e.id === id))),
+    `两个组件同时选中时按「全部包含」筛选（${r2.err ? '无匹配并给出提示' : r2.rows.length + ' 条'}）`);
+
+  // 失效 id（旧存档里的组件在新数据里已不存在）应被忽略，而不是筛成空
+  G(`state.mustHave=['__nope__','${dc.id}'];state._res=solve(state, algoData());`);
+  const r4 = G('state._res');
+  ok(!r4.err && r4.mustHave.length === 1 && r4.rows.every((r) => r.edges.some((e) => e.id === dc.id)),
+    '存档里失效的组件 id 被忽略，不影响筛选结果');
+
+  // 全选必然无解：一条路径不可能包含所有通道 —— 检查空结果时是否仍能操作组件
+  const allIds = av.map((c) => c.id);
+  G(`state.mustHave=${JSON.stringify(allIds)};state._res=solve(state, algoData());renderCalc();`);
+  const r3 = G('state._res');
+  ok(!!r3.err && r3.availChannels && r3.availChannels.length > 0, '组件组合筛空时给出提示，仍返回组件清单');
+  const h3 = G("document.getElementById('v-calc').innerHTML");
+  ok(h3.includes('通道组件') && h3.includes('toggleComp(') && h3.includes('清除全部组件'),
+    '筛空时界面仍渲染组件选择器与「清除全部组件」，用户不会被困住');
+
+  // 交互：点选 / 清除
+  G('state.mustHave=[];state._res=solve(state, algoData());renderCalc();');
+  const h2 = G("document.getElementById('v-calc').innerHTML");
+  ok(h2.includes('通道组件') && h2.includes('chip dc') && h2.includes('必经组件'), '测算页渲染组件选择器，直流 chip 带 dc 样式');
+  ok(h2.includes('<details class="explain"><summary>候选与可行的定义'), '可选路线的口径说明默认折叠');
+  ok(h2.includes('<details class="explain"><summary>政策口径与取值依据'), '价格与口径的政策说明默认折叠');
+  G(`toggleComp('${dc.id}')`);
+  ok(G('state.mustHave.length') === 1 && G('state._res.mustHave.length') === 1, '点选组件后立即重算并带上筛选条件');
+  G('clearComp()');
+  ok(G('state.mustHave.length') === 0 && G('state._res.mustHave.length') === 0, '清除全部组件后恢复全量候选');
+}
+
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);
 if (fail) { console.log('未通过项：'); problems.forEach((p) => console.log('  · ' + p)); }
 process.exit(fail ? 1 : 0);

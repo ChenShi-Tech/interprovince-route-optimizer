@@ -523,6 +523,33 @@ const tests = [
     viewport: { width: 1440, height: 900 },
     async run(page, set) { await respCheck(page, set, false, true); },
   },
+  {
+    id: 'R-04', section: '响应式', title: '两栏 900–1279px：智能推荐与方案之间不得留大片空白',
+    steps: '以 900 / 1100 / 1279 视口打开测算页，量 .col-ai 底边到 .col-main 顶边的垂直距离',
+    expected: '均落在两栏布局（348px + 剩余）；该距离等于正常 grid gap，而不是被左栏撑成整屏高',
+    viewport: { width: 1100, height: 900 },
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const out = [];
+      for (const w of [900, 1100, 1279]) {
+        await page.setViewportSize({ width: w, height: 900 });
+        await page.waitForSelector('.layout', { timeout: 15000 });
+        const m = await page.evaluate(() => {
+          const box = (s) => document.querySelector(s).getBoundingClientRect();
+          const cs = getComputedStyle(document.querySelector('.layout'));
+          return { cols: cs.gridTemplateColumns.split(' ').length, gap: cs.gap,
+            d: box('.col-main').top - box('.col-ai').bottom,
+            sideCross: getComputedStyle(document.querySelector('.col-side')).gridRow };
+        });
+        // 回归背景（2026-09-16 修复）：左栏 sticky + max-height 只占 grid-row:1 时会把第一行撑满整屏，
+        // 而智能推荐也在第一行 —— 推荐卡片下方于是空出几百像素，方案详情被推到屏幕外。
+        ok(m.cols === 2, `${w}px 应为两栏布局，实际 ${m.cols} 栏`);
+        ok(m.d >= -2 && m.d <= 40, `${w}px：推荐底边到方案顶边应等于正常行距，实际 ${m.d.toFixed(1)}px（gap ${m.gap}）`);
+        out.push(`${w}px gap=${m.d.toFixed(1)}px`);
+      }
+      set(out.join('；'));
+    },
+  },
 
   /* ================= PRD-IPRO-2026-001 ================= */
   {
@@ -667,6 +694,58 @@ const tests = [
       ok(rr.changed === rr.net0 + 1, `改值后 pNet 应为 ${rr.net0 + 1}，实际 ${rr.changed}`);
       ok(rr.restored === rr.net0 && rr.inputVal === rr.net0, `resetOne 应还原 ${rr.net0}，实际 state=${rr.restored} 输入框=${rr.inputVal}`);
       set(out.join('；') + `；resetOne ${rr.net0}→${rr.changed}→${rr.restored}`);
+    },
+  },
+  {
+    id: 'RQ-705', section: 'PRD-IPRO', title: 'REQ-705：通道组件（直流）作为必经组件筛方案 + 说明文字可折叠',
+    steps: '检查 details.explain 默认收起；放宽跳数/绕行让候选含多条直流；点选一个直流组件，再清除',
+    expected: '长段说明默认收起、点击可展开；直流组件排在最前；点选后列表只保留含该通道的方案，且组件清单仍为完整候选集（其余组件仍可取消）；清除后恢复全量',
+    viewport: { width: 1440, height: 900 },
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.layout', { timeout: 15000 });
+      // 长段解释文字默认收起（原来是整段摊在卡片里）
+      const ex = await page.evaluate(() => [...document.querySelectorAll('details.explain')]
+        .map((d) => ({ open: d.open, len: (d.querySelector('.inner') || {}).textContent.trim().length })));
+      ok(ex.length >= 2, `应有多处可折叠说明，实际 ${ex.length} 处`);
+      ok(ex.every((d) => !d.open), '说明区应默认收起');
+      ok(ex.every((d) => d.len > 60), '折叠区应有实际内容，不是空壳');
+      await page.click('details.explain > summary');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.querySelector('details.explain').open), '点击标题应能展开');
+
+      // 放宽条件，让候选里出现多条直流
+      await page.evaluate(() => { state.from = 'SC'; state.to = 'SH'; state.maxHops = 6; state.maxDetour = 9;
+        state.showBad = true; state.mustHave = []; state.sel = 0; applyBothProv(); doSolve(); });
+      await page.waitForTimeout(200);
+      const b = await page.evaluate(() => {
+        const av = state._res.availChannels || [];
+        const firstAc = av.findIndex((c) => c.type !== 'DC' && c.type !== 'AC/DC');
+        return { n: av.length, chips: document.querySelectorAll('.comps button.chip').length,
+          dcFirst: av.slice(0, firstAc < 0 ? av.length : firstAc).every((c) => c.type === 'DC' || c.type === 'AC/DC'),
+          rows: state._res.rows.length };
+      });
+      ok(b.n > 0 && b.chips === b.n, `组件选择器应列出全部可选通道（${b.chips}/${b.n}）`);
+      ok(b.dcFirst, '直流（专项工程）组件应排在最前');
+
+      await page.click('.comps button.chip');
+      await page.waitForTimeout(250);
+      const a = await page.evaluate(() => ({
+        must: state.mustHave.slice(), rows: (state._res.rows || []).length,
+        allOk: (state._res.rows || []).every((r) => state.mustHave.every((id) => r.edges.some((e) => e.id === id))),
+        avail: (state._res.availChannels || []).length,
+        hint: (document.querySelector('.sec-title .hint') || {}).textContent || '',
+      }));
+      ok(a.must.length === 1, `点选后应记为必经组件，实际 ${a.must.length} 个`);
+      ok(a.rows > 0 && a.allOk, `筛出的 ${a.rows} 条方案应全部包含该组件`);
+      ok(a.avail === b.n, `组件清单不得被筛选收窄（${a.avail}/${b.n}），否则其余组件再也点不回来`);
+      ok(/按 1 个组件筛选/.test(a.hint), `标题应提示已按组件筛选，实际「${a.hint.trim()}」`);
+
+      await page.click('button:has-text("清除全部组件")');
+      await page.waitForTimeout(250);
+      const c = await page.evaluate(() => ({ must: state.mustHave.length, rows: state._res.rows.length }));
+      ok(c.must === 0 && c.rows === b.rows, `清除后应恢复全量 ${b.rows} 条候选，实际 ${c.rows} 条`);
+      set(`说明区 ${ex.length} 处默认收起；组件 ${b.chips} 个（直流优先）；筛出 ${a.rows}/${b.rows} 条；清除后恢复`);
     },
   },
 ];
