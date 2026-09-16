@@ -62,19 +62,22 @@ const tests = [
   },
   {
     id: 'F-02', section: '主流程', title: '切换省对自动重算+省级参数联动',
-    steps: '出发地下拉选「上海」，目的地下拉选「四川」',
-    expected: '选完即重算（无按钮）；受端输配电价/基金附加自动换成四川值；详情线路串含上海',
+    steps: '出发地下拉选「宁夏」，目的地下拉选「浙江」',
+    expected: '选完即重算（无按钮）；受端输配电价/基金附加自动换成浙江值；详情线路串以宁夏开头',
     async run(page, set) {
+      // 适配 main 通道方向重构（2026-09-15）：原「上海→四川」在方向性通道模型下
+      // 无连通路径（复奉直流单向 SC→SH），页面渲染错误卡片无 .hd-route；
+      // 改用灵绍直达省对 宁夏→浙江，断言语义不变。
       await page.goto(G, DCL);
       const before = await page.evaluate(() => state.pNet);
-      await page.selectOption('#i-from', 'SH');
-      await page.selectOption('#i-to', 'SC');
+      await page.selectOption('#i-from', 'NX');
+      await page.selectOption('#i-to', 'ZJ');
       const after = await page.evaluate(() => state.pNet);
-      const scNet = await page.evaluate(() => PV['SC'].net);
-      ok(after === scNet, `pNet 应联动为四川 ${scNet}，实际 ${after}`);
+      const dstNet = await page.evaluate(() => PV['ZJ'].net);
+      ok(after === dstNet, `pNet 应联动为浙江 ${dstNet}，实际 ${after}`);
       const hd = (await page.locator('.hd-route').first().innerText()).trim();
-      ok(hd.startsWith('上海'), `详情应以上海开头，实际「${hd.slice(0, 20)}」`);
-      set(`pNet ${before}→${after}（=四川参数 ${scNet}）；详情「${hd.slice(0, 40)}」`);
+      ok(hd.startsWith('宁夏'), `详情应以宁夏开头，实际「${hd.slice(0, 20)}」`);
+      set(`pNet ${before}→${after}（=浙江参数 ${dstNet}）；详情「${hd.slice(0, 40)}」`);
     },
   },
   {
@@ -272,9 +275,10 @@ const tests = [
   {
     id: 'I-05', section: '交互', title: '「导出 JSON」触发浏览器下载',
     steps: '费率库 Tab 点「导出 JSON」',
-    expected: '触发下载，文件名 费率库-v2.json，内容含 70 条通道',
+    expected: '触发下载，文件名 费率库-v2.json，内容含全部通道（与 CH.length 一致，当前 64）',
     async run(page, set) {
       await page.goto(G, DCL);
+      const expectN = await page.evaluate(() => CH.length);
       await page.click('#t-lib');
       const [dl] = await Promise.all([
         page.waitForEvent('download', { timeout: 5000 }),
@@ -283,7 +287,9 @@ const tests = [
       const p = path.join(SHOTS, 'export-lib.json');
       await dl.saveAs(p);
       const j = JSON.parse(fs.readFileSync(p, 'utf8'));
-      ok(j.ch && j.ch.length === 70, `导出应含 70 条通道，实际 ${j.ch ? j.ch.length : 0}`);
+      // 适配 main 联络线清单修订（2026-09-15）：删除 6 条物理不存在的联络线，
+      // 通道数 70→64；断言改为与运行时 CH.length 动态对齐，避免数据变更再过期。
+      ok(j.ch && j.ch.length === expectN, `导出应含 ${expectN} 条通道，实际 ${j.ch ? j.ch.length : 0}`);
       set(`下载 ${dl.suggestedFilename()}；解析得通道 ${j.ch.length} 条、断面 ${j.sec.length} 个`);
     },
   },
