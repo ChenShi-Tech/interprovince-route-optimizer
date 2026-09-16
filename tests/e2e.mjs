@@ -697,6 +697,57 @@ const tests = [
     },
   },
   {
+    id: 'RQ-401', section: 'PRD-IPRO', title: 'REQ-401：容量电费测算器（折叠卡 · 电压档选择 · 不参与路径比选）',
+    steps: '打开测算页展开「容量电费测算」卡：断言默认档预选=1~10（20）千伏、P5 固定标注存在；容量方式输入 1000 kVA + 年用电量 12000 MWh → 年费用/分摊断言；切电压档 → 输出随之变化；年电量 0 → 分摊显示 —；西藏 → 暂无数据（负向）',
+    expected: '默认预选档规则（1~10（20）千伏，无此档取第一档）生效；北京按容量 33 元/kVA·月×1000×12=396,000 元/年、分摊 33.00 元/MWh；切 220千伏及以上档 → 336,000 元/年；P5 固定标注「容量电费与电量来自省内或省外无关，不参与路径比选」含发改价格〔2020〕1441号 / 〔2023〕532号；年电量 0 显示 — 不出 Infinity；西藏显示「暂无数据」',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const card = page.locator('#d-capfee');
+      ok(await card.getAttribute('open') === null, '容量电费卡默认应收起（独立折叠卡）');
+      await card.locator('summary').click();
+      ok(await card.getAttribute('open') !== null, '点击 summary 应展开');
+      // P5 固定标注（政策口径声明，含文号）
+      const note = await card.locator('.cap-note').innerText();
+      ok(note.includes('容量电费与电量来自省内或省外无关，不参与路径比选'), `P5 固定标注缺失：「${note.slice(0, 40)}」`);
+      ok(note.includes('1441') && note.includes('532'), 'P5 标注应含发改价格〔2020〕1441号 / 〔2023〕532号');
+      // 默认档预选：受端 JS(江苏) 默认档 = 1~10（20）千伏
+      ok(await page.locator('#i-captier').inputValue() === '1~10（20）千伏', `默认预选档应为 1~10（20）千伏，实际「${await page.locator('#i-captier').inputValue()}」`);
+      // 手算比对：北京按容量 33×1000×12=396000；按需量 52×1000×12=624000（默认档月单价）
+      const run = async (prov, mode, val, qty) => page.evaluate(([p, m, v, q]) => {
+        state.capProv = p; state.capTier = null; setCapMode(m);
+        const iv = document.getElementById('i-capval'); iv.value = String(v); iv.dispatchEvent(new Event('change', { bubbles: true }));
+        const iq = document.getElementById('i-capqty'); iq.value = String(q); iq.dispatchEvent(new Event('change', { bubbles: true }));
+        const mc = document.querySelectorAll('#d-capfee .mc .v');
+        return { annual: mc[1].textContent.trim(), per: mc[2].textContent.trim() };
+      }, [prov, mode, val, qty]);
+      let r = await run('BJ', 'cap', 1000, 12000);
+      ok(r.annual.replace(/,/g, '') === '396000元/年', `BJ 按容量年费用应 396,000 元/年，实际「${r.annual}」`);
+      ok(r.per === '33.00元/MWh', `BJ 按容量分摊应 33.00 元/MWh，实际「${r.per}」`);
+      r = await run('BJ', 'demand', 1000, 12000);
+      ok(r.annual.replace(/,/g, '') === '624000元/年', `BJ 按需量年费用应 624,000 元/年，实际「${r.annual}」`);
+      ok(r.per === '52.00元/MWh', `BJ 按需量分摊应 52.00 元/MWh，实际「${r.per}」`);
+      // 切档联动：220千伏及以上 容量 28 → 336,000
+      await page.evaluate(() => { state.capProv = 'BJ'; state.capTier = null; setCapMode('cap'); });
+      await page.selectOption('#i-captier', '220千伏及以上');
+      r = await page.evaluate(() => ({
+        annual: document.querySelectorAll('#d-capfee .mc .v')[1].textContent.trim(),
+        tier: document.getElementById('i-captier').value,
+      }));
+      ok(r.annual.replace(/,/g, '') === '336000元/年', `切 220千伏及以上档后年费用应 336,000 元/年，实际「${r.annual}」`);
+      // 负向 1：年电量 0 → 分摊显示 —（不报错、不出 Infinity）
+      await page.evaluate(() => {
+        const iq = document.getElementById('i-capqty'); iq.value = '0'; iq.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      const per0 = await page.evaluate(() => document.querySelectorAll('#d-capfee .mc .v')[2].textContent.trim());
+      ok(per0 === '—元/MWh' && !per0.includes('Infinity'), `年电量 0 时分摊应显示 —，实际「${per0}」`);
+      // 负向 2：西藏（缺省省）→ 暂无数据，不补估
+      await page.evaluate(() => { state.capProv = 'XZ'; renderCalc(); });
+      const xzTxt = await card.locator('.warn').innerText();
+      ok(xzTxt.includes('暂无数据'), `西藏应显示暂无数据，实际「${xzTxt.slice(0, 40)}」`);
+      set(`默认档预选=1~10（20）千伏；BJ 容量 396,000/33.00、需量 624,000/52.00；切档 336,000；年电量0→—；XZ→暂无数据`);
+    },
+  },
+  {
     id: 'RQ-705', section: 'PRD-IPRO', title: 'REQ-705：通道组件（直流）作为必经组件筛方案 + 说明文字可折叠',
     steps: '检查 details.explain 默认收起；放宽跳数/绕行让候选含多条直流；点选一个直流组件，再清除',
     expected: '长段说明默认收起、点击可展开；直流组件排在最前；点选后列表只保留含该通道的方案，且组件清单仍为完整候选集（其余组件仍可取消）；清除后恢复全量',
