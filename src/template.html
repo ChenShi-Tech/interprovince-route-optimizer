@@ -55,6 +55,10 @@ input:disabled{cursor:not-allowed}
 label.f.off span{color:var(--ink3)}
 label.f.off input{background:var(--gray-bg);color:var(--ink3)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* REQ-701+704 统一对齐策略：列内改 flex 纵列并 justify-content:flex-end，
+   输入框在等高的 grid 列内底线对齐——标签允许自由换行（不截断），换行不再顶歪输入框 */
+.row2>label.f{display:flex;flex-direction:column;justify-content:flex-end;margin-bottom:0}
+.row2:has(>label.f){margin-bottom:11px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .btn{width:100%;font-family:inherit;font-size:15px;font-weight:600;color:#fff;background:var(--blue);border:0;border-radius:10px;padding:13px;cursor:pointer;letter-spacing:.2px}
 .btn:active{opacity:.85}
@@ -110,6 +114,7 @@ td b{font-weight:600}
 .lib-nm{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 .lib-nm em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:999px;white-space:nowrap}
 .lib-io{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:7px}
+.lib-io>div{display:flex;flex-direction:column;justify-content:flex-end}
 .lib-io label{font-size:10.5px;color:var(--ink3);display:block;margin-bottom:3px}
 .lib-io input{padding:6px 8px;font-size:12.5px;border-radius:7px}
 .lib-src{font-size:10.5px;color:var(--ink3);margin-top:6px;line-height:1.5}
@@ -118,6 +123,9 @@ td b{font-weight:600}
 .prow .pn{font-size:12px;font-weight:500}
 .prow input{padding:5px 6px;font-size:12px;border-radius:6px}
 #map-view,#fallback{width:100%;height:calc(100vh - 290px);min-height:320px;border-radius:var(--r);overflow:hidden;background:#EDEFEF;border:.5px solid var(--line)}
+/* REQ-603+702：svg 拓扑模式容器高度随绘制纵横比自适应（viewBox 660×430），
+   仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则 */
+#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430}
 #fallback{display:none;padding:16px;font-size:12px;color:var(--ink2);overflow:auto}
 .empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
 .mc{background:var(--gray-bg);border-radius:9px;padding:8px 10px}
