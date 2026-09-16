@@ -32,23 +32,12 @@ header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdro
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
-/* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
-   声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
-main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
-/* 末尾卡片的外边距属于尾部留白，由页脚间距接管。
-   深层选择器：各 Tab 内容末尾的 margin 在任意嵌套层泄漏会导致
-   「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），
-   统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
-main section>:last-child,main section :last-child{margin-bottom:0}
-/* z-index 3000：地图图层（含 canvas/WebView 层叠上下文）不得盖住固定导航（底栏遮挡修复） */
+main{flex:1;padding:14px 16px 96px;overflow-x:hidden}
 nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
 nav .ic{width:20px;height:20px;display:block}
 nav button.on .ic path,nav button.on .ic circle,nav button.on .ic rect{stroke:var(--blue)}
-/* REQ-307：页脚定位声明，三 Tab 共用。底部内边距 = 固定导航条高度(≈64px) + 4px 呼吸隙，
-   含 safe-area 适配（与 nav 的 max(6px,env(safe-area-inset-bottom)) 对应） */
-.disclaim{padding:6px 16px calc(68px + env(safe-area-inset-bottom));text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6}
 .card{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
 .card.tight{padding:12px}
 .sec-title{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -296,10 +285,7 @@ details.adv.boxed summary{font-size:12.5px}
     border-bottom:2px solid transparent;border-radius:0}
   nav button.on{color:var(--blue);border-bottom-color:var(--blue);background:none}
   nav .ic{width:16px;height:16px}
-  main{order:2;padding:16px 24px 14px}
-  /* 桌面端导航条在页头下方（非固定悬浮），页脚沉到文档底部即可，无需大让位内边距；
-     用 footer.disclaim 提高特异性，压过移动端 .disclaim 的导航让位内边距 */
-  footer.disclaim{order:3;padding:6px 24px 10px}
+  main{order:2;padding:16px 24px 56px}
 
   .topbar{display:grid;grid-template-columns:minmax(340px,460px) minmax(0,1fr);gap:12px;
     align-items:stretch;margin-bottom:10px}
@@ -378,8 +364,8 @@ details.adv.boxed summary{font-size:12.5px}
     <section id="v-map" hidden></section>
     <section id="v-lib" hidden></section>
   </main>
-  <!-- REQ-307：页脚定位声明，三 Tab 共用；样式见 .disclaim（移动端贴固定导航条上方，桌面端沉底） -->
-  <footer class="disclaim">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
+  <!-- REQ-307：页脚定位声明，三 Tab 共用 -->
+  <footer style="padding:10px 16px 4px;text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
@@ -396,7 +382,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-16 10:51';
+const BUILD_TIME='2026-09-16 10:21';
 const PRICE_VERSION='818c4593d4b15f51';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -1737,38 +1723,18 @@ let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
 /* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
    冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
 const TD_COOLDOWN_MS=10*60*1000;
-/* 天地图 4.0 的主脚本只同步注册核心类，叠加物类是随后异步注册的——实测 onload 触发时
-   T.Map/T.Marker/T.Polyline 已就绪，但 **T.Label 仍为 undefined，约 200ms 后才注册**。
-   只判断 T.Map 就会立刻开始绘制，撞上「T.Label is not a constructor」被 catch 吞掉，
-   界面误报成「天地图 API 兼容性问题」而降级（2026-09-16 实测的真实故障）。
-   因此必须等绘制真正用到的类齐备；下面这份清单与 drawMapTD 里用到的 T.* 一一对应。 */
-const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
-const TD_WAIT_MS=5000, TD_POLL_MS=100;
-function tdApiReady(){
-  if(typeof T==='undefined') return false;
-  return TD_REQUIRED.every(k=>typeof T[k]==='function');
-}
 function loadTianditu(cb){
   tdAttempted=false;
   if(tdReady) return cb(true);
-  if(tdApiReady()){ tdReady=true; return cb(true); }
+  if(typeof T!=='undefined'&&T.Map){ tdReady=true; return cb(true); }
   if(!state.tiandituKey) return cb(false);
   const src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
   if(tdTried===src) return cb(false);
   tdTried=src; tdAttempted=true;
   const s=document.createElement('script');
   s.src=src;
-  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认所需类真正可用才算成功。
-  // onload 时叠加物类可能尚未注册，故轮询等待而非一次判定（见上方 TD_REQUIRED 说明）；
-  // 超时单独回一句 why='incomplete'，避免被误诊成网络或风控问题。
-  let waited=0;
-  const poll=()=>{
-    if(tdApiReady()){ tdReady=true; return cb(true); }
-    waited+=TD_POLL_MS;
-    if(waited>=TD_WAIT_MS){ tdReady=false; return cb(false,'incomplete'); }
-    setTimeout(poll,TD_POLL_MS);
-  };
-  s.onload=poll;
+  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认 T 真正可用才算成功
+  s.onload=()=>{ tdReady=(typeof T!=='undefined'&&!!T.Map); cb(tdReady); };
   s.onerror=()=>cb(false);
   document.head.appendChild(s);
 }
@@ -1985,9 +1951,9 @@ function renderMap(){
     } else if(mode==='qq'){
       if(!drawMapQQ()) showMapFallback();
     } else {
-      loadTianditu((ok,why)=>{
+      loadTianditu(ok=>{
         if(ok&&drawMapTD()) tkMsg('ok');
-        else { showMapFallback(); tkMsg(ok?'drawfail':(why||(state.tiandituKey?'loadfail':'empty'))); }
+        else { showMapFallback(); tkMsg(ok?'drawfail':(state.tiandituKey?'loadfail':'empty')); }
       });
     }
   },80);
@@ -2023,7 +1989,6 @@ function tkMsg(kind){
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
   if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
   if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
-  if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el);
 }
 /* 加载失败二分诊断：script 标签拿不到状态码（天地图无 CORS 头），改用 no-cors fetch 探测——

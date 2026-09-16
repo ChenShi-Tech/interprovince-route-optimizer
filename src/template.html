@@ -40,7 +40,8 @@ main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
    「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），
    统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
 main section>:last-child,main section :last-child{margin-bottom:0}
-nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
+/* z-index 3000：地图图层（含 canvas/WebView 层叠上下文）不得盖住固定导航（底栏遮挡修复） */
+nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
 nav .ic{width:20px;height:20px;display:block}
@@ -159,6 +160,10 @@ td b{font-weight:600}
 .prow .pn{font-size:12px;font-weight:500}
 .prow input{padding:5px 6px;font-size:12px;border-radius:6px}
 #map-view,#fallback{width:100%;height:calc(100vh - 290px);min-height:320px;border-radius:var(--r);overflow:hidden;background:#EDEFEF;border:.5px solid var(--line)}
+/* 地图 API（天地图/腾讯）内部图层 z-index 高达 200~1000+：容器若不建立层叠上下文，
+   这些图层会在根层叠环境里压过 z-index:30 的固定底栏（容器延伸到视口底时必现）。
+   contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
+#map-view{contain:paint;position:relative;z-index:0}
 /* REQ-603+702：svg 拓扑模式容器高度随绘制纵横比自适应（viewBox 660×430），
    仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则 */
 #map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430}
