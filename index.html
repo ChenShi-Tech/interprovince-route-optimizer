@@ -378,7 +378,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-16 07:34';
+const BUILD_TIME='2026-09-16 09:07';
 const PRICE_VERSION='5ead949e5845a53c';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -1650,18 +1650,38 @@ let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
 /* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
    冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
 const TD_COOLDOWN_MS=10*60*1000;
+/* 天地图 4.0 的主脚本只同步注册核心类，叠加物类是随后异步注册的——实测 onload 触发时
+   T.Map/T.Marker/T.Polyline 已就绪，但 **T.Label 仍为 undefined，约 200ms 后才注册**。
+   只判断 T.Map 就会立刻开始绘制，撞上「T.Label is not a constructor」被 catch 吞掉，
+   界面误报成「天地图 API 兼容性问题」而降级（2026-09-16 实测的真实故障）。
+   因此必须等绘制真正用到的类齐备；下面这份清单与 drawMapTD 里用到的 T.* 一一对应。 */
+const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
+const TD_WAIT_MS=5000, TD_POLL_MS=100;
+function tdApiReady(){
+  if(typeof T==='undefined') return false;
+  return TD_REQUIRED.every(k=>typeof T[k]==='function');
+}
 function loadTianditu(cb){
   tdAttempted=false;
   if(tdReady) return cb(true);
-  if(typeof T!=='undefined'&&T.Map){ tdReady=true; return cb(true); }
+  if(tdApiReady()){ tdReady=true; return cb(true); }
   if(!state.tiandituKey) return cb(false);
   const src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
   if(tdTried===src) return cb(false);
   tdTried=src; tdAttempted=true;
   const s=document.createElement('script');
   s.src=src;
-  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认 T 真正可用才算成功
-  s.onload=()=>{ tdReady=(typeof T!=='undefined'&&!!T.Map); cb(tdReady); };
+  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认所需类真正可用才算成功。
+  // onload 时叠加物类可能尚未注册，故轮询等待而非一次判定（见上方 TD_REQUIRED 说明）；
+  // 超时单独回一句 why='incomplete'，避免被误诊成网络或风控问题。
+  let waited=0;
+  const poll=()=>{
+    if(tdApiReady()){ tdReady=true; return cb(true); }
+    waited+=TD_POLL_MS;
+    if(waited>=TD_WAIT_MS){ tdReady=false; return cb(false,'incomplete'); }
+    setTimeout(poll,TD_POLL_MS);
+  };
+  s.onload=poll;
   s.onerror=()=>cb(false);
   document.head.appendChild(s);
 }
@@ -1878,9 +1898,9 @@ function renderMap(){
     } else if(mode==='qq'){
       if(!drawMapQQ()) showMapFallback();
     } else {
-      loadTianditu(ok=>{
+      loadTianditu((ok,why)=>{
         if(ok&&drawMapTD()) tkMsg('ok');
-        else { showMapFallback(); tkMsg(ok?'drawfail':(state.tiandituKey?'loadfail':'empty')); }
+        else { showMapFallback(); tkMsg(ok?'drawfail':(why||(state.tiandituKey?'loadfail':'empty'))); }
       });
     }
   },80);
@@ -1916,6 +1936,7 @@ function tkMsg(kind){
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
   if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
   if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
+  if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el);
 }
 /* 加载失败二分诊断：script 标签拿不到状态码（天地图无 CORS 头），改用 no-cors fetch 探测——
