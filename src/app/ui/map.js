@@ -87,12 +87,20 @@ const TD_COOLDOWN_MS=10*60*1000;
    T.Map/T.Marker/T.Polyline 已就绪，但 **T.Label 仍为 undefined，约 200ms 后才注册**。
    只判断 T.Map 就会立刻开始绘制，撞上「T.Label is not a constructor」被 catch 吞掉，
    界面误报成「天地图 API 兼容性问题」而降级（2026-09-16 实测的真实故障）。
-   因此必须等绘制真正用到的类齐备；下面这份清单与 drawMapTD 里用到的 T.* 一一对应。 */
+   因此必须等绘制用到的类齐备。T.Label 现已不再用于绘制（省名/站点名标注已移除），
+   但仍保留在清单里作为保守的就绪门槛，不放宽实测得出的时序约束。 */
 const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
 const TD_WAIT_MS=5000, TD_POLL_MS=100;
 function tdApiReady(){
   if(typeof T==='undefined') return false;
-  return TD_REQUIRED.every(k=>typeof T[k]==='function');
+  if(!TD_REQUIRED.every(k=>typeof T[k]==='function')) return false;
+  /* 瓦片协议钉为 https：SDK 源码（api?v=4.0）中 T.Protocol 只认 "https:" 页面，
+     file://（真机 APK）下 T.Protocol.value 退化为 "http://"，而瓦片 URL 在每次请求时
+     动态读取该值拼接——targetSdk 34 默认禁止明文 HTTP，瓦片会全部失败且叠加物
+     （线路/圆点）正常，肉眼难辨。这里在就绪后统一钉为 https，与 API 脚本同一通道。
+     T.Protocol 为 SDK 内部对象，未来版本若缺失则守卫跳过，行为与旧版一致。 */
+  try{ if(T.Protocol&&T.Protocol.value==='http://') T.Protocol.value='https://'; }catch(e){}
+  return true;
 }
 function loadTianditu(cb){
   tdAttempted=false;
@@ -137,7 +145,6 @@ function drawMapTD(){
           if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
           const p=ST[st];
           tdMap.addOverLay(new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})}));
-          tdMap.addOverLay(new T.Label({text:p.n,position:new T.LngLat(p.lng,p.lat),offset:new T.Point(0,-14)}));
         });
       });
     }
@@ -145,7 +152,6 @@ function drawMapTD(){
       const ll=provLngLat(k); if(!ll||seen.has(k)) return; seen.add(k);
       const onRoute=v.routeNodes.has(k);
       tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl:onRoute?D_HOT:D_BASE,iconSize:new T.Point(onRoute?14:9,onRoute?14:9)})}));
-      tdMap.addOverLay(new T.Label({text:N(k),position:new T.LngLat(ll[0],ll[1]),offset:new T.Point(0,-12)}));
     });
     return true;
   }catch(e){ return false; }
@@ -370,12 +376,29 @@ function applyTk(){
    script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
 function tkMsg(kind){
   const el=document.getElementById('tk-msg'); if(!el) return;
-  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; return; }
+  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; tdTileProbe(el); return; }
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
   if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
   if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
   if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el);
+}
+/* 瓦片自检：叠加物（线路/圆点）正常而底图全灭时肉眼难辨原因。按 SDK 此刻将用的协议
+   探测一张真实 vec_w 瓦片——no-cors 拿不到状态码（天地图无 CORS 头），仅区分
+   「传输可达」与「连接被禁/不通」，把失败定性直接显示在界面上，供真机截图定位。 */
+function tdTileProbe(el){
+  try{
+    if(typeof T==='undefined'||!T.Protocol) return;
+    const tk=state.tiandituKey||window.TMAP_AUTHKEY||'';
+    const url=T.Protocol.value+'t0.tianditu.'+(T.Domain||'gov.cn')
+      +'/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default'
+      +'&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=5&TILEROW=1&TILECOL=1&tk='+encodeURIComponent(tk);
+    const done=txt=>{ if(document.getElementById('tk-msg')!==el) return;
+      el.innerHTML=el.innerHTML.replace(/ ?｜瓦片自检：[^<]*/,'')+' <span style="color:var(--ink3)">｜瓦片自检：'+txt+'</span>'; };
+    fetch(url,{mode:'no-cors'}).then(
+      ()=>done(T.Protocol.value==='https://'?'https 通道传输正常':'异常：瓦片仍走非 https'),
+      ()=>done(T.Protocol.value!=='https://'?'明文 http 被系统禁止（应走 https）':'网络不可达'));
+  }catch(e){}
 }
 /* 加载失败二分诊断：script 标签拿不到状态码（天地图无 CORS 头），改用 no-cors fetch 探测——
    fetch 成功＝服务端有响应（密钥/白名单/风控拒绝，ORB 拦掉了非 JS 内容）；
