@@ -252,7 +252,7 @@ const tests = [
     },
   },
   {
-    id: 'I-04', section: '交互', title: '「恢复检索原始值」confirm 弹窗（取消/确认）',
+    id: 'I-04', section: '交互', title: '「恢复检索原始值」应用内确认框（取消/确认）',
     steps: '先改 CH[0].t=123；点恢复→取消；再点恢复→确认',
     expected: '取消：值不变；确认：恢复为 DATA.CH 原始值',
     async run(page, set) {
@@ -260,16 +260,19 @@ const tests = [
       await page.click('#t-lib');
       await page.evaluate(() => { CH[0].t = 123; });
       const btn = page.locator('button', { hasText: '恢复检索原始值' });
-      let msg = '';
-      page.once('dialog', async d => { msg = d.message(); await d.dismiss(); });
+      const dlg = page.locator('[role="dialog"]');
       await btn.click();
-      ok(msg.includes('恢复为检索原始值'), `confirm 文案异常：「${msg}」`);
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      const msg = await dlg.innerText();
+      ok(msg.includes('恢复为检索原始值'), `确认框文案异常：「${msg}」`);
+      await dlg.locator('button', { hasText: '取消' }).click();
       ok(await page.evaluate(() => CH[0].t) === 123, '取消后应保持 123');
-      page.once('dialog', async d => { msg = d.message(); await d.accept(); });
       await btn.click();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      await dlg.locator('button', { hasText: '恢复原始值' }).click();
       const restored = await page.evaluate(() => CH[0].t === DATA.CH[0].t);
       ok(restored, '确认后应恢复原始值');
-      set(`confirm「${msg.slice(0, 18)}…」；取消保持 123；确认后恢复 ${await page.evaluate(() => DATA.CH[0].t)}`);
+      set(`应用内确认框「${msg.slice(0, 18)}…」；取消保持 123；确认后恢复 ${await page.evaluate(() => DATA.CH[0].t)}`);
     },
   },
   {
@@ -801,48 +804,47 @@ const tests = [
   },
   {
     id: 'RQ-602', section: 'PRD-IPRO', title: 'REQ-602：本地价格覆盖 priceVersion 校验',
-    steps: '预置旧版本地费率覆盖（pv=0000）后加载页面，自动「确定」丢弃',
-    expected: '出现提示并丢弃旧覆盖，CH 恢复当前核定值（64 条且内容非占位）',
+    steps: '预置旧版本地费率覆盖（pv=0000）后加载页面，应用内确认框点「丢弃本地修改」',
+    expected: '出现应用内提示并丢弃旧覆盖，CH 恢复当前核定值（64 条且内容非占位）',
     async run(page, set) {
       await page.addInitScript(() => {
-        window.__dialogSeen = false;
         localStorage.setItem('iproute.v2.lib', JSON.stringify({
           pv: '0000dead', at: 'old',
           ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
         }));
       });
-      page.on('dialog', d => { page.__dialogSeen = true; d.accept(); });
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
-      const seen = page.__dialogSeen === true;
+      const dlg = page.locator('[role="dialog"]');
+      await dlg.waitFor({ state: 'visible', timeout: 5000 });
+      const tip = await dlg.innerText();
+      ok(tip.includes('priceVersion') && tip.includes('不一致'), `应有旧版本提示（应用内确认框），实际「${tip.slice(0, 30)}」`);
+      await dlg.locator('button', { hasText: '丢弃本地修改' }).click();
+      await page.waitForTimeout(200);
       const ch = await page.evaluate(() => ({ n: CH.length, first: CH[0].n, stale: !!state._libStale }));
-      ok(seen, '应弹出旧版本提示（confirm）');
-      ok(ch.n === 64 && !String(ch.first).includes('占位'), `旧覆盖应被丢弃恢复核定值，实际 CH[0].n=${ch.first}`);
-      set(`提示出现=${seen}；本地覆盖已丢弃，CH 恢复核定值（${ch.n} 条）`);
+      ok(ch.n === 64 && !String(ch.first).includes('占位') && !ch.stale, `旧覆盖应被丢弃恢复核定值，实际 CH[0].n=${ch.first} stale=${ch.stale}`);
+      set(`应用内提示出现（priceVersion 不一致）；丢弃后 CH 恢复核定值（${ch.n} 条）`);
     },
   },
   {
     id: 'RQ-602b', section: 'PRD-IPRO', title: 'REQ-602b：保留旧版价格覆盖时费率库出现核对横幅',
-    steps: '预置旧版本地费率覆盖后加载，confirm 选「取消」暂保留，进入费率库；再点「恢复检索原始值」',
-    expected: '费率库顶部出现「旧版价格数据」核对横幅；恢复原始值后横幅消失',
+    steps: '预置旧版本地费率覆盖后加载，应用内确认框选「暂保留」，进入费率库；再点「恢复检索原始值」',
+    expected: '费率库顶部出现「旧版价格数据」核对横幅；应用内确认恢复后横幅消失',
     async run(page, set) {
       await page.addInitScript(() => {
-        window.__keepSeen = false;
         localStorage.setItem('iproute.v2.lib', JSON.stringify({
           pv: '0000dead', at: 'old',
           ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
         }));
       });
-      let acceptNext = false;   // 第一个弹框=加载时旧版提示（dismiss=暂保留），第二个=resetLib 确认（accept）
-      page.on('dialog', async d => {
-        page.__keepSeen = true;
-        if (acceptNext) { acceptNext = false; await d.accept(); } else { await d.dismiss(); }
-      });
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      const dlg = page.locator('[role="dialog"]');
+      await dlg.waitFor({ state: 'visible', timeout: 5000 });
+      const tip = await dlg.innerText();
+      ok(tip.includes('priceVersion') && tip.includes('不一致'), '应弹出旧版本提示（应用内确认框）');
+      await dlg.locator('button', { hasText: '暂保留' }).click();
+      await page.waitForTimeout(150);
       const kept = await page.evaluate(() => ({ stale: !!state._libStale, first: CH[0].n }));
-      ok(page.__keepSeen === true, '应弹出旧版本提示（confirm）');
-      ok(kept.stale && String(kept.first).includes('占位'), '「取消」后应暂保留旧覆盖（_libStale=true）');
+      ok(kept.stale && String(kept.first).includes('占位'), '「暂保留」后应保留旧覆盖（_libStale=true）');
       await page.click('#t-lib');
       await page.waitForTimeout(150);
       const banner = await page.evaluate(() => {
@@ -850,8 +852,9 @@ const tests = [
         return w ? w.textContent.trim().slice(0, 40) : '';
       });
       ok(banner.includes('旧版价格数据'), `费率库应出现核对横幅，实际「${banner}」`);
-      acceptNext = true;
       await page.locator('#v-lib button', { hasText: '恢复检索原始值' }).click();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      await dlg.locator('button', { hasText: '恢复原始值' }).click();
       await page.waitForTimeout(200);
       const after = await page.evaluate(() => ({ stale: !!state._libStale, banner: [...document.querySelectorAll('#v-lib .warn')].some(x => x.textContent.includes('旧版价格数据')) }));
       ok(!after.stale && !after.banner, '恢复原始值后横幅应消失');
@@ -1079,23 +1082,34 @@ const tests = [
     },
   },
   {
-    id: 'RQ-703', section: 'PRD-IPRO', title: 'REQ-703：底图切换不可用时弹框反馈',
-    steps: '非代理环境点击「腾讯地图」',
-    expected: '弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），不再静默',
+    id: 'RQ-703', section: 'PRD-IPRO', title: 'REQ-703：底图切换不可用时应用内弹框反馈',
+    steps: '非代理环境点击「腾讯地图」，应用内确认框分别走「保持内置拓扑图」与「改用天地图」',
+    expected: '应用内弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），确定后切到天地图',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.waitForSelector('.rc');
-      let dialogMsg = '';
-      page.on('dialog', async d => { dialogMsg = d.message(); await d.dismiss(); });
-      await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
-        await page.evaluate(() => go('map'));
-        await page.locator('#v-map button', { hasText: '腾讯地图' }).click();
-      });
+      const dlg = page.locator('[role="dialog"]');
+      const clickQQ = async () => {
+        await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
+          await page.evaluate(() => go('map'));
+          await page.locator('#v-map button', { hasText: '腾讯地图' }).click();
+        });
+      };
+      await clickQQ();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      const msg = await dlg.innerText();
+      ok(msg.includes('腾讯地图') && msg.includes('不可用'), `应弹框说明，实际「${msg.slice(0, 30)}」`);
+      await dlg.locator('button', { hasText: '保持内置拓扑图' }).click();
       await page.waitForTimeout(200);
       const r = await page.evaluate(() => ({ p: state.mapProvider, on: document.querySelector('#v-map .seg.small button.on')?.textContent }));
-      ok(dialogMsg.includes('腾讯地图') && dialogMsg.includes('不可用'), `应弹框说明，实际「${dialogMsg.slice(0, 30)}」`);
       ok(r.p === 'svg' && r.on === '拓扑图', '取消后应保持拓扑图');
-      set(`弹框="${dialogMsg.slice(0, 24)}…"；provider=${r.p}（原 svg）`);
+      await clickQQ();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      await dlg.locator('button', { hasText: '改用天地图' }).click();
+      await page.waitForTimeout(200);
+      const r2 = await page.evaluate(() => ({ p: state.mapProvider, on: document.querySelector('#v-map .seg.small button.on')?.textContent }));
+      ok(r2.p === 'td' && r2.on === '天地图', '确定后应切到天地图');
+      set(`应用内弹框="腾讯地图不可用…"；保持→${r.p}；改用→${r2.p}`);
     },
   },
 ];
