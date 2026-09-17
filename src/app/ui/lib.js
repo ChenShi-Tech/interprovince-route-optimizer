@@ -148,5 +148,9 @@ function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); state._res=null;
 function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); state._res=null; }
 function exportLib(){ const b=new Blob([JSON.stringify({ch:CH,pv:PV,sec:SEC},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='费率库-v2.json'; a.click(); }
-function resetLib(){ if(!confirm('恢复为检索原始值？本地修改将丢失。')) return;
-  CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); state._res=null; }
+function resetLib(){
+  uiConfirm('恢复检索原始值','恢复为检索原始值？本地修改将丢失。','恢复原始值','取消').then(ok=>{
+    if(!ok) return;
+    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); state._res=null;
+  });
+}

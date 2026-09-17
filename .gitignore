@@ -21,3 +21,7 @@ npm-debug.log*
 
 # 本次浏览器验证使用的依赖符号链接
 node_modules
+
+# 远端既有本地工具目录约定
+openspec/
+.zcode/

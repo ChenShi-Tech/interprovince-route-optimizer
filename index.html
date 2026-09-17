@@ -65,12 +65,23 @@ header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdro
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
-main{flex:1;padding:14px 16px 96px;overflow-x:hidden}
+/* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
+   声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
+main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
+/* 末尾卡片的外边距属于尾部留白，由页脚间距接管。
+   深层选择器：各 Tab 内容末尾的 margin 在任意嵌套层泄漏会导致
+   「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），
+   统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
+main section>:last-child,main section :last-child{margin-bottom:0}
+/* z-index 3000：地图图层（含 canvas/WebView 层叠上下文）不得盖住固定导航（底栏遮挡修复） */
 nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
 nav .ic{width:20px;height:20px;display:block}
 nav button.on .ic path,nav button.on .ic circle,nav button.on .ic rect{stroke:var(--blue)}
+/* REQ-307：页脚定位声明，三 Tab 共用。底部内边距 = 固定导航条高度(≈64px) + 4px 呼吸隙，
+   含 safe-area 适配（与 nav 的 max(6px,env(safe-area-inset-bottom)) 对应） */
+.disclaim{padding:6px 16px calc(68px + env(safe-area-inset-bottom));text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6}
 .card{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
 .card.tight{padding:12px}
 .sec-title{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -84,6 +95,14 @@ textarea{resize:vertical;min-height:64px;line-height:1.5;font-size:13px}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
 input[type=number]{font-variant-numeric:tabular-nums}
 input:disabled{cursor:not-allowed}
+/* 密钥输入框：掩码显示 + 右侧小眼睛切换可见性（toggleTkVis 在 ui/map.js） */
+.tk-wrap{position:relative}
+.tk-wrap input{padding-right:38px}
+.tk-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+  border:0;background:none;cursor:pointer;padding:6px;color:var(--ink3);
+  display:flex;align-items:center;justify-content:center;border-radius:7px}
+.tk-eye:hover{background:var(--gray-bg);color:var(--ink2)}
+.tk-eye svg{width:18px;height:18px;display:block;pointer-events:none}
 /* 该字段在当前口径下不参与计算：置灰但保留在 DOM 中（readInputs 仍按 id 读取） */
 label.f.off span{color:var(--ink3)}
 label.f.off input{background:var(--gray-bg);color:var(--ink3)}
@@ -318,7 +337,10 @@ details.adv.boxed summary{font-size:12.5px}
     border-bottom:2px solid transparent;border-radius:0}
   nav button.on{color:var(--blue);border-bottom-color:var(--blue);background:none}
   nav .ic{width:16px;height:16px}
-  main{order:2;padding:16px 24px 56px}
+  main{order:2;padding:16px 24px 14px}
+  /* 桌面端导航条在页头下方（非固定悬浮），页脚沉到文档底部即可，无需大让位内边距；
+     用 footer.disclaim 提高特异性，压过移动端 .disclaim 的导航让位内边距 */
+  footer.disclaim{order:3;padding:6px 24px 10px}
 
   .topbar{display:grid;grid-template-columns:minmax(340px,460px) minmax(0,1fr);gap:12px;
     align-items:stretch;margin-bottom:10px}
@@ -397,8 +419,8 @@ details.adv.boxed summary{font-size:12.5px}
     <section id="v-map" hidden></section>
     <section id="v-lib" hidden></section>
   </main>
-  <!-- REQ-307：页脚定位声明，三 Tab 共用 -->
-  <footer style="padding:10px 16px 4px;text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
+  <!-- REQ-307：页脚定位声明，三 Tab 共用；样式见 .disclaim（移动端贴固定导航条上方，桌面端沉底） -->
+  <footer class="disclaim">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
@@ -415,7 +437,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-17 09:57';
+const BUILD_TIME='2026-09-17 09:59';
 const PRICE_VERSION='986d0e013777d727';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -489,6 +511,35 @@ let state={
   mapProvider:'svg', tiandituKey:''
 };
 let stored=null;
+/* 应用内确认框：原生 confirm() 在安卓 WebView（壳未设 WebChromeClient）与 iOS WKWebView
+   （未挂 WKUIDelegate）中都不显示、且恒按「取消」返回 false，故三端统一自绘。
+   返回 Promise<boolean>；已有弹框未关闭时再次调用直接按「取消」结算，避免叠层。 */
+let _cfmOpen=false;
+function uiConfirm(title,msg,okText,cancelText){
+  if(_cfmOpen) return Promise.resolve(false);
+  _cfmOpen=true;
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(20,24,32,.45);display:flex;align-items:center;justify-content:center;padding:28px';
+    ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.22)">
+      <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">${esc(title)}</div>
+      <div style="font-size:12.5px;color:var(--ink2);line-height:1.7;white-space:pre-line">${esc(msg)}</div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn ghost" data-r="0" style="flex:1">${esc(cancelText)}</button>
+        <button class="btn" data-r="1" style="flex:1;font-size:14px;padding:10px">${esc(okText)}</button>
+      </div></div>`;
+    const done=ok=>{ _cfmOpen=false; ov.remove(); document.removeEventListener('keydown',onKey); res(ok); };
+    const onKey=e=>{ if(e.key==='Escape') done(false); };
+    ov.addEventListener('click',e=>{
+      const b=e.target.closest('button[data-r]');
+      if(b) done(b.dataset.r==='1');
+      else if(e.target===ov) done(false);   // 点遮罩视为取消
+    });
+    document.addEventListener('keydown',onKey);
+    document.body.appendChild(ov);
+    ov.querySelector('button[data-r="1"]').focus();
+  });
+}
 /* ================= 存储 ================= */
 /* 存储故障可见化（spec: local-persistence）：写入失败（配额满/隐私模式）只置一次性标记，
    由测算页渲染一条常驻提示，会话内不重复弹。渲染路径内禁止任何 setItem 调用（防循环）。 */
@@ -502,9 +553,18 @@ function loadStored(){
       // 否则由用户决定丢弃或暂留——静默使用旧覆盖会算出过期结果
       if(s.ch&&s.ch.length===CH.length){
         if(s.pv&&s.pv===PRICE_VERSION){ CH=s.ch; }
-        else if(confirm('本地费率修改基于旧版价格数据（priceVersion 不一致），继续使用可能算出过期结果。\n\n「确定」丢弃本地修改，恢复当前核定值；「取消」暂保留（费率库会提示核对）。')){
-          localStorage.removeItem(LS_LIB);
-        } else { CH=s.ch; state._libStale=true; }
+        else{
+          // REQ-602：priceVersion 不一致必须由用户决定丢弃或暂留。确认框是异步的，
+          // 先按保守口径暂留并置 _libStale（费率库会提示核对，等同原「取消」分支），
+          // 用户选「丢弃」再回滚核定值并重算
+          CH=s.ch; state._libStale=true;
+          uiConfirm('费率本地修改版本不一致','本地费率修改基于旧版价格数据（priceVersion 不一致），继续使用可能算出过期结果。','丢弃本地修改','暂保留').then(ok=>{
+            if(!ok) return;
+            localStorage.removeItem(LS_LIB);
+            CH=DATA.CH.map(c=>({...c})); state._libStale=false;
+            state._res=solve(state, algoData()); renderCalc();
+          });
+        }
       }
     }
     const b=localStorage.getItem(LS_LAST);
@@ -1847,8 +1907,12 @@ function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); state._res=null;
 function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); state._res=null; }
 function exportLib(){ const b=new Blob([JSON.stringify({ch:CH,pv:PV,sec:SEC},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='费率库-v2.json'; a.click(); }
-function resetLib(){ if(!confirm('恢复为检索原始值？本地修改将丢失。')) return;
-  CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); state._res=null; }
+function resetLib(){
+  uiConfirm('恢复检索原始值','恢复为检索原始值？本地修改将丢失。','恢复原始值','取消').then(ok=>{
+    if(!ok) return;
+    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); state._res=null;
+  });
+}
 
 /* ===== src/app/ui/map.js ===== */
 /* 网架图：内置 SVG 拓扑图 + 腾讯地图 + 天地图（均为白名单底图）。 */
@@ -1936,18 +2000,57 @@ let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
 /* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
    冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
 const TD_COOLDOWN_MS=10*60*1000;
+/* 天地图 4.0 的主脚本只同步注册核心类，叠加物类是随后异步注册的——实测 onload 触发时
+   T.Map/T.Marker/T.Polyline 已就绪，但 **T.Label 仍为 undefined，约 200ms 后才注册**。
+   只判断 T.Map 就会立刻开始绘制，撞上「T.Label is not a constructor」被 catch 吞掉，
+   界面误报成「天地图 API 兼容性问题」而降级（2026-09-16 实测的真实故障）。
+   因此必须等绘制用到的类齐备。T.Label 现已不再用于绘制（省名/站点名标注已移除），
+   但仍保留在清单里作为保守的就绪门槛，不放宽实测得出的时序约束。 */
+const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
+const TD_WAIT_MS=5000, TD_POLL_MS=100;
+/* tkVis：密钥输入框的可见性状态（默认掩码）。切换只改 DOM 的 type/图标，不走 renderMap——
+   整卡重渲染会打断输入焦点；renderMap 重绘时按 tkVis 恢复上次选择的可见性。 */
+let tkVis=false;
+const SVG_EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const SVG_EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function toggleTkVis(){
+  tkVis=!tkVis;
+  const inp=document.getElementById('i-tk'), btn=document.querySelector('.tk-eye');
+  if(inp) inp.type=tkVis?'text':'password';
+  if(btn){ btn.innerHTML=tkVis?SVG_EYE_OFF:SVG_EYE; btn.setAttribute('aria-label',tkVis?'隐藏密钥':'显示密钥'); btn.title=btn.getAttribute('aria-label'); }
+}
+function tdApiReady(){
+  if(typeof T==='undefined') return false;
+  if(!TD_REQUIRED.every(k=>typeof T[k]==='function')) return false;
+  /* 瓦片协议钉为 https：SDK 源码（api?v=4.0）中 T.Protocol 只认 "https:" 页面，
+     file://（真机 APK）下 T.Protocol.value 退化为 "http://"，而瓦片 URL 在每次请求时
+     动态读取该值拼接——targetSdk 34 默认禁止明文 HTTP，瓦片会全部失败且叠加物
+     （线路/圆点）正常，肉眼难辨。这里在就绪后统一钉为 https，与 API 脚本同一通道。
+     T.Protocol 为 SDK 内部对象，未来版本若缺失则守卫跳过，行为与旧版一致。 */
+  try{ if(T.Protocol&&T.Protocol.value==='http://') T.Protocol.value='https://'; }catch(e){}
+  return true;
+}
 function loadTianditu(cb){
   tdAttempted=false;
   if(tdReady) return cb(true);
-  if(typeof T!=='undefined'&&T.Map){ tdReady=true; return cb(true); }
+  if(tdApiReady()){ tdReady=true; return cb(true); }
   if(!state.tiandituKey) return cb(false);
   const src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
   if(tdTried===src) return cb(false);
   tdTried=src; tdAttempted=true;
   const s=document.createElement('script');
   s.src=src;
-  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认 T 真正可用才算成功
-  s.onload=()=>{ tdReady=(typeof T!=='undefined'&&!!T.Map); cb(tdReady); };
+  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认所需类真正可用才算成功。
+  // onload 时叠加物类可能尚未注册，故轮询等待而非一次判定（见上方 TD_REQUIRED 说明）；
+  // 超时单独回一句 why='incomplete'，避免被误诊成网络或风控问题。
+  let waited=0;
+  const poll=()=>{
+    if(tdApiReady()){ tdReady=true; return cb(true); }
+    waited+=TD_POLL_MS;
+    if(waited>=TD_WAIT_MS){ tdReady=false; return cb(false,'incomplete'); }
+    setTimeout(poll,TD_POLL_MS);
+  };
+  s.onload=poll;
   s.onerror=()=>cb(false);
   document.head.appendChild(s);
 }
@@ -1970,7 +2073,6 @@ function drawMapTD(){
           if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
           const p=ST[st];
           tdMap.addOverLay(new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})}));
-          tdMap.addOverLay(new T.Label({text:p.n,position:new T.LngLat(p.lng,p.lat),offset:new T.Point(0,-14)}));
         });
       });
     }
@@ -1978,7 +2080,6 @@ function drawMapTD(){
       const ll=provLngLat(k); if(!ll||seen.has(k)) return; seen.add(k);
       const onRoute=v.routeNodes.has(k);
       tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl:onRoute?D_HOT:D_BASE,iconSize:new T.Point(onRoute?14:9,onRoute?14:9)})}));
-      tdMap.addOverLay(new T.Label({text:N(k),position:new T.LngLat(ll[0],ll[1]),offset:new T.Point(0,-12)}));
     });
     return true;
   }catch(e){ return false; }
@@ -2117,13 +2218,15 @@ function renderMap(){
   }
   if(mode==='td'){
     out+=`<label class="f"><span>天地图密钥（tk）</span>
-      <input id="i-tk" type="text" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里"></label>
+      <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
+        <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
+      </div></label>
       <div class="row2" style="margin-bottom:10px">
         <button class="btn ghost" onclick="applyTk()">应用密钥</button>
         <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
       <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
-      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥仅存本机，代码中不内嵌任何有效密钥。</p>`;
+      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥默认掩码显示，点右侧小眼睛可见；仅存本机，代码中不内嵌任何有效密钥。</p>`;
   }
   if(mode==='svg'){
     out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
@@ -2164,21 +2267,26 @@ function renderMap(){
     } else if(mode==='qq'){
       if(!drawMapQQ()) showMapFallback();
     } else {
-      loadTianditu(ok=>{
+      loadTianditu((ok,why)=>{
         if(ok&&drawMapTD()) tkMsg('ok');
-        else { showMapFallback(); tkMsg(ok?'drawfail':(state.tiandituKey?'loadfail':'empty')); }
+        else { showMapFallback(); tkMsg(ok?'drawfail':(why||(state.tiandituKey?'loadfail':'empty'))); }
       });
     }
   },80);
 }
 function switchMap(p){
   // REQ-703：不可用底图必须给出明确反馈，不得静默回退（真机 APK 以 file:// 加载，
-  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）
+  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）。原生 confirm 在 WebView 中
+  // 不显示且恒按「取消」返回，改用应用内确认框 uiConfirm（见 state.js）
   if(p==='qq'&&!isProxyEnv()){
-    if(confirm('腾讯地图需要本地代理环境，当前环境不可用。\n\n「确定」改用天地图（需自行填入密钥）；「取消」保持内置拓扑图。')){
-      state.mapProvider='td'; tdReady=false;
-    } else { state.mapProvider='svg'; }
-  } else state.mapProvider=p;
+    uiConfirm('腾讯地图不可用','腾讯地图需要本地代理环境，当前环境不可用。','改用天地图','保持内置拓扑图').then(ok=>{
+      state.mapProvider=ok?'td':'svg';
+      if(ok) tdReady=false;
+      saveMap(); renderMap();
+    });
+    return;
+  }
+  state.mapProvider=p;
   saveMap(); renderMap();
 }
 function applyTk(){
@@ -2198,11 +2306,29 @@ function applyTk(){
    script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
 function tkMsg(kind){
   const el=document.getElementById('tk-msg'); if(!el) return;
-  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; return; }
+  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; tdTileProbe(el); return; }
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
   if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
   if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
+  if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el);
+}
+/* 瓦片自检：叠加物（线路/圆点）正常而底图全灭时肉眼难辨原因。按 SDK 此刻将用的协议
+   探测一张真实 vec_w 瓦片——no-cors 拿不到状态码（天地图无 CORS 头），仅区分
+   「传输可达」与「连接被禁/不通」，把失败定性直接显示在界面上，供真机截图定位。 */
+function tdTileProbe(el){
+  try{
+    if(typeof T==='undefined'||!T.Protocol) return;
+    const tk=state.tiandituKey||window.TMAP_AUTHKEY||'';
+    const url=T.Protocol.value+'t0.tianditu.'+(T.Domain||'gov.cn')
+      +'/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default'
+      +'&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=5&TILEROW=1&TILECOL=1&tk='+encodeURIComponent(tk);
+    const done=txt=>{ if(document.getElementById('tk-msg')!==el) return;
+      el.innerHTML=el.innerHTML.replace(/ ?｜瓦片自检：[^<]*/,'')+' <span style="color:var(--ink3)">｜瓦片自检：'+txt+'</span>'; };
+    fetch(url,{mode:'no-cors'}).then(
+      ()=>done(T.Protocol.value==='https://'?'https 通道传输正常':'异常：瓦片仍走非 https'),
+      ()=>done(T.Protocol.value!=='https://'?'明文 http 被系统禁止（应走 https）':'网络不可达'));
+  }catch(e){}
 }
 /* 加载失败二分诊断：script 标签拿不到状态码（天地图无 CORS 头），改用 no-cors fetch 探测——
    fetch 成功＝服务端有响应（密钥/白名单/风控拒绝，ORB 拦掉了非 JS 内容）；
