@@ -99,7 +99,7 @@ jobs:
           # 变量兼容 keytool 的大写带冒号写法，统一成 apksigner 的小写连续十六进制再比
           EXPECTED=$(printf '%s' "$EXPECTED_SIGNER" | tr -d ': ' | tr 'A-F' 'a-f')
           if [ -z "$EXPECTED" ]; then
-            echo "::warning::未设置仓库变量 ANDROID_SIGNER_SHA256，跳过签名连续性校验（本次签名 $SIGNER）"
+            echo "::warning::未设置仓库变量 ANDROID_SIGNER_SHA256，跳过签名连续性校验（本次签名 ${SIGNER}）"
           elif [ "$SIGNER" != "$EXPECTED" ]; then
             echo "::error::APK 签名证书 $SIGNER 与约定的 $EXPECTED 不一致——已安装旧版的手机无法覆盖升级，已中止发布"
             exit 1
