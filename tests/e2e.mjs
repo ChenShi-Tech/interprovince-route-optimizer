@@ -504,6 +504,148 @@ const tests = [
     },
   },
 
+  /* ================= 运行时健壮性（harden-web-runtime） ================= */
+  {
+    id: 'HR-01', section: '运行时健壮性', title: '存储写入失败→可见提示+去重+功能不受影响',
+    steps: '把 setItem 替换为抛错版本，触发重算与方案切换',
+    expected: '测算页出现恰好一条存储故障提示；多次失败不重复弹条；测算与切换照常、无未捕获异常',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        window.__origSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function () { throw new Error('HR01 模拟配额超限'); };
+      });
+      await page.selectOption('#i-hops', '3');
+      await page.waitForTimeout(150);
+      const r1 = await page.evaluate(() => ({
+        warnN: [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length,
+        rows: state._res.rows.length,
+      }));
+      ok(r1.warnN === 1, `存储故障提示应恰好 1 条，实际 ${r1.warnN}`);
+      ok(r1.rows > 0, `存储故障下测算应正常，实际 ${r1.rows} 条`);
+      await page.locator('.rc').nth(1).click();
+      await page.selectOption('#i-hops', '4');
+      await page.waitForTimeout(150);
+      const r2 = await page.evaluate(() => [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length);
+      ok(r2 === 1, `多次写入失败后提示仍应 1 条，实际 ${r2}`);
+      await page.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
+      set(`提示恰好 1 条（多次失败去重，防渲染循环）；故障下重算 ${r1.rows} 条、切方案正常`);
+    },
+  },
+  {
+    id: 'HR-02', section: '运行时健壮性', title: '重渲染保持折叠态（完整明细 + 无 id 说明面板）',
+    steps: '展开「完整明细」与任一口径说明面板，改价格、切跳数触发重算',
+    expected: '重建后两者仍为展开态（修复前完整明细会被收回）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        document.getElementById('d-detail').open = true;
+        const ex = document.querySelector('details.explain'); if (ex) ex.open = true;
+      });
+      await page.fill('#i-pgen', '333');
+      await page.locator('#i-pgen').blur();
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.getElementById('d-detail').open), '改价格后完整明细应保持展开');
+      const ex1 = await page.evaluate(() => { const d = document.querySelector('details.explain'); return d ? d.open : null; });
+      await page.selectOption('#i-hops', '3');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.getElementById('d-detail').open), '切跳数后完整明细应保持展开');
+      const ex2 = await page.evaluate(() => [...document.querySelectorAll('details.explain')].some(d => d.open));
+      ok(ex2 === true, `无 id 说明面板展开态应保持，实际 ${ex2}`);
+      set(`d-detail 保持展开；说明面板 open=${ex1}→${ex2}`);
+    },
+  },
+  {
+    id: 'HR-03', section: '运行时健壮性', title: '错误态往返不发生错位恢复',
+    steps: '展开完整明细后切到无连通路径省对（错误态），再切回',
+    expected: '错误态正常渲染空态卡片；切回后 d-detail 按 id 恢复展开，无错位、无异常',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => { document.getElementById('d-detail').open = true; });
+      await page.selectOption('#i-from', 'BJ');
+      await page.selectOption('#i-hops', '1');
+      await page.waitForTimeout(150);
+      const err = await page.evaluate(() => ({ empty: !!document.querySelector('.empty'), dets: document.querySelectorAll('#v-calc details').length }));
+      ok(err.empty, '应进入错误空态');
+      await page.selectOption('#i-from', 'SC');
+      await page.waitForTimeout(150);
+      const back = await page.evaluate(() => ({
+        detailOpen: document.getElementById('d-detail').open,
+        cards: document.querySelectorAll('.rc').length,
+      }));
+      ok(back.cards > 0, '应恢复正常结果态');
+      ok(back.detailOpen, '切回后完整明细应按 id 恢复展开');
+      set(`错误态面板 ${err.dets} 个（数量守卫分支）；切回后卡片 ${back.cards} 张、d-detail 按 id 恢复展开`);
+    },
+  },
+  {
+    id: 'HR-04', section: '运行时健壮性', title: '最坏参数下持久化记录 < 2KB',
+    steps: '西藏→江苏、6 段、绕行不限（候选逾百条）后触发保存',
+    expected: 'iproute.v2.last 低于 2048 字节且不含求解结果（修复前最坏约 12MB）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        const setv = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
+        setv('i-from', 'XZ'); setv('i-to', 'JS'); setv('i-hops', '6'); setv('i-detour', '9');
+      });
+      await page.waitForTimeout(200);
+      const r = await page.evaluate(() => {
+        const raw = localStorage.getItem('iproute.v2.last') || '';
+        return { bytes: raw.length, hasRes: raw.includes('_res'), n: state._res.total };
+      });
+      ok(r.n > 50, `最坏省对候选应 >50 条，实际 ${r.n}`);
+      ok(r.bytes < 2048, `持久化记录应 <2KB，实际 ${r.bytes}B`);
+      ok(!r.hasRes, '持久化记录不得包含 _res 求解结果');
+      set(`候选 ${r.n} 条；记录 ${r.bytes}B（修复前最坏约 12MB）；含 _res=${r.hasRes}`);
+    },
+  },
+  {
+    id: 'HR-05', section: '运行时健壮性', title: '全局错误兜底：提示条去重计数且不吞控制台',
+    steps: '注入两次相同未捕获异常与一次不同异常',
+    expected: '提示条出现且相同错误合并为 ×2；不同错误单列；pageerror 事件照常触发（控制台留痕）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const errs = [];
+      page.on('pageerror', e => errs.push(String(e)));
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
+      await page.waitForTimeout(250);
+      let box = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return b ? b.innerText : ''; });
+      ok(box.includes('hr05-重复错误'), `提示条应含错误摘要，实际「${box.slice(0, 60)}」`);
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
+      await page.waitForTimeout(250);
+      const dup = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return (b ? b.innerText : '').includes('×2'); });
+      ok(dup, '相同错误第二次应合并为 ×2 而非新增一条');
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-另一错误'); }, 0));
+      await page.waitForTimeout(250);
+      const both = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return b ? b.innerText : ''; });
+      ok(both.includes('hr05-另一错误'), '不同错误应单独显示');
+      const n = errs.filter(e => e.includes('hr05')).length;
+      ok(n >= 3, `pageerror 应照常触发 ≥3 次（不吞控制台），实际 ${n}`);
+      set(`提示条含 2 类错误（重复项合并 ×2）；pageerror 触发 ${n} 次未被吞`);
+    },
+  },
+  {
+    id: 'HR-06', section: '运行时健壮性', title: '费率库整页重建保持卡片展开态',
+    steps: '展开第一张通道卡片后切到测算再切回费率库',
+    expected: '切回后第一张通道卡仍为展开态（此前 renderLib 整页替换会收起）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.locator('.libcard summary').first().click();
+      ok(await page.evaluate(() => document.querySelector('.libcard').open), '前置：卡片应已展开');
+      await page.click('#t-calc');
+      await page.click('#t-lib');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.querySelector('.libcard').open), '切回费率库后第一张通道卡应保持展开');
+      set('通道卡展开态跨 Tab 往返保持');
+    },
+  },
+
   /* ================= 响应式 ================= */
   {
     id: 'R-01', section: '响应式', title: '手机竖屏 375×667（iPhone SE）',
@@ -637,7 +779,8 @@ const tests = [
         await page.click('#t-lib');
         await page.locator('button', { hasText: /^省级参数/ }).click();
         const card = page.locator('.libcard').first();
-        await card.locator('summary').click();
+        // harden-web-runtime 后展开态跨 Tab 保持：二次循环进来的卡片可能已展开，盲点 summary 会把它收起，改为「收起才展开」
+        if ((await card.getAttribute('open')) === null) await card.locator('summary').click();
         const r = await card.evaluate(() => {
           const inputs = [...document.querySelectorAll('.libcard .lib-io input')].slice(0, 3);
           const labels = [...document.querySelectorAll('.libcard .lib-io label')].slice(0, 3);

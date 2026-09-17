@@ -1,8 +1,8 @@
 /* 费率库页：通道费率、省级参数、输电断面。 */
 /* ================= 费率库 ================= */
 let libTab='ch';
-function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b) b.innerHTML=renderLibList(); }
-function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b) b.innerHTML=renderPvList(); }
+function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderLibList(); restoreDetails(b,s); } }
+function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderPvList(); restoreDetails(b,s); } }
 function renderPvList(){
   const q=(state.pvQ||'').trim().toLowerCase();
   const ids=Object.keys(PV).filter(k=>{
@@ -96,6 +96,9 @@ function renderLibList(){
   </details>`).join('');
 }
 function renderLib(){
+  // 重渲染稳定性：整页重建前快照展开的通道/省份卡片，重建后恢复（切 Tab 不丢展开态）
+  const _host=document.getElementById('v-lib');
+  const _snap=snapDetails(_host);
   let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`
   // REQ-602：加载时用户选择「暂保留」旧版价格覆盖（state.js 置 _libStale），费率库必须给出常驻提示
   +(state._libStale?`<div class="warn" style="margin-top:8px">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
@@ -137,6 +140,7 @@ function renderLib(){
     <p class="note">Web 版与手机端共用同一份数据：构建时同时产出 <code>shared/app-data.json</code>，两端的 priceVersion 一致即表示数值同源。</p></div>`;
 
   document.getElementById('v-lib').innerHTML=out;
+  restoreDetails(_host,_snap);
 }
 function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); state._res=null;
   const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }
