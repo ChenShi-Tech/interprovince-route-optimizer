@@ -116,15 +116,24 @@ const tests = [
     expected: '费用总额变为原 3 倍；落地单价不变',
     async run(page, set) {
       await page.goto(G, DCL);
-      const t1 = await page.evaluate(() => state._res.rows[0].yuan.total);
-      const p1 = await page.evaluate(() => state._res.rows[0].landed);
+      // 修正(2026-09-17)：电量放大 3 倍可能让原最优路线越限沉底（如 SC>ZJ>JS 在 3000MW 下超容）,
+      // rows[0] 随之换路线,旧断言「前后 rows[0] 相比」会误报非线性。改为锁定同一条路线对比。
+      const base = await page.evaluate(() => {
+        const r = state._res.rows[0];
+        return { key: r.nodes.join('>'), total: r.yuan.total, landed: r.landed };
+      });
       await page.fill('#i-qty', '3000');
       await page.locator('#i-qty').blur();
-      const t2 = await page.evaluate(() => state._res.rows[0].yuan.total);
-      const p2 = await page.evaluate(() => state._res.rows[0].landed);
-      ok(Math.abs(t2 - t1 * 3) < 1, `总额应 ${t1 * 3}，实际 ${t2}`);
-      ok(p1 === p2, `单价应不变 ${p1} vs ${p2}`);
-      set(`总额 ${t1}→${t2}（×3）；单价保持 ${p1} 元/MWh`);
+      const after = await page.evaluate((key) => {
+        state.showBad = true;   // 原路线可能越限沉底,纳入越限方案保证可追踪
+        state._res = solve(state, algoData());
+        const r = state._res.rows.find(x => x.nodes.join('>') === key);
+        if (!r) throw new Error('原最优路线在候选集中消失');
+        return { total: r.yuan.total, landed: r.landed };
+      }, base.key);
+      ok(Math.abs(after.total - base.total * 3) < 1, `同路线总额应 ${base.total * 3}，实际 ${after.total}`);
+      ok(after.landed === base.landed, `单价应不变 ${base.landed} vs ${after.landed}`);
+      set(`同一路线(${base.key})总额 ${base.total.toFixed(0)}→${after.total.toFixed(0)}（×3）；单价保持 ${base.landed} 元/MWh`);
     },
   },
   {
@@ -142,7 +151,8 @@ const tests = [
         const tr = [...document.querySelectorAll('#d-detail tr')].find(t => t.textContent.includes('网损折价'));
         return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : '(未找到行)';
       });
-      ok(/^网损折价（受端承担部分）\s*0\.0/.test(row), `网损行单价应显示 0.0，实际「${row.slice(0, 50)}」`);
+      // 修正(2026-09-17)：计费明示后网损行文案含「，含线损段不另收」后缀（Dphys≠D 的段）,正则放宽括号内文案
+      ok(/^网损折价（受端承担部分[^）]*）\s*0\.0/.test(row), `网损行单价应显示 0.0，实际「${row.slice(0, 50)}」`);
       const landed = await page.evaluate(() => state._res.rows[0].landed);
       set(`lossBearer=0；comp.loss=0；网损行显示 0；落地单价 ${landed} 元/MWh`);
     },
