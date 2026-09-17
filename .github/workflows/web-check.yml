@@ -1,0 +1,38 @@
+name: web-check
+# Web 侧持续集成：三套纯 Node 验证 + 构建产物同步校验。
+# 每次推送都跑（无 paths 过滤，本工作流就是全仓库防线）；本机验证过的四步
+# （模块测试 / 回归基线 / 双端数据 / 构建后 diff）在 CI 原样复跑。
+on:
+  workflow_dispatch:
+  push:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 工具链版本留档
+        run: node --version
+
+      # 防换行假阳性：产物 diff 校验对字节敏感，固定 LF 口径
+      - name: 固定换行口径
+        run: git config core.autocrlf false
+
+      - name: 算法模块测试
+        run: node tools/test-modules.mjs
+
+      - name: 回归基线校验（须 693/693）
+        run: node tools/baseline-check.mjs
+
+      - name: 双端数据一致性
+        run: node tools/test-data-share.mjs
+
+      - name: 重新构建
+        run: node tools/build.mjs
+
+      # 剔除每次构建必然变化的 BUILD_TIME 后与入库版本比对：
+      # 不一致 = 提交的产物与当前源码不同步（改了源码忘了构建）
+      - name: 产物同步校验（剔除构建时间戳）
+        run: |
+          sed -E -i "s/BUILD_TIME='[^']*'/BUILD_TIME=''/" index.html
+          git diff --exit-code -- index.html shared/app-data.json shared/app-data.min.json
