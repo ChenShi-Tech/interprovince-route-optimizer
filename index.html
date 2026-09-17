@@ -5,6 +5,39 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#ffffff">
 <title>省间路径优选测算 v2</title>
+<script>
+/* 全局错误兜底（spec: runtime-error-feedback）：head 最先安装，先于腾讯地图脚本，
+   捕获启动期第三方脚本错误。提示按消息去重并计数（上限 4 条）；不吞错误——
+   onerror 返回 false、rejection 不 preventDefault，控制台照常留痕。 */
+(function(){
+  var items={}, order=[];
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function flush(){
+    if(!document.body){ document.addEventListener('DOMContentLoaded',flush,{once:true}); return; }
+    var box=document.getElementById('gerr-box');
+    if(!order.length){ if(box) box.remove(); return; }
+    if(!box){ box=document.createElement('div'); box.id='gerr-box';
+      box.style.cssText='position:fixed;left:10px;right:10px;bottom:64px;z-index:3900;display:flex;flex-direction:column;gap:6px';
+      document.body.appendChild(box); }
+    box.innerHTML=order.map(function(k){
+      return '<div style="background:#FCEBEB;color:#A32D2D;border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.55;box-shadow:0 4px 14px rgba(0,0,0,.14);display:flex;gap:8px;align-items:flex-start">'
+        +'<div style="flex:1;word-break:break-all">⚠ 运行时错误'+(items[k]>1?' ×'+items[k]:'')+'：<code>'+esc(k)+'</code></div>'
+        +'<button data-gerr-close style="border:0;background:rgba(163,45,45,.12);color:#A32D2D;border-radius:6px;padding:3px 8px;font-size:11px;flex:none;cursor:pointer">关闭</button></div>';
+    }).join('');
+  }
+  function report(m){
+    m=String(m==null?'未知错误':(m&&m.message)||m).slice(0,160);
+    if(items[m]==null){ items[m]=1; order.push(m); if(order.length>4){ var drop=order.shift(); delete items[drop]; } }
+    else items[m]++;
+    flush();
+  }
+  window.onerror=function(m){ report(m); return false; };
+  window.addEventListener('unhandledrejection',function(e){ report(e.reason); });
+  document.addEventListener('click',function(ev){
+    if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
+  });
+})();
+</script>
 <script type="text/javascript">
 window._TMapSecurityConfig = {
   serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
@@ -404,7 +437,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-17 09:05';
+const BUILD_TIME='2026-09-17 09:39';
 const PRICE_VERSION='818c4593d4b15f51';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -465,12 +498,12 @@ function algoData(){
 let state={
   from:'SC', to:'JS', qty:1000, hours:1,
   pGen:320, pDst:450, pNet:112, fund:26.6,
-  lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10, includeDstCost:true,
+  lossBearer:1, maxHops:2, maxDetour:2.0, degrade:0.10, includeDstCost:true,
   sel:0, showBad:false, sortBy:'A', showAll:false,
   includeRegion:true,
   // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
-  mustHave:[], compOpen:false,
+  mustHave:[],
   mapProvider:'svg', tiandituKey:''
 };
 let stored=null;
@@ -504,6 +537,9 @@ function uiConfirm(title,msg,okText,cancelText){
   });
 }
 /* ================= 存储 ================= */
+/* 存储故障可见化（spec: local-persistence）：写入失败（配额满/隐私模式）只置一次性标记，
+   由测算页渲染一条常驻提示，会话内不重复弹。渲染路径内禁止任何 setItem 调用（防循环）。 */
+let _storageBroken=false;
 function loadStored(){
   try{
     const a=localStorage.getItem(LS_LIB);
@@ -538,16 +574,20 @@ function loadStored(){
     const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
   }catch(e){}
 }
-function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,pv:PRICE_VERSION,at:BUILD_TIME})); state._libStale=false; }catch(e){} }
+function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,pv:PRICE_VERSION,at:BUILD_TIME})); state._libStale=false; }catch(e){ _storageBroken=true; } }
 function saveLast(){
   try{
-    // tradableOnly（REQ-203）与 occPct（REQ-302）为会话内口径，按 PRD 不持久化
+    // tradableOnly（REQ-203）与 occPct（REQ-302）为会话内口径，按 PRD 不持久化；
+    // 运行时产物同样不入档：_res 含 rows+byA/byB/byC 四份引用（JSON 序列化不去重，
+    // 最坏省对达 12MB，撞穿 localStorage 配额后所有持久化会静默失效），_ai 挂着同一份
+    // 结果，_libStale/_stalePrice 是会话内标志。启动时 boot 无条件重算 _res，剥离无消费方。
     const s=Object.assign({},state,{_bt:BUILD_TIME});
     delete s.tradableOnly; delete s.occPct;
+    delete s._res; delete s._ai; delete s._libStale; delete s._stalePrice;
     localStorage.setItem(LS_LAST,JSON.stringify(s));
-  }catch(e){}
+  }catch(e){ _storageBroken=true; }
 }
-function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){} }
+function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){ _storageBroken=true; } }
 
 /* ===== src/app/algo/network.js ===== */
 /* 图结构与几何工具。
@@ -1003,6 +1043,27 @@ function tagOf(r, N){
 /* 测算页：参数输入、可选路线列表、方案详情。
    依赖：config / format / data / state / algo/*。 */
 /* ================= 测算页 ================= */
+/* 重渲染稳定性（spec: ui-render-stability）：折叠面板展开态快照/恢复。
+   全部面板按文档序快照；重建后数量一致且 id 位序相同才逐位还原
+   （条件渲染会改变面板集合，错位恢复比收起更糟），否则仅有稳定 id 的面板按 id 恢复。
+   ⚠ DOM 无 id 元素的 .id 是空串不是 null，比较两侧都要归一化。
+   id 面板的展开态另存跨渲染 memo：穿过「该面板不存在的中间帧」（如错误态）再回来也不丢。 */
+const _detailMemo={};
+function snapDetails(root){
+  if(!root || !root.querySelectorAll) return [];   // VM 测试桩无此方法（与旧 _capOpen 守卫同风格）
+  const snap=[...root.querySelectorAll('details')].map(d=>({id:d.id||null,open:d.open}));
+  snap.forEach(s=>{ if(s.id) _detailMemo[s.id]=s.open; });
+  return snap;
+}
+function restoreDetails(root,snap){
+  if(!root || !root.querySelectorAll) return;
+  const now=[...root.querySelectorAll('details')];
+  if(snap.length===now.length && snap.every((s,i)=>(now[i].id||null)===(s.id||null))){
+    now.forEach((d,i)=>{ d.open=snap[i].open; });
+    return;
+  }
+  now.forEach(d=>{ if(d.id && _detailMemo[d.id]!==undefined) d.open=_detailMemo[d.id]; });
+}
 function renderCalc(){
   const res=state._res;
   // 重渲染会整体替换 v-calc：先记录其中的焦点控件与光标位置，重建后恢复，
@@ -1010,8 +1071,8 @@ function renderCalc(){
   const _host=document.getElementById('v-calc');
   const _ae=(typeof document.activeElement!=='undefined')?document.activeElement:null;
   const _fid=(_ae&&_ae.id&&_host&&_host.contains&&_host.contains(_ae))?_ae.id:null;
-  // REQ-401：重渲染前记住容量电费卡的展开态，重建后恢复（用户展开后不随任何重算收起）
-  const _capOpen=!!(_host&&_host.querySelector&&_host.querySelector('#d-capfee[open]'));
+  // 重渲染稳定性：快照全部折叠面板展开态（含容量电费卡 d-capfee），重建后统一恢复
+  const _detailSnap=_host?snapDetails(_host):[];
   let _caret=null;
   if(_fid){ try{ _caret=[_ae.selectionStart,_ae.selectionEnd]; }catch(e){ /* number 型输入无 selection */ } }
   const opt=(sel,ex)=>Object.keys(PV).map(k=>
@@ -1019,7 +1080,9 @@ function renderCalc(){
   // 只算到受端省界：受端省内两项（省网输配电价 / 基金及附加）不参与计算，界面上置灰并标注
   const noDst=state.includeDstCost===false;
 
-  let out=`<div class="topbar"><div class="picker">
+  // 存储故障可见化（spec: local-persistence）：写入失败后常驻提示，测算功能不受影响
+  const _sbHead=_storageBroken?`<div class="warn">⚠ 本机存储不可用（隐私模式或空间已满），本次的参数与费率修改在重开应用后不会保留。</div>`:'';
+  let out=_sbHead+`<div class="topbar"><div class="picker">
     <div class="pk-col">
       <div class="pk-lb">出发地 · 送端</div>
       <select id="i-from">${opt(state.from,state.to)}</select>
@@ -1106,7 +1169,7 @@ function renderCalc(){
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
   document.getElementById('v-calc').innerHTML=out;
-  if(_capOpen){ const _cf=document.getElementById('d-capfee'); if(_cf) _cf.open=true; }
+  restoreDetails(document.getElementById('v-calc'),_detailSnap);
   if(_fid){
     const el=document.getElementById(_fid);
     if(el){
@@ -1583,8 +1646,8 @@ function renderCapFee(){
 /* 费率库页：通道费率、省级参数、输电断面。 */
 /* ================= 费率库 ================= */
 let libTab='ch';
-function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b) b.innerHTML=renderLibList(); }
-function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b) b.innerHTML=renderPvList(); }
+function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderLibList(); restoreDetails(b,s); } }
+function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderPvList(); restoreDetails(b,s); } }
 function renderPvList(){
   const q=(state.pvQ||'').trim().toLowerCase();
   const ids=Object.keys(PV).filter(k=>{
@@ -1679,6 +1742,9 @@ function renderLibList(){
   </details>`).join('');
 }
 function renderLib(){
+  // 重渲染稳定性：整页重建前快照展开的通道/省份卡片，重建后恢复（切 Tab 不丢展开态）
+  const _host=document.getElementById('v-lib');
+  const _snap=snapDetails(_host);
   let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`
   // REQ-602：加载时用户选择「暂保留」旧版价格覆盖（state.js 置 _libStale），费率库必须给出常驻提示
   +(state._libStale?`<div class="warn" style="margin-top:8px">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
@@ -1720,6 +1786,7 @@ function renderLib(){
     <p class="note">Web 版与手机端共用同一份数据：构建时同时产出 <code>shared/app-data.json</code>，两端的 priceVersion 一致即表示数值同源。</p></div>`;
 
   document.getElementById('v-lib').innerHTML=out;
+  restoreDetails(_host,_snap);
 }
 function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); state._res=null;
   const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }

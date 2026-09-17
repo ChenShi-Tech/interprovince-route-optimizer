@@ -1,6 +1,27 @@
 /* 测算页：参数输入、可选路线列表、方案详情。
    依赖：config / format / data / state / algo/*。 */
 /* ================= 测算页 ================= */
+/* 重渲染稳定性（spec: ui-render-stability）：折叠面板展开态快照/恢复。
+   全部面板按文档序快照；重建后数量一致且 id 位序相同才逐位还原
+   （条件渲染会改变面板集合，错位恢复比收起更糟），否则仅有稳定 id 的面板按 id 恢复。
+   ⚠ DOM 无 id 元素的 .id 是空串不是 null，比较两侧都要归一化。
+   id 面板的展开态另存跨渲染 memo：穿过「该面板不存在的中间帧」（如错误态）再回来也不丢。 */
+const _detailMemo={};
+function snapDetails(root){
+  if(!root || !root.querySelectorAll) return [];   // VM 测试桩无此方法（与旧 _capOpen 守卫同风格）
+  const snap=[...root.querySelectorAll('details')].map(d=>({id:d.id||null,open:d.open}));
+  snap.forEach(s=>{ if(s.id) _detailMemo[s.id]=s.open; });
+  return snap;
+}
+function restoreDetails(root,snap){
+  if(!root || !root.querySelectorAll) return;
+  const now=[...root.querySelectorAll('details')];
+  if(snap.length===now.length && snap.every((s,i)=>(now[i].id||null)===(s.id||null))){
+    now.forEach((d,i)=>{ d.open=snap[i].open; });
+    return;
+  }
+  now.forEach(d=>{ if(d.id && _detailMemo[d.id]!==undefined) d.open=_detailMemo[d.id]; });
+}
 function renderCalc(){
   const res=state._res;
   // 重渲染会整体替换 v-calc：先记录其中的焦点控件与光标位置，重建后恢复，
@@ -8,8 +29,8 @@ function renderCalc(){
   const _host=document.getElementById('v-calc');
   const _ae=(typeof document.activeElement!=='undefined')?document.activeElement:null;
   const _fid=(_ae&&_ae.id&&_host&&_host.contains&&_host.contains(_ae))?_ae.id:null;
-  // REQ-401：重渲染前记住容量电费卡的展开态，重建后恢复（用户展开后不随任何重算收起）
-  const _capOpen=!!(_host&&_host.querySelector&&_host.querySelector('#d-capfee[open]'));
+  // 重渲染稳定性：快照全部折叠面板展开态（含容量电费卡 d-capfee），重建后统一恢复
+  const _detailSnap=_host?snapDetails(_host):[];
   let _caret=null;
   if(_fid){ try{ _caret=[_ae.selectionStart,_ae.selectionEnd]; }catch(e){ /* number 型输入无 selection */ } }
   const opt=(sel,ex)=>Object.keys(PV).map(k=>
@@ -17,7 +38,9 @@ function renderCalc(){
   // 只算到受端省界：受端省内两项（省网输配电价 / 基金及附加）不参与计算，界面上置灰并标注
   const noDst=state.includeDstCost===false;
 
-  let out=`<div class="topbar"><div class="picker">
+  // 存储故障可见化（spec: local-persistence）：写入失败后常驻提示，测算功能不受影响
+  const _sbHead=_storageBroken?`<div class="warn">⚠ 本机存储不可用（隐私模式或空间已满），本次的参数与费率修改在重开应用后不会保留。</div>`:'';
+  let out=_sbHead+`<div class="topbar"><div class="picker">
     <div class="pk-col">
       <div class="pk-lb">出发地 · 送端</div>
       <select id="i-from">${opt(state.from,state.to)}</select>
@@ -104,7 +127,7 @@ function renderCalc(){
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
   document.getElementById('v-calc').innerHTML=out;
-  if(_capOpen){ const _cf=document.getElementById('d-capfee'); if(_cf) _cf.open=true; }
+  restoreDetails(document.getElementById('v-calc'),_detailSnap);
   if(_fid){
     const el=document.getElementById(_fid);
     if(el){
