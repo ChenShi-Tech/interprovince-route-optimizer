@@ -3,7 +3,7 @@ name: android-release
 # 执行机：南洋自托管 runner irp-nanyang-1（label irp-linux，专用无特权用户 irp-runner）。
 # 工具链预装在 runner 用户的 ~/android-toolchain（JDK 17 + Gradle 8.7 + Android SDK 34），
 # 布局与 android/build-apk.mjs 的探测约定一致；Gradle 依赖缓存在 runner 用户的 ~/.gradle。
-# 流程：发布 Release（标签 vX.Y.Z）→ 校验版本号与工具链 → 构建 + 7 组测试 → 打包 → 签名核验 → APK 挂到该 Release。
+# 流程：发布 Release（标签 vX.Y.Z）→ 校验版本号与工具链 → 附件查重 → 构建 + 7 组测试 → 打包 → 签名核验 → APK 挂到该 Release。
 # 补打包：Actions 页手动运行本工作流，填已发布的标签；勾选 dry_run 则只打包不上传（验证流水线用）。
 on:
   release:
@@ -62,8 +62,26 @@ jobs:
           for p in "$JDK" "$TC/gradle-8.7/bin/gradle" "$TC/sdk/platforms/android-34" "$TC/sdk/build-tools/34.0.0"; do
             [ -n "$p" ] && [ -e "$p" ] || { echo "::error::runner 缺安卓工具链组件：${p:-jdk-17}（重装见 android/README.md「发版自动打包」）"; exit 1; }
           done
+          command -v gh >/dev/null || { echo "::error::runner 缺 GitHub CLI（gh），上传 Release 附件要用（见 android/README.md「发版自动打包」）"; exit 1; }
           echo "JAVA_HOME=$JDK" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$TC/sdk" >> "$GITHUB_ENV"
+
+      # 不做覆盖式上传：gh 的 --clobber 先删旧附件再传，传失败旧附件就没了。
+      # 已有同名附件一律中止，确需替换由人先在 Release 页面删除后重跑；放在构建前，早失败
+      - name: 检查 Release 是否已有同名附件
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="iproute-${TAG}-debug.apk"
+          EXISTING=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          for f in "$APK" "$APK.sha256"; do
+            if printf '%s\n' "$EXISTING" | grep -qxF "$f"; then
+              echo "::error::Release $TAG 已有附件 ${f}——为防上传失败丢失原附件，不做覆盖。确需替换：先在 Release 页面删除 $APK 与 $APK.sha256，再手动重跑（可先勾 dry_run 核对签名）"
+              exit 1
+            fi
+          done
+          echo "Release $TAG 无同名附件，可上传"
 
       # 先构建再测：测试读的是 index.html，这样测到的就是即将打进 APK 的内容
       - name: 构建与发版前测试（任一失败不出包）
@@ -117,4 +135,4 @@ jobs:
         if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$TAG" "$APK" "$APK.sha256" --clobber --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "$TAG" "$APK" "$APK.sha256" --repo "$GITHUB_REPOSITORY"

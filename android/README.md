@@ -31,25 +31,27 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 1. 发版提交里改 `android/app/build.gradle`：`versionName` 与标签一致（去掉 `v`），`versionCode` +1，合入 `main`；
 2. 发布 Release，标签 `vX.Y.Z`：`gh release create vX.Y.Z --target main --title "…" --notes "…"`
    （网页上只保存草稿不触发，点「Publish release」才触发）；
-3. 工作流依次：标签与 `versionName` 一致性 → 工具链检查 → 构建 + 7 组测试 → 打包 → 签名核验 →
-   把 `iproute-vX.Y.Z-debug.apk` 与 `.sha256` 挂到该 Release（同名文件覆盖）；
+3. 工作流依次：标签与 `versionName` 一致性 → 工具链检查 → 附件查重 → 构建 + 7 组测试 → 打包 → 签名核验 →
+   把 `iproute-vX.Y.Z-debug.apk` 与 `.sha256` 挂到该 Release；
 4. 失败后补打包：Actions → android-release → Run workflow，填已发布的标签；
    勾选 `dry_run` 则只打包、在运行摘要里给出签名指纹，不改动 Release 附件（验证流水线或核对签名时用）。
 
 注意：
 
-- **不要再在本机打包后手动上传**——同名文件会被 CI 覆盖，且各机器的 debug 签名密钥不同。
+- **不要再在本机打包后手动上传**——Release 上已有同名附件时 CI 会中止不出包，且各机器的 debug 签名密钥不同。
 - **签名连续性**：仓库变量 `ANDROID_SIGNER_SHA256` 设为约定签名证书的 SHA-256 指纹后，签名对不上的 APK 会被拦下不上传
   （手机上已装旧版的无法覆盖升级，只能卸载重装并丢失本地数据）；未设置时只告警。
   指纹写 apksigner 输出的 64 位十六进制即可，keytool 的大写带冒号写法也兼容。
 - ⚠️ **v1.1.0～v1.1.5 是协作者本机 debug 密钥签的，与南洋密钥不同。** 签名方案拍板并设好上面的变量之前不要发新版；
   若决定改用新密钥，首个 CI 版本的 Release 说明里必须写明「已装用户需卸载重装（本地费率修改、地图与模型密钥会丢）」。
 - 标签只支持 `vX.Y.Z`；预发布（pre-release / rc 标签）发布时工作流会报格式错误、不出包。
-- **补打包已有附件的标签会覆盖原 APK**：签名不同就等于换包，先用 `dry_run` 核对签名。
+- **不做覆盖式上传**：Release 已有同名附件（含上次上传到一半留下的）时直接中止，防止上传失败把原附件弄丢。
+  确需替换：先勾 `dry_run` 跑一次核对签名，再在 Release 页面删除 `iproute-vX.Y.Z-debug.apk` 与 `.sha256`，最后正常重跑。
 - 用 `GITHUB_TOKEN` 在别的工作流里创建的 Release 不会触发本工作流（GitHub 防递归），发版须由人发布。
 
-南洋工具链位于 runner 用户 `irp-runner` 的 `~/android-toolchain/`（Temurin JDK 17 + Gradle 8.7 +
-SDK `platform-tools` / `platforms;android-34` / `build-tools;34.0.0`），签名密钥为该用户的 `~/.android/debug.keystore`。
+runner 前置条件：南洋工具链位于 runner 用户 `irp-runner` 的 `~/android-toolchain/`（Temurin JDK 17 + Gradle 8.7 +
+SDK `platform-tools` / `platforms;android-34` / `build-tools;34.0.0`），签名密钥为该用户的 `~/.android/debug.keystore`；
+另需系统 `PATH` 里有 GitHub CLI `gh`（南洋现为 `/usr/bin/gh`，上传附件用，重建 runner 时别漏装）。工作流在构建前逐项检查，缺了直接报错。
 重装按上面「在新机器上重建工具链」前三步以 `irp-runner` 身份执行；SDK 路径由工作流注入 `ANDROID_HOME`，无需 `local.properties`。
 
 ## 安装到手机
