@@ -62,6 +62,14 @@ textarea{resize:vertical;min-height:64px;line-height:1.5;font-size:13px}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
 input[type=number]{font-variant-numeric:tabular-nums}
 input:disabled{cursor:not-allowed}
+/* 密钥输入框：掩码显示 + 右侧小眼睛切换可见性（toggleTkVis 在 ui/map.js） */
+.tk-wrap{position:relative}
+.tk-wrap input{padding-right:38px}
+.tk-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+  border:0;background:none;cursor:pointer;padding:6px;color:var(--ink3);
+  display:flex;align-items:center;justify-content:center;border-radius:7px}
+.tk-eye:hover{background:var(--gray-bg);color:var(--ink2)}
+.tk-eye svg{width:18px;height:18px;display:block;pointer-events:none}
 /* 该字段在当前口径下不参与计算：置灰但保留在 DOM 中（readInputs 仍按 id 读取） */
 label.f.off span{color:var(--ink3)}
 label.f.off input{background:var(--gray-bg);color:var(--ink3)}
@@ -396,7 +404,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-17 03:24';
+const BUILD_TIME='2026-09-17 05:45';
 const PRICE_VERSION='818c4593d4b15f51';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -1787,6 +1795,17 @@ const TD_COOLDOWN_MS=10*60*1000;
    但仍保留在清单里作为保守的就绪门槛，不放宽实测得出的时序约束。 */
 const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
 const TD_WAIT_MS=5000, TD_POLL_MS=100;
+/* tkVis：密钥输入框的可见性状态（默认掩码）。切换只改 DOM 的 type/图标，不走 renderMap——
+   整卡重渲染会打断输入焦点；renderMap 重绘时按 tkVis 恢复上次选择的可见性。 */
+let tkVis=false;
+const SVG_EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const SVG_EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function toggleTkVis(){
+  tkVis=!tkVis;
+  const inp=document.getElementById('i-tk'), btn=document.querySelector('.tk-eye');
+  if(inp) inp.type=tkVis?'text':'password';
+  if(btn){ btn.innerHTML=tkVis?SVG_EYE_OFF:SVG_EYE; btn.setAttribute('aria-label',tkVis?'隐藏密钥':'显示密钥'); btn.title=btn.getAttribute('aria-label'); }
+}
 function tdApiReady(){
   if(typeof T==='undefined') return false;
   if(!TD_REQUIRED.every(k=>typeof T[k]==='function')) return false;
@@ -1986,13 +2005,15 @@ function renderMap(){
   }
   if(mode==='td'){
     out+=`<label class="f"><span>天地图密钥（tk）</span>
-      <input id="i-tk" type="text" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里"></label>
+      <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
+        <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
+      </div></label>
       <div class="row2" style="margin-bottom:10px">
         <button class="btn ghost" onclick="applyTk()">应用密钥</button>
         <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
       <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
-      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥仅存本机，代码中不内嵌任何有效密钥。</p>`;
+      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥默认掩码显示，点右侧小眼睛可见；仅存本机，代码中不内嵌任何有效密钥。</p>`;
   }
   if(mode==='svg'){
     out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
