@@ -31,6 +31,7 @@ function solve(input, data){
     geo: data.geo,
     includeRegion: input.includeRegion !== false,
     pGen: input.pGen,
+    source: input.from,
   };
   const ctx={
     pGen: input.pGen, pDst: input.pDst, pNet: input.pNet, fund: input.fund,

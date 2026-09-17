@@ -6,7 +6,7 @@
  *   - S14《省间电力现货交易规则》(2026-04) 4.3.1：买方价格向卖方节点折算
  *       折算价 = 买方报价 × Π(1−ρ_r) − Σ_m [ Pt_m × Π_{r≤m}(1−ρ_r) ]
  *     换算到每交付 1 MWh：每段输电费 = 该段输电价 × 该段「段后」电量系数；买方为送端电量 1/Π(1−ρ) 付费。
- *   - S14 3.3.2：输电价格已包含网损的段，不再另行收取网损 → 该段在计费链里线损率按 0 计。
+ *   - S14 3.3.2：输电价格已包含网损的段，不再另行收取网损 → 该段在计费链里线损率按 0 计；本工具另按交易测算约定将区域共用交流接口的计费损耗设为 0。
  *   - S14 3.4.2(a)、7.3(c)：经营主体购电时统一计入买方节点所在区域电网的输电价格；
  *     S15 发改价格规〔2020〕1441号 第二条：通过区域电网共用网络交易的用户，购电价格应包括区域电网电量电价及损耗。
  *   - S01 发改价格〔2018〕1227号 第五条：购电价格 = 市场价 + 送出省输电价格 + 专项工程输电价格及损耗 + 落地省输配电价 + 基金附加。
@@ -20,6 +20,7 @@
  *   env.LOSS_OF      省代码 → { exportLoss, inLoss }（%，可为 null）
  *   env.SEC          输电断面定义数组
  *   env.includeRegion 是否计入区域电网费
+ *   env.source       交易起点省代码（近似权重只在起点收送出省费）
  *   env.pGen         送端出清价（仅用于枚举排序的近似权重）
  *   env.geo          { lngLatOf, provLngLat }
  *
@@ -39,25 +40,36 @@ function tariffOf(e, fromCode){
   return (e.bidir && fromCode===e.to && e.tRev!=null) ? e.tRev : e.t;
 }
 
-/** 段的送端省内段费用（送出省输电价格，元/兆瓦时），按实际行进方向取值。
- *  双向专项工程反向行进时送端省是存储的 to 端，取 sendFeeRev。 */
+/** 交易起点的送出省价格（元/兆瓦时），只在路径首段计一次。
+ *  regional 通道的 t/tRev 是送出省参考价，不是该接口的独立输电价。
+ *  双向专项工程反向行进时取 sendFeeRev。 */
 function sendFeeOf(e, fromCode){
+  if(e.regional) return tariffOf(e, fromCode);
   return (e.bidir && fromCode===e.to && e.sendFeeRev!=null) ? e.sendFeeRev : (e.sendFee||0);
 }
 
+/** 区域共用交流网的接口是路径抽象，不把估算线损逐条计入交易报价。
+ *  专项工程及背靠背直流仍按自身口径计费；物理链始终保留原线损供容量估算。 */
+function billingLossOf(env, e){
+  const region=env.REGION_OF[e.from];
+  const pooled=e.regional && e.type==='AC' && region && region===env.REGION_OF[e.to];
+  return (e.incLoss || pooled)?0:(e.loss||0);
+}
+
 /** 近似边权：只决定路径枚举的顺序，不参与最终计价。
- *  用线性近似把线损折成成本，避免用乘法项直接做最短路。买方区域费与路径无关，不参与排序。 */
+ *  用线性近似把线损折成成本，避免用乘法项直接做最短路。
+ *  送出省价格只在起点计入；区域费需按整条路径去重，留给精确计价。 */
 function approxW(env, e, fromCode, toCode){
-  const rho = e.incLoss ? 0 : (e.loss||0);
-  return tariffOf(e, fromCode)+sendFeeOf(e, fromCode)+rho/100*env.pGen
-    +((env.includeRegion&&e.regional)?regionRate(env, toCode):0);
+  const rho = billingLossOf(env,e);
+  return (e.regional?0:tariffOf(e, fromCode))
+    +(fromCode===env.source?sendFeeOf(e, fromCode):0)+rho/100*env.pGen;
 }
 
 /** 对一条路径做精确计价。
  *
  *  两条系数链：
  *    物理链 sufP —— 用全部段的实际线损率，算功率、容量占用与物理损耗电量；
- *    计费链 sufT —— 「含输电环节线损」的段（incLoss）线损按 0 计（S14 3.3.2 不再另行收取），其余段按核定线损率。
+ *    计费链 sufT —— 「含输电环节线损」的段（incLoss）线损按 0 计（S14 3.3.2 不再另行收取），区域共用交流接口也按 0 计，其余段按已录入线损率。
  *  段前系数 = 1 / Π(该段及之后各段的通过率)，段后系数 = 1 / Π(之后各段的通过率)。
  *  每段输电费按「段后」电量计（S14 4.3.1），送出省段按其出口电量（= 本段入口电量）计。
  */
@@ -67,7 +79,7 @@ function evalPath(path, ctx, env){
   for(let i=n-1;i>=0;i--){
     const l=(edges[i].loss||0)/100;
     sufP[i]=sufP[i+1]*(1-l);
-    sufT[i]=sufT[i+1]*(edges[i].incLoss?1:(1-l));
+    sufT[i]=sufT[i+1]*(1-billingLossOf(env,edges[i])/100);
   }
   const D=sufT[0], genQty=1/D, lossQty=genQty-1;   // 计费口径：买方为送端电量 1/D 付费
   const Dphys=sufP[0];
@@ -76,6 +88,13 @@ function evalPath(path, ctx, env){
   const toMWh=q=>qty*q;
   const buyerRegion=env.REGION_OF[nodes[n]];
   const LOSS=env.LOSS_OF||{};
+  // 区域共用网络按区域归集，不能把每个省间接口当成一个收费单元。
+  // 买方区域在路径层面计一次；其它区域计在该区域最后一个共用网络接口的出口。
+  const regionExit=new Map();
+  if(env.includeRegion) edges.forEach((e,i)=>{
+    const region=env.REGION_OF[nodes[i+1]];
+    if(e.regional && region && region!==buyerRegion) regionExit.set(region,i);
+  });
 
   let trans=0, regTransit=0, sendTotal=0, dist=0, segLossMwh=0, vsCount=0;
   // REQ-302：中长期占用——容量校验按 cap×(1−占用比例) 扣减（默认 0，不持久化）
@@ -84,12 +103,11 @@ function evalPath(path, ctx, env){
   const segs=edges.map((e,i)=>{
     const q=1/sufT[i], qOut=1/sufT[i+1];        // 计费链
     const qP=1/sufP[i], qOutP=1/sufP[i+1];      // 物理链
-    const t=tariffOf(e,nodes[i]), sf0=sendFeeOf(e,nodes[i]);
+    const t=e.regional?0:tariffOf(e,nodes[i]);
+    const sf0=i===0?sendFeeOf(e,nodes[i]):0;
     const fee=t*qOut;                           // S14 4.3.1：输电价 × 段后电量
     const sf=sf0*q;                             // 送出省段：出口电量 = 本段入口电量
-    // 过境其它区域的联络线段，按该区域电量电价 × 段后电量（S14 3.3.1 区域共用电网段）；
-    // 买方所在区域的费用在路径层面统一计一次（S14 3.4.2(a)），不在段上重复
-    const rg=(env.includeRegion && e.regional && env.REGION_OF[nodes[i+1]]!==buyerRegion) ? regionRate(env,nodes[i+1])*qOut : 0;
+    const rg=regionExit.get(env.REGION_OF[nodes[i+1]])===i ? regionRate(env,nodes[i+1])*qOut : 0;
     trans+=fee; regTransit+=rg; sendTotal+=sf;
     const a=env.geo.lngLatOf(e,'from'), b=env.geo.lngLatOf(e,'to');
     const crow=havKm(a,b);
@@ -101,6 +119,7 @@ function evalPath(path, ctx, env){
     if(e.type==='DC') vsCount++;
     return {
       e,t,sf0,q,qOut,qP,qOutP,fee,rg,sf,a:nodes[i],b:nodes[i+1],
+      billLossPct:billingLossOf(env,e),
       km, crow, kmEst:!e.lenKm,
       inMW:toMW(qP), outMW:toMW(qOutP), lossMW:toMW(qP-qOutP),
       inMWh:toMWh(qP), outMWh:toMWh(qOutP), lossMwh,

@@ -75,8 +75,8 @@ function renderCalc(){
     </div>
     <details class="explain"><summary>政策口径与取值依据<em>区域电网费 · 网损承担方 · 自动带入值</em></summary><div class="inner">
     <p class="note">受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端出清价与受端结算价随送端省 / 受端省变化自动带入。以上均可手动覆盖，点「恢复核定值」还原。口径二（过网费）与口径三（送端净收益）不含受端省内费用，因此不受「费用边界」开关影响。</p>
-    <p class="note"><b>区域电网输电价格</b>是国网华北、华东、华中、东北、西北五个区域分部运营的区域共用输电网络（跨省 500kV / 1000kV 联络网架）的电量电价，由国家发改委核定（发改价格〔2026〕1077号附件2），随区域电网实际交易结算电量向购电方收取。按《省间电力现货交易规则》(2026年4月，发改办体改〔2026〕275号复函) 3.4.2(a)，经营主体购电时<b>统一计入买方节点所在区域电网的输电价格</b>，与路径是否跨区、是否走专项工程无关；发改价格规〔2020〕1441号第二条亦规定通过区域电网共用网络交易的用户购电价格应包括区域电网电量电价及损耗。本工具按买方所在区域计一次，路径过境其它区域的联络线段再按该区域计一次；区域电网自身网损率未公开，暂按 0 计。</p>
-    <p class="note"><b>网损承担方</b>的政策口径是<b>受端（购电方）承担</b>：规则 4.3.1 把买方价格按 Π(1−线损率) 折算到卖方节点，即买方为送端电量付费；1490号附件4第十八条，线损率偏差损益由购电方承担或享有。「两端各半」与「送端承担」用于模拟中长期双边谈判条款，送端承担实质是送端把线损折入报价。各段线损率一律按核定值计。规则 3.3.2：<b>输电价格已包含网损的段不再另行收取网损</b>，9 条「含输电环节线损」通道的线损只体现在物理功率与容量占用上，不进买方费用。送端省内的「送省外上网环节线损」由卖方承担（规则 7.3(a)），只计入口径三；受端省内的「上网环节线损费用」在输配电价外单列（1077号附件1 注3），计入完整落地价。</p>
+    <p class="note"><b>区域电网输电价格</b>是国网华北、华东、华中、东北、西北五个区域分部运营的区域共用输电网络（跨省 500kV / 1000kV 联络网架）的电量电价，由国家发改委核定（发改价格〔2026〕1077号附件2），随区域电网实际交易结算电量向购电方收取。按《省间电力现货交易规则》(2026年4月，发改办体改〔2026〕275号复函) 3.4.2(a)，经营主体购电时<b>统一计入买方节点所在区域电网的输电价格</b>，与路径是否跨区、是否走专项工程无关；发改价格规〔2020〕1441号第二条亦规定通过区域电网共用网络交易的用户购电价格应包括区域电网电量电价及损耗。本工具按买方所在区域计一次，路径过境其它区域的共用网络按区域去重计一次。送出省费用只计交易起点，过境联络接口不再叠加送出省价格。区域共用交流网接口的计费损耗按 0 处理，原线损仅用于容量估算；专项工程与背靠背直流按各自计费口径处理。</p>
+    <p class="note"><b>网损承担方</b>的政策口径是<b>受端（购电方）承担</b>：规则 4.3.1 把买方价格按 Π(1−线损率) 折算到卖方节点，即买方为送端电量付费；1490号附件4第十八条，线损率偏差损益由购电方承担或享有。「两端各半」与「送端承担」用于模拟中长期双边谈判条款，送端承担实质是送端把线损折入报价。专项工程按已录入的核定或备案线损率计费；区域共用交流接口的估算线损不逐条计费。规则 3.3.2：<b>输电价格已包含网损的段不再另行收取网损</b>，9 条「含输电环节线损」通道的线损只体现在物理功率与容量占用上，不进买方费用。送端省内的「送省外上网环节线损」由卖方承担（规则 7.3(a)），只计入口径三；受端省内的「上网环节线损费用」在输配电价外单列（1077号附件1 注3），计入完整落地价。</p>
     <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
     </div></details>
   </div></details>`;
@@ -272,14 +272,15 @@ function renderDetail(res,r){
           <div class="tl-seg-g">
             <div>长度<b>${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}</b></div>
             <div>容量<b>${e.cap?e.cap+' MW':'待补'}</b></div>
-            <div>输电价<b>${fmt(s.t)} 元/MWh</b></div>
-            <div>线损率<b>${fmt(e.loss,2)}%</b></div>
+            <div>${e.regional?'单独通道费':'输电价'}<b>${fmt(s.t)} 元/MWh</b></div>
+            <div>计费线损率<b>${fmt(s.billLossPct,2)}%</b></div>
             <div>段入口功率<b>${fmt(s.inMW,0)} MW</b></div>
-            <div>段损耗电量<b>${fmt(s.lossMwh,2)} MWh</b></div>
+            <div>段损耗电量（物理估算）<b>${fmt(s.lossMwh,2)} MWh</b></div>
           </div>
           ${s.util!=null?`<div class="meter"><i class="${s.util>1?'over':(s.util>0.8?'hi':'')}" style="width:${Math.min(s.util*100,100).toFixed(1)}%"></i></div>
             <div class="tl-cap">占用 ${fmt(s.util*100,1)}%　剩余 ${fmt(s.headroom,0)} / ${e.cap} MW</div>`
             :`<div class="tl-cap">核定容量待补，无法校验占用</div>`}
+          ${e.regional?`<p class="note">区域共用网络接口，不单独收通道费；${i===0?'送出省费用只在交易起点计一次。':'不收过境省外送费。'}${e.type==='AC' && s.billLossPct===0?'计费损耗 0，物理损耗仅作容量估算。':'直流计费损耗按该段口径保留。'}</p>`:''}
           <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　生效 '+esc(e.eff):''}</div>
         </div>
       </div>`;
@@ -310,7 +311,7 @@ function renderDetail(res,r){
       <div class="mc"><div class="l">计费网损电量</div><div class="v">${fmt(r.lossMwh,2)}<small>MWh</small></div></div>
       <div class="mc"><div class="l">计费线损率</div><div class="v">${fmt((1-r.D)*100,3)}<small>%</small></div></div>
     </div>
-    ${Math.abs(r.Dphys-r.D)>1e-9?`<p class="note" style="margin-top:6px">物理口径：送端需发电 ${fmt(r.genMWhPhys,1)} MWh，物理网损 ${fmt(r.lossMwhPhys,2)} MWh（${fmt((1-r.Dphys)*100,3)}%）。差异来自「含输电环节线损」的段，其网损已含在输电价里，不再向买方另收。</p>`:''}
+    ${Math.abs(r.Dphys-r.D)>1e-9?`<p class="note" style="margin-top:6px">物理口径：送端需发电 ${fmt(r.genMWhPhys,1)} MWh，物理网损 ${fmt(r.lossMwhPhys,2)} MWh（${fmt((1-r.Dphys)*100,3)}%）。物理链用于容量校验；计费链剔除已含在输电价中的网损，以及区域共用交流接口的估算损耗，避免重复计费。</p>`:''}
     <p class="note" style="margin-top:6px">送端省内线损：${r.exportLossPct!=null?`${esc(N(r.nodes[0]))} 送省外上网环节线损率 ${fmt(r.exportLossPct,2)}%，由卖方承担（规则 7.3(a)），折合每交付 1 MWh 多发 ${fmt(r.exportLossQty*1000,2)} kWh、成本 ${fmt(r.cExportLoss,2)} 元，已计入口径三，不计入买方落地价。`:`${esc(N(r.nodes[0]))} 未获取送省外上网环节线损率，口径三未计此项。`}</p>
     <div class="g3" style="margin-top:8px">
       <div class="mc"><div class="l">路径长度</div><div class="v">${fmt(r.dist,0)}<small>km</small></div></div>
@@ -343,9 +344,10 @@ function renderDetail(res,r){
       <div class="src" style="margin-top:4px;padding-top:0;border-top:0">
         ${tierTag(e.tier)}　${e.doc?esc(e.doc):'无发改委文号'}${e.eff?'　生效 '+esc(e.eff):(e.pubDate?'　发布 '+esc(e.pubDate):'')}<br>
         ${e.docTitle?esc(e.docTitle)+'<br>':''}
-        计费口径：${esc(e.bill)}${e.incLoss?'（含输电环节线损，本段网损不再另收；规则 3.3.2）':'（不含线损，线损另计）'}${e.tax?'　含税':'　不含税'}　输电费 = 输电价 × 段后电量（规则 4.3.1）<br>
-        ${s.t!==e.t?`本段反向行进：按送端 ${esc(N(s.a))} 的送出省输电价格 ${fmt(s.t)} 元/MWh 计（存储方向 ${esc(N(e.from))}→${esc(N(e.to))} 为 ${fmt(e.t)}）<br>`:''}
-        ${(e.sendFeeRev!=null && s.sf0!==e.sendFee)?`本段反向行进（${esc(e.dirNote||'双向工程')}）：送端省内段按 ${esc(N(s.a))} 送出省输电价格 ${fmt(s.sf0)} 元/MWh 计<br>`:''}
+        ${e.regional?`区域接口单独通道费 0；${si===0?'起点送出省价格 '+fmt(s.sf0)+' 元/MWh':'不叠加过境省外送费'}；计费损耗 ${fmt(s.billLossPct,2)}%，物理估算损耗 ${fmt(e.loss,2)}%。<br>`:''}
+        计费口径：${e.regional?'区域共用网络统一归集（按上方计费损耗执行）':esc(e.bill)+(e.incLoss?'（含输电环节线损，本段网损不再另收；规则 3.3.2）':'（不含线损，线损另计）')}${e.tax?'　含税':'　不含税'}　输电费 = 输电价 × 段后电量（规则 4.3.1）<br>
+        ${!e.regional && s.a===e.to && s.t!==e.t?`本段反向行进：按送端 ${esc(N(s.a))} 的送出省输电价格 ${fmt(s.t)} 元/MWh 计（存储方向 ${esc(N(e.from))}→${esc(N(e.to))} 为 ${fmt(e.t)}）<br>`:''}
+        ${(si===0 && s.a===e.to && e.sendFeeRev!=null && s.sf0!==e.sendFee)?`本段反向行进（${esc(e.dirNote||'双向工程')}）：送端省内段按 ${esc(N(s.a))} 送出省输电价格 ${fmt(s.sf0)} 元/MWh 计<br>`:''}
         ${e.marginalNote?`边际输电价说明：${esc(e.marginalNote)}<br>`:''}
         ${e.status?'状态：'+esc(e.status)+'<br>':''}
         ${e.fn&&e.fn!==e.n?'别名：'+esc(e.fn)+'<br>':''}
@@ -375,9 +377,9 @@ function renderDetail(res,r){
     <p class="note" style="margin:4px 0 0">口径三（送端净收益）为<b>受端价折回估算，非结算口径</b>——实际卖方结算价按卖方节点边际价确定（S14 规则 4.3.3）。</p>
     <div class="formula" style="margin-top:12px">
       <div class="mono">${state.includeDstCost===false
-        ? '送到省界价 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[送端省内段费 × 段前系数 + 通道输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价　—— 不含受端省内费用'
-        : '落地成本 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + Σ[送端省内段费 × 段前系数 + 通道输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价 + 受端上网环节线损费用 + 受端省网输配电价 + 政府性基金及附加'}</div>
-      <div class="txt">段前系数 = 1 / Π(该段及之后各段的通过率)，段后系数 = 1 / Π(之后各段的通过率)。输电费按段后电量计，来自《省间电力现货交易规则》(2026-04) 4.3.1 的折算公式；「含输电环节线损」的段在计费链里线损按 0 计（3.3.2）。</div>
+        ? '送到省界价 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + 起点送出省价格 × 首段前系数 + Σ[独立工程输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价　—— 不含受端省内费用'
+        : '落地成本 = 出清价 × (1 + ' + state.lossBearer + ' × 网损电量) + 起点送出省价格 × 首段前系数 + Σ[独立工程输电价 × 段后系数] + 买方区域电量电价 + 过境区域电量电价 + 受端上网环节线损费用 + 受端省网输配电价 + 政府性基金及附加'}</div>
+      <div class="txt">段前系数 = 1 / Π(该段及之后各段的通过率)，段后系数 = 1 / Π(之后各段的通过率)。输电费按段后电量计，来自《省间电力现货交易规则》(2026-04) 4.3.1 的折算公式；「含输电环节线损」的段在计费链里线损按 0 计（3.3.2）；区域共用交流接口的计费损耗也按 0，物理估算仍用于容量校验。</div>
     </div>
 
     <div class="sub">结算机制<em>《省间电力现货交易规则》(2026-04) 原文摘录</em></div>
@@ -454,7 +456,8 @@ function exportReport(){
     const e=s.e;
     L.push('');
     L.push('### 第 '+(i+1)+' 段 '+N(s.a)+' → '+N(s.b)+'：'+e.n);
-    L.push('- 电压 '+e.kv+'　输电价 '+fmt(s.t)+' 元/MWh　线损率 '+fmt(e.loss,2)+'%　段入口 '+fmt(s.inMW,0)+' MW'+(e.cap?'　容量 '+e.cap+' MW':''));
+    if(e.regional) L.push('- 区域共用网络接口：不单独收通道费；'+(i===0?'送出省费仅起点计入':'不收过境省外送费'));
+    L.push('- 电压 '+e.kv+'　输电价 '+fmt(s.t)+' 元/MWh　计费线损率 '+fmt(s.billLossPct,2)+'%　物理估算线损 '+fmt(e.loss,2)+'%　段入口 '+fmt(s.inMW,0)+' MW'+(e.cap?'　容量 '+e.cap+' MW':''));
     L.push('- 文号：'+(e.doc||'无发改委文号')+(e.eff?'　生效 '+e.eff:''));
     if(e.excerpt) L.push('- 原文摘录：'+e.excerpt);
   });

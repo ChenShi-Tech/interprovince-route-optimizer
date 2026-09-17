@@ -62,23 +62,24 @@ function renderLibList(){
   return '<div class="libcount">匹配 '+list.length+' 条</div>'+list.map(({c,i})=>`<details class="libcard">
     <summary>
       <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}${effBadge(c)}${c.tradable===false?'<span class="lc-tag">交易网络·待确认</span>':''}</span>
-      <span class="lc-p">${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
+      <span class="lc-p">${c.regional?'送出省参考价 ':''}${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
       <span class="lc-m">${esc(N(c.from))}→${esc(N(c.to))} · ${esc(c.kv)} · 线损 ${c.loss==null?'—':fmt(c.loss,2)+'%'} · ${c.capActual!=null?c.capActual+' MW':(c.cap!=null?'额定 '+c.cap+' MW':'容量待补')}</span>
       <span class="lc-b">${tierTag(c.tier)}</span>
     </summary>
     <div class="lc-body">
       <div class="lib-io">
-        <div><label>输电价 元/MWh</label><input type="number" step="0.1" value="${c.t==null?'':c.t}" onchange="setCh(${i},'t',this.value)"></div>
+        <div><label>${c.regional?'送出省参考价':'输电价'} 元/MWh</label><input type="number" step="0.1" value="${c.t==null?'':c.t}" onchange="setCh(${i},'t',this.value)"></div>
         <div><label>线损率 %</label><input type="number" step="0.05" value="${c.loss==null?'':c.loss}" onchange="setCh(${i},'loss',this.value)"></div>
         <div><label>容量 MW</label><input type="number" step="100" value="${c.cap==null?'':c.cap}" onchange="setCh(${i},'cap',this.value)" placeholder="待补"></div>
       </div>
       <div class="lc-kv">
-        <div><span>送端省</span>${esc(N(c.from))}　<b>送出省输电价格</b> ${c.sendFee>0?fmt(c.sendFee,1)+' 元/MWh':'已含在通道价中'}</div>
+        <div><span>送端省</span>${esc(N(c.from))}　<b>送出省输电价格</b> ${c.regional?fmt(c.t,1)+' 元/MWh（仅交易起点计入）':c.sendFee>0?fmt(c.sendFee,1)+' 元/MWh（仅交易起点计入）':'已含在通道价中'}</div>
         <div><span>受端省</span>${esc(N(c.to))}</div>
         <div><span>容量口径</span>${c.capBasis==='cap'?'实际输送能力（非 ATC）':c.capBasis==='rated'?'仅额定容量':'未获取'}${c.capActual!=null?'　实际 '+c.capActual+' MW':''}${c.capRated!=null?'　额定 '+c.capRated+' MW':''}</div>
         <div><span>容量来源</span>${esc(c.capSrc||'—')}</div>
         ${c.priceType==='capacity'?`<div><span>计价方式</span>单一容量电价制　容量电价 ${c.capPrice?c.capPrice.容量电价+' '+c.capPrice.单位:''}　折算等效 ${c.capEq!=null?fmt(c.capEq,2)+' 元/MWh':''}（按 ${DATA._capHours||4500} 小时）</div>`:''}
         ${c.sendFee>0?`<div><span>送端省内段</span>按送端省「送出省输电价格」计，发改价格〔2018〕1227号第五条</div>`:''}
+        ${c.regional?'<div><span>区域接口</span>不单独收通道费，不叠加过境省外送费；区域共用交流接口计费损耗为 0，原线损仅作容量估算。</div>':''}
         <div><span>计费口径</span>${esc(c.bill)}${c.incLoss?'（含线损）':'（不含线损）'}${c.tax?'　含税':'　不含税'}</div>
         ${c.status?`<div><span>状态</span>${esc(c.status)}</div>`:''}
         ${c.stFrom?`<div><span>送端落点</span>${esc(stName(c.stFrom))} @ ${esc(stAddr(c.stFrom))}</div>`:''}
