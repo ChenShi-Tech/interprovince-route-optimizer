@@ -49,6 +49,7 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 - 标签必须打在已合入 `main` 的提交上（`--target main`）；打在未合并的功能分支提交上会被拦下，防止未审查的代码作为正式包发出。
 - **不做覆盖式上传**：Release 已有同名附件（含上次上传到一半留下的）时直接中止，防止上传失败把原附件弄丢。
   确需替换：先勾 `dry_run` 跑一次核对签名，再在 Release 页面删除 `iproute-vX.Y.Z-debug.apk` 与 `.sha256`，最后正常重跑。
+- **凡上传必须 7 组测试齐全**：测试文件缺失只在 `dry_run` 下告警跳过（用于核对早期标签），正式发版和手动重跑上传都会中止。
 - 用 `GITHUB_TOKEN` 在别的工作流里创建的 Release 不会触发本工作流（GitHub 防递归），发版须由人发布。
 
 runner 前置条件：南洋工具链位于 runner 用户 `irp-runner` 的 `~/android-toolchain/`（Temurin JDK 17 + Gradle 8.7 +
