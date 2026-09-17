@@ -9,7 +9,7 @@
 node android/build-apk.mjs        # 构建 index.html → 拷入 assets → gradle assembleDebug
 ```
 
-产物：`android/app/build/outputs/apk/debug/app-debug.apk`（同时复制一份 `android/省间路径优选-v1.0-debug.apk` 便于分发）。
+产物：`android/app/build/outputs/apk/debug/app-debug.apk`（本机自测用；对外分发的包由发版流水线产出，见下节）。
 
 工具链位置：`~/android-toolchain/`（便携版 JDK 17 + Gradle 8.7 + Android SDK，免安装、免管理员，
 `build-apk.mjs` 自动探测并注入 `JAVA_HOME`，不依赖系统环境变量）。
@@ -31,15 +31,21 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 1. 发版提交里改 `android/app/build.gradle`：`versionName` 与标签一致（去掉 `v`），`versionCode` +1，合入 `main`；
 2. 发布 Release，标签 `vX.Y.Z`：`gh release create vX.Y.Z --target main --title "…" --notes "…"`
    （网页上只保存草稿不触发，点「Publish release」才触发）；
-3. 工作流依次：标签与 `versionName` 一致性 → 构建 + 7 组测试 → 打包 → 签名核验 →
+3. 工作流依次：标签与 `versionName` 一致性 → 工具链检查 → 构建 + 7 组测试 → 打包 → 签名核验 →
    把 `iproute-vX.Y.Z-debug.apk` 与 `.sha256` 挂到该 Release（同名文件覆盖）；
-4. 失败后补打包：Actions → android-release → Run workflow，填已发布的标签。
+4. 失败后补打包：Actions → android-release → Run workflow，填已发布的标签；
+   勾选 `dry_run` 则只打包、在运行摘要里给出签名指纹，不改动 Release 附件（验证流水线或核对签名时用）。
 
 注意：
 
 - **不要再在本机打包后手动上传**——同名文件会被 CI 覆盖，且各机器的 debug 签名密钥不同。
 - **签名连续性**：仓库变量 `ANDROID_SIGNER_SHA256` 设为约定签名证书的 SHA-256 指纹后，签名对不上的 APK 会被拦下不上传
   （手机上已装旧版的无法覆盖升级，只能卸载重装并丢失本地数据）；未设置时只告警。
+  指纹写 apksigner 输出的 64 位十六进制即可，keytool 的大写带冒号写法也兼容。
+- ⚠️ **v1.1.0～v1.1.5 是协作者本机 debug 密钥签的，与南洋密钥不同。** 签名方案拍板并设好上面的变量之前不要发新版；
+  若决定改用新密钥，首个 CI 版本的 Release 说明里必须写明「已装用户需卸载重装（本地费率修改、地图与模型密钥会丢）」。
+- 标签只支持 `vX.Y.Z`；预发布（pre-release / rc 标签）发布时工作流会报格式错误、不出包。
+- **补打包已有附件的标签会覆盖原 APK**：签名不同就等于换包，先用 `dry_run` 核对签名。
 - 用 `GITHUB_TOKEN` 在别的工作流里创建的 Release 不会触发本工作流（GitHub 防递归），发版须由人发布。
 
 南洋工具链位于 runner 用户 `irp-runner` 的 `~/android-toolchain/`（Temurin JDK 17 + Gradle 8.7 +
@@ -49,8 +55,8 @@ SDK `platform-tools` / `platforms;android-34` / `build-tools;34.0.0`），签名
 ## 安装到手机
 
 APK 为 debug 签名（首次构建自动生成于 `~/.android/debug.keystore`），可直接侧载：
-把 `省间路径优选-v1.0-debug.apk` 发到手机（钉钉/微信/数据线），点开安装（需允许"安装未知应用"）。
-无 adb 依赖；如已开 USB 调试也可 `adb install android/省间路径优选-v1.0-debug.apk`。
+从 GitHub Release 下载 `iproute-vX.Y.Z-debug.apk`（本机自测则用 `app-debug.apk`）发到手机（钉钉/微信/数据线），
+点开安装（需允许"安装未知应用"）。无 adb 依赖；如已开 USB 调试也可 `adb install iproute-vX.Y.Z-debug.apk`。
 
 ### 真机验收要点
 
