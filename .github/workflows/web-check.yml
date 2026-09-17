@@ -30,9 +30,18 @@ jobs:
       - name: 重新构建
         run: node tools/build.mjs
 
-      # 剔除每次构建必然变化的 BUILD_TIME 后与入库版本比对：
-      # 不一致 = 提交的产物与当前源码不同步（改了源码忘了构建）
+      # 产物同步校验：对「已提交版本」与「当前源码重建版本」用同一管道归一化两侧时间戳
+      # （index.html 的 BUILD_TIME + shared/*.json 的 builtAt），再逐文件比对——
+      # 只归一化单侧会让 git diff 永远显示时间戳差异（首跑踩过的坑）
       - name: 产物同步校验（剔除构建时间戳）
         run: |
-          sed -E -i "s/BUILD_TIME='[^']*'/BUILD_TIME=''/" index.html
-          git diff --exit-code -- index.html shared/app-data.json shared/app-data.min.json
+          norm() { sed -E "s/const BUILD_TIME='[^']*'/const BUILD_TIME=''/; s/\"builtAt\": ?\"[^\"]*\"/\"builtAt\": \"\"/" "$@"; }
+          fail=0
+          for f in index.html shared/app-data.json shared/app-data.min.json; do
+            echo "比对 $f …"
+            if ! diff <(git show HEAD:"$f" | norm) <(norm "$f"); then
+              echo "::error::$f 与当前源码的构建产物不同步——改了源码/数据后忘记重新构建？"
+              fail=1
+            fi
+          done
+          exit $fail
