@@ -35,7 +35,7 @@ if (fail) { console.log('\n产物缺失，先跑 node tools/build.mjs'); process
 
 console.log('\n══ 二、手机端数据结构 ══');
 const ad = JSON.parse(fs.readFileSync(path.join(root, p.full), 'utf8'));
-ok(ad.schema === 'iproute-app-data/v3', `schema = ${ad.schema}（v3：CH 新增 sendFeeRev / dirNote / marginalNote，PV 新增 inLoss / exportLoss）`);
+ok(ad.schema === 'iproute-app-data/v4', `schema = ${ad.schema}（v4：区域损耗来源与适用日期）`);
 ok(typeof ad.priceVersion === 'string' && ad.priceVersion.length === 16, `priceVersion = ${ad.priceVersion}`);
 ok(typeof ad.dataHash === 'string' && ad.dataHash.length === 64, 'dataHash 长度正确');
 ok(ad.ST && Object.keys(ad.ST).length === ad.counts.stations, `ST 站点 ${ad.counts.stations} 个与 counts 一致`);
@@ -51,7 +51,7 @@ const minAd = JSON.parse(fs.readFileSync(path.join(root, p.min), 'utf8'));
 ok(JSON.stringify(minAd) === JSON.stringify(ad), 'app-data.min.json 与 app-data.json 内容完全一致');
 
 console.log('\n══ 四、载荷指纹自校验 ══');
-const payload = { ST: ad.ST, CH: ad.CH, SEC: ad.SEC, PV: ad.PV, RG: ad.RG, RGOF: ad.RGOF };
+const payload = { ST: ad.ST, CH: ad.CH, SEC: ad.SEC, PV: ad.PV, RG: ad.RG, RGOF: ad.RGOF, RLOSS:ad.RLOSS, VALIDITY:ad.VALIDITY, CAP: ad.CAP };
 ok(sha(JSON.stringify(payload)) === ad.dataHash, 'dataHash 与载荷内容吻合，数据未被篡改');
 // 与 build.mjs 同口径：哈希前归一化换行，避免 autocrlf 检出差异造成假性版本不一致
 const fixedHash = sha(fs.readFileSync(path.join(root, p.fixed), 'utf8').replace(/\r\n?/g, '\n')).slice(0, 16);

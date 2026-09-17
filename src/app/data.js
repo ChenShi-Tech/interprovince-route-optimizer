@@ -2,6 +2,7 @@
    DATA 由构建脚本注入（data/fixed-prices.json + src/extra.json 合并后的载荷）。
    同一份载荷也以 shared/app-data.json 提供给安卓端，两端结构完全一致。 */
 const PV=DATA.PV, ST=DATA.ST, SEC=DATA.SEC, RG=DATA.RG;
+const CAP=DATA.CAP||{};   // REQ-401 两部制容（需）量电价（月单价，分电压档）
 let CH=DATA.CH.map(c=>({...c}));
 
 const REGION_OF=DATA.RGOF||{};   // 区域归属由 data/fixed-prices.json 提供
@@ -28,6 +29,7 @@ function algoData(){
     RG: DATA.RG,
     REGION_OF: DATA.RGOF || {},
     LOSS_OF,
+    RLOSS: DATA.RLOSS || {}, VALIDITY: DATA.VALIDITY || {},
     geo: { lngLatOf, provLngLat },
     name: N,
   };

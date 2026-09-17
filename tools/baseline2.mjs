@@ -125,7 +125,7 @@ const checks = [
   ['费率库搜索命中', "state.libQ='锦苏';renderLib();", 'v-lib', ['锦苏', '匹配 1 条']],
   ['费率库筛选容量制', "state.libQ='';state.libFilter='capacity';renderLib();", 'v-lib', ['容量制', '辛洹', '云霄']],
   ['renderLib() 省级页', "libTab='pv';renderLib();", 'v-lib', ['输配电价', '待补']],
-  ['renderLib() 断面页', "libTab='sec';renderLib();", 'v-lib', ['川渝断面', 'GSDF']],
+  ['renderLib() 断面页', "libTab='sec';renderLib();", 'v-lib', ['川渝断面', '真实可交易能力须由对应交易机构与调度机构确认']],
   ['renderMap() 腾讯底图', "state.mapProvider='qq';renderMap();", 'v-map', ['腾讯地图', '天地图', 'map-view']],
   ['renderMap() 天地图分支', "state.mapProvider='td';renderMap();", 'v-map', ['天地图密钥', 'cloudcenter.tianditu.gov.cn']],
 ];

@@ -1,4 +1,4 @@
-/* 智能推荐：把当前的可行路线与用户用自然语言写的额外考虑因素交给大模型，
+/* 智能推荐：把当前的参考路线与用户用自然语言写的额外考虑因素交给大模型，
    由它在候选里挑选并说明理由。
 
    边界：
@@ -32,7 +32,7 @@ function aiField(k, v){
   if(k==='provider') renderCalc();
 }
 
-/** 送给模型的候选摘要：只取可行路线，字段全部来自 evalPath 的结果。id 即列表里的 #序号。 */
+/** 送给模型的候选摘要：只取参考路线，字段全部来自 evalPath 的结果。id 即列表里的 #序号。 */
 function aiRouteDigest(res){
   const rows = res.rows.map((r,i)=>({r,i})).filter(x=>x.r.feasible);
   const take = rows.slice(0, AI_MAX_ROUTES);
@@ -41,12 +41,15 @@ function aiRouteDigest(res){
     total: rows.length, sent: take.length,
     routes: take.map(({r,i})=>({
       id: i+1,
+      适用条件与缺项:r.pricingIssues||[], 区域网损模式:state.regionLossMode, 报价边界:state.sourceQuote, 送端省内网损:state.originLossMode, 区域计费范围:state.regionChargeMode,
+      容量状态:r.capacityStatus, 当期ATC已确认:false,
+      费用完整:r.priceComplete,
       途经省份: r.nodes.map(N).join('→'),
       线路: r.edges.map(e=>e.n).join('+'),
       段数: r.hops,
       落地成本_元每MWh: f1(r.landed),
       过网费_元每MWh: f1(r.channelOnly),
-      送端净收益_元每MWh: f1(r.senderNet),
+      可接受送端报价_元每MWh: f1(r.senderNet),
       综合线损率_pct: f1((1-r.D)*100),
       最高通道占用_pct: f1(r.maxLoad*100),
       里程_km: Math.round(r.dist),
@@ -58,17 +61,18 @@ function aiRouteDigest(res){
       费率来源: r.edges.map(e=>e.n+':'+(TIER[e.tier]||e.tier)).join('；'),
       经过断面: r.secHits.map(h=>h.sec.n+' 利用率'+f1(h.util*100)+'%').join('；')||'无',
       容量待补段数: r.capUnknown,
-      排名_落地成本: r.rankA, 排名_过网费: r.rankB, 排名_送端净收益: r.rankC,
+      排名_落地成本: r.rankA, 排名_过网费: r.rankB, 排名_可接受送端报价: r.rankC,
     })),
   };
 }
 
 function aiBuildMessages(res){
   const d = aiRouteDigest(res);
-  const costName = state.includeDstCost===false ? '送到受端省界的价格（不含受端省内费用）' : '受端完整落地价';
+  const costName = state.includeDstCost===false ? '送到受端省界的价格（不含受端省内费用）' : '到户已列费用小计';
   const system = [
-    '你是省间电力现货交易的送电路径分析助手。用户已经用确定性算法枚举并计价了从送端省到受端省的全部可行路径，',
+    '你是省间中长期交付成本与报价测算的送电路径分析助手。用户已经用确定性算法枚举并计价了从送端省到受端省的参考容量未越限的候选路径，',
     '现在给出额外的考虑因素，请你只在给定的候选路径中挑选，不得虚构候选之外的路径，不得修改任何数值。',
+    '这些结果不是市场出清或实际结算。必须保留费用缺项、历史网损和容量未确认说明，不得将参考未越限解释为可成交。',
     '判断要有依据：引用候选表里的字段（成本、线损、占用、断面、里程、费率来源等）解释为什么推荐或不推荐。',
     '如果用户的要求与候选数据冲突或无法满足，直接说明，不要勉强推荐。',
     '必须以 JSON 格式输出，结构为：',
@@ -77,9 +81,9 @@ function aiBuildMessages(res){
   ].join('');
   const user = [
     `送端：${N(state.from)}；受端：${N(state.to)}；电量 ${state.qty} MWh，时段 ${state.hours} h；`,
-    `送端出清价 ${state.pGen} 元/MWh，受端结算价 ${state.pDst} 元/MWh；网损承担方：${state.lossBearer==1?'受端':state.lossBearer==0?'送端':'两端各半'}；`,
+    `送端报价 ${state.pGen} 元/MWh，受端目标交付价 ${state.pDst} 元/MWh；网损承担方：${state.lossBearer==1?'受端':state.lossBearer==0?'送端':'两端各半'}；`,
     `主指标口径：${costName}。`,
-    d.sent<d.total ? `可行路径共 ${d.total} 条，按当前排序只给出前 ${d.sent} 条。` : `可行路径共 ${d.total} 条，全部列出。`,
+    d.sent<d.total ? `参考路径共 ${d.total} 条，按当前排序只给出前 ${d.sent} 条。` : `参考路径共 ${d.total} 条，全部列出。`,
     '\n候选路径（JSON）：\n', JSON.stringify(d.routes),
     '\n\n用户的额外考虑因素：\n', (aiState.prompt||'').trim() || '（用户未填写，请按综合成本、可靠性与费率可信度给出建议）',
     '\n\n请以 JSON 格式输出推荐结果。',
@@ -90,7 +94,7 @@ function aiBuildMessages(res){
 async function aiRun(){
   const res = state._res;
   if(!res || !res.rows || !res.rows.length){ state._ai={error:'当前没有可推荐的路线'}; renderCalc(); return; }
-  if(!res.rows.some(r=>r.feasible)){ state._ai={error:'当前没有可行路线（全部越限），无法推荐'}; renderCalc(); return; }
+  if(!res.rows.some(r=>r.feasible)){ state._ai={error:'当前没有参考路线（全部越限），无法推荐'}; renderCalc(); return; }
   if(!aiState.key){ state._ai={error:'请先在「模型设置」里填写 API Key'}; aiState.showCfg=true; aiSave(); renderCalc(); return; }
   const base=(aiState.base||'').replace(/\/+$/,''), model=aiState.model;
   if(!base||!model){ state._ai={error:'请填写接口地址与模型名'}; aiState.showCfg=true; aiSave(); renderCalc(); return; }
@@ -145,8 +149,8 @@ function renderAI(res){
   const feasible=res.rows.filter(r=>r.feasible).length;
   const preset=AI_PRESETS[aiState.provider]||AI_PRESETS.custom;
   let out=`<div class="card tight ai">
-    <div class="sec-title">智能推荐<span class="hint">在 ${feasible} 条可行路线中按你的要求挑选</span></div>
-    <p class="note" style="margin:-4px 0 8px">把成本之外的考虑因素用自然语言写在下面，例如「优先全部发改委核定的线路」「避开占用超过 60% 的通道」「不要经过断面」「直流段不超过 1 段」「线损和过网费都要兼顾」。模型只在上面列出的可行路线里选，不改动任何数值。</p>
+    <div class="sec-title">智能推荐<span class="hint">在 ${feasible} 条参考路线中按你的要求挑选</span></div>
+    <p class="note" style="margin:-4px 0 8px">把成本之外的考虑因素用自然语言写在下面，例如「优先全部发改委核定的线路」「避开占用超过 60% 的通道」「不要经过断面」「直流段不超过 1 段」「线损和过网费都要兼顾」。模型只在上面列出的参考路线里选，不改动任何数值。</p>
     <textarea id="i-ai-prompt" rows="3" placeholder="例：优先发改委核定价格的线路，避开容量待补的通道，线损率不超过 5%" oninput="aiField('prompt',this.value)">${esc(aiState.prompt)}</textarea>
     <div class="ai-bar">
       <button class="btn" ${ai.loading?'disabled':''} onclick="aiRun()">${ai.loading?'正在分析…':'让模型推荐'}</button>
@@ -164,7 +168,7 @@ function renderAI(res){
       <p class="note" style="margin-top:2px">密钥只保存在本机浏览器，不会写入本站点或构建产物。浏览器直接调用服务商接口（OpenAI 兼容的 chat/completions），服务商须允许跨域；DeepSeek 已验证可用。</p>
     </div>`;
   if(ai.error) out+=`<div class="warn bad" style="margin:10px 0 0">${esc(ai.error)}</div>`;
-  if(ai.loading) out+=`<div class="ai-loading">已把 ${Math.min(feasible,AI_MAX_ROUTES)} 条可行路线与你的要求发给 ${esc(aiState.model)}，通常需要 10～40 秒…</div>`;
+  if(ai.loading) out+=`<div class="ai-loading">已把 ${Math.min(feasible,AI_MAX_ROUTES)} 条参考路线与你的要求发给 ${esc(aiState.model)}，通常需要 10～40 秒…</div>`;
   if(ai.result){
     const r=ai.result;
     out+=`<div class="ai-res">

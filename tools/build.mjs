@@ -46,11 +46,10 @@ function stationPair(name) {
 }
 
 // ---------- 0. 送出省输电价格与容量制折算（下面两段共用，须先声明） ----------
-const EXPORT_DEFAULT = 0.03;   // 元/千瓦时，无专属值的省份适用通用互济条款
 const EX = prices.送出省输电价格 || {};
-const exportOf = (code) => (typeof EX[code] === 'number' ? EX[code] : EXPORT_DEFAULT);
+const exportOf = (code) => (typeof EX[code] === 'number' ? EX[code] : null);
 // 送出省输电价格：元/千瓦时 → 元/兆瓦时
-const EXPORT_YUAN_PER_MWH = (code) => exportOf(code) * 1000;
+const EXPORT_YUAN_PER_MWH = (code) => exportOf(code)==null ? null : exportOf(code)*1000;
 // 容量制工程的等效度电成本：容量电价 × 1000 ÷ 折算利用小时
 const CAP_HOURS = prices.容量制折算利用小时 || 4500;
 const capEq = (r) => (r.容量电价 ? r.容量电价.容量电价 * 1000 / CAP_HOURS : null);
@@ -154,24 +153,24 @@ for (const [a, b, n, kv, cap, loss, type, kvText, extraNote] of AC_LINKS) {
     kv: kvText || (kv + 'kV'), type: type || 'AC', cap, lenKm: null,
     dirNote: extraNote || '省间交流联络线，潮流双向',
     sendFeeRev: null, marginalNote: '',
-    t: exportOf(a) * 1000,      // 省间交流联络线未单独核价，其自身即按送出省输电价格计（存储方向 a→b，取 a 的价格）
+    t: exportOf(a) * 1000,      // 送出省参考价，仅路径起点使用；不是接口独立通道费
     tRaw: exportOf(a) * 1000,
     tRev: exportOf(b) * 1000,   // 反向行进 b→a 时送端省是 b，取 b 的送出省输电价格
     bidir: true,                // 交流联络线可双向通行
-    regional: true,             // 经区域共用交流网络输送，按到达省所在区域计区域电网电量电价（1490号附件3第十一条）
+    regional: true,             // 共用网络接口：区域费用按整条路径去重归集
     capEq: null,
-    sendFee: 0,                 // 上行的送出省价已含在 t 中，不重复计
-    loss, tier: 'region',
+    sendFee: 0,                 // 起点送出省参考价存于 t/tRev，算法归入 send，不重复计
+    loss, lossStatus:'estimate', tariffStatus:type==='DC'?'unknown':'pooled', tier: 'region',
     doc: '送出省输电价格（第四监管周期）',
     docTitle: '各省第四监管周期输配电价通知',
     issuer: '省级发展改革委', pubDate: '2026-07/08', url: '',
     eff: '2026-08-01',
-    excerpt: `因省间互济等因素临时送省外电量，送出省输电价格按每千瓦时 ${exportOf(a)} 元（含税）执行，不计线损。`,
+    excerpt: '送出省参考价取自对应省核价表，临时互济与核定外送条件不同；接口容量、损耗为估算，不是核价表的核定参数。',
     hist: [], tax: true, incLoss: false,
     bill: '送出省输电价格', status: '口径待确认',
-    priceType: 'energy', capRated: cap, capActual: cap, capBasis: 'rated', capSrc: '设计容量',
+    priceType: 'energy', capRated: cap, capActual: cap, capBasis: 'estimate', capSrc: '拓扑模型估算，非核定容量或当期ATC',
     tradable: false,   // 省间交流联络线未单独核定输电价格，是否属于省间现货交易网络待确认
-    note: '省间联络线未单独核定输电价格，此处按第四监管周期送端省「外送电送出省输电价格」口径取值（反向行进取对侧省的价格）；该段属区域共用网络，买方所在区域的电量电价在路径层面统一计一次，过境其它区域再按该区域电量电价计。'
+    note: '省间联络接口无单独核定通道价；t/tRev 仅保存正反方向送出省参考价，只有作为交易起点时计入送端省内段，过境时不收。区域共用网络按区域去重计费；区域内交流接口计费损耗为 0，原线损仅作容量估算，背靠背直流保留自身计费损耗。'
       + (extraNote ? '　' + extraNote : ''),
     docVersion: '', sourceIssue: '',
   });
@@ -187,6 +186,7 @@ for (const [code, geo] of Object.entries(extra.provinces)) {
     net: pr.受端省网输配电价 ?? null,
     fund: pr.政府性基金及附加 === undefined ? null : pr.政府性基金及附加,
     netSrc: pr.来源 || '（未记录来源）',
+    effectiveFrom:pr.价格生效日期 || '', scopeNote:pr.适用主体提醒 || '',
     // 1077号附件1 各省表注3 / 注4（S11）：受端省内上网环节线损率（用户承担）、送省外上网环节线损率（卖方承担）
     inLoss: pr.省内上网环节线损率 ?? null,
     exportLoss: pr.送省外上网环节线损率 ?? null,
@@ -203,6 +203,10 @@ const payload = {
   PV: provinceOut,
   RG: prices.区域电网输电价格,
   RGOF: prices.区域电网分区,
+  RLOSS: prices.区域网损参数,
+  VALIDITY: prices.参数适用期,
+  // REQ-401：两部制容（需）量电价（月单价，按电压档多档），数据源 S11-附件1 省级电网输配电价表
+  CAP: prices.两部制容量需量电价,
 };
 
 const builtAt = new Date().toISOString();
@@ -249,7 +253,7 @@ fs.writeFileSync(path.join(root, 'index.html'), out);
 // (b) 手机端与其它消费方：同一份数据的独立 JSON（输出到 shared/，不用 dist/ 以免被发布工具排除）。
 //     与 Web 版同源、同一次构建产出，保证两端数据结构与数值完全一致。
 const appData = {
-  schema: 'iproute-app-data/v3',   // v2：CH 新增 bidir / regional / tRev；v3：CH 新增 sendFeeRev / dirNote / marginalNote，PV 新增 inLoss / exportLoss / exportKind
+  schema: 'iproute-app-data/v4',   // v2：CH 新增 bidir / regional / tRev；v3：CH 新增 sendFeeRev / dirNote / marginalNote，PV 新增 inLoss / exportLoss / exportKind
   builtAt,
   priceVersion,                                   // 价格数据指纹，用于两端比对
   dataHash: sha(json(payload)),                   // 载荷指纹，用于校验完整性
@@ -268,15 +272,17 @@ const appData = {
     区域电网输电价格: '元/千瓦时（同上）',
   },
   readme: [
+    'RLOSS：currentPct=null 表示本期未核实；historicalPct 仅供历史参考情景。VALIDITY/PV.effectiveFrom 为适用期。',
     '本文件由 tools/build.mjs 生成，与 index.html 同源同版本。',
     '修改价格请改 data/fixed-prices.json 后重新构建，不要直接改本文件。',
     'CH[].tier 为数据可信度：gov=发改委核定 / grid=国网披露 / region=区域或送出省口径。',
     'CH[].cap 为用于容量校验的容量，已优先取「实际输送能力」，缺失时回退额定；capBasis 标明口径。',
-    'CH[].priceType 为 energy（电量制）或 capacity（容量制，t 为折算的等效度电成本）。',
-    'CH[].sendFee 为送端省内段费用（送出省输电价格），AC 联络线为 0（其价格已含在该段 t 中）。',
+    'CH[].priceType 为 energy（电量制）或 capacity（容量制，t 为边际费用情景，非通用核定电量价）。',
+    'CH[].sendFee 仅在交易起点计入送端省内段。regional 接口的 t/tRev 为两侧省送出参考价，仅首段归入 send，不作独立通道收费。',
     'CH[].bidir：能否双向通行。专项工程默认 false；数据文件标「双向」的 7 条（德宝、青藏、长南荆、辛洹、灵宝、高岭、云霄）与全部联络线为 true。反向行进时联络线输电价取 tRev，专项工程送端省内段费用取 sendFeeRev；dirNote 为方向依据。',
-    'CH[].regional：仅联络线为 true，表示属区域共用网络。区域电网电量电价按《省间电力现货交易规则》(2026-04) 3.4.2(a) 统一计买方所在区域一次，过境其它区域的联络线段再按该区域计一次。',
-    'CH[].incLoss 为 true 的段「输电价格已包含网损」，按规则 3.3.2 不再向买方收该段网损；所有段的输电费均按规则 4.3.1 以该段段后电量计。',
+    'CH[].regional：仅联络接口为 true，中长期区域费按共用网络去重，公告要求时另计受端区域一次。',
+    '区域内部共用交流接口的计费线损为 0；CH[].loss 原值仅作物理功率和容量估算。专项工程与背靠背直流按自身计费口径处理。',
+    'CH[].incLoss 为 true 的段「输电价格已包含网损」，不再重复收计费网损；独立工程输电费按其出口电量约定折算。',
     'CH[].marginalNote：容量制工程（辛洹、云霄）的 t 为交易方的边际输电价（辛洹 0，云霄取输电权报价下限），说明见此字段。',
     'PV[].inLoss / exportLoss：受端省内上网环节线损率 / 送省外上网环节线损率（%），1077号附件1 注3、注4；exportKind 标明送出省价格是「核定外送」还是「临时互济条款」。',
     'PV[].fund 可能为 null（西藏未获取），消费方需按缺失处理而非当作 0 静默使用。',

@@ -116,15 +116,24 @@ const tests = [
     expected: '费用总额变为原 3 倍；落地单价不变',
     async run(page, set) {
       await page.goto(G, DCL);
-      const t1 = await page.evaluate(() => state._res.rows[0].yuan.total);
-      const p1 = await page.evaluate(() => state._res.rows[0].landed);
+      // 修正(2026-09-17)：电量放大 3 倍可能让原最优路线越限沉底（如 SC>ZJ>JS 在 3000MW 下超容）,
+      // rows[0] 随之换路线,旧断言「前后 rows[0] 相比」会误报非线性。改为锁定同一条路线对比。
+      const base = await page.evaluate(() => {
+        const r = state._res.rows[0];
+        return { key: r.nodes.join('>'), total: r.yuan.total, landed: r.landed };
+      });
       await page.fill('#i-qty', '3000');
       await page.locator('#i-qty').blur();
-      const t2 = await page.evaluate(() => state._res.rows[0].yuan.total);
-      const p2 = await page.evaluate(() => state._res.rows[0].landed);
-      ok(Math.abs(t2 - t1 * 3) < 1, `总额应 ${t1 * 3}，实际 ${t2}`);
-      ok(p1 === p2, `单价应不变 ${p1} vs ${p2}`);
-      set(`总额 ${t1}→${t2}（×3）；单价保持 ${p1} 元/MWh`);
+      const after = await page.evaluate((key) => {
+        state.showBad = true;   // 原路线可能越限沉底,纳入越限方案保证可追踪
+        state._res = solve(state, algoData());
+        const r = state._res.rows.find(x => x.nodes.join('>') === key);
+        if (!r) throw new Error('原最优路线在候选集中消失');
+        return { total: r.yuan.total, landed: r.landed };
+      }, base.key);
+      ok(Math.abs(after.total - base.total * 3) < 1, `同路线总额应 ${base.total * 3}，实际 ${after.total}`);
+      ok(after.landed === base.landed, `单价应不变 ${base.landed} vs ${after.landed}`);
+      set(`同一路线(${base.key})总额 ${base.total.toFixed(0)}→${after.total.toFixed(0)}（×3）；单价保持 ${base.landed} 元/MWh`);
     },
   },
   {
@@ -142,7 +151,8 @@ const tests = [
         const tr = [...document.querySelectorAll('#d-detail tr')].find(t => t.textContent.includes('网损折价'));
         return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : '(未找到行)';
       });
-      ok(/^网损折价（受端承担部分）\s*0\.0/.test(row), `网损行单价应显示 0.0，实际「${row.slice(0, 50)}」`);
+      // 修正(2026-09-17)：计费明示后网损行文案含「，含线损段不另收」后缀（Dphys≠D 的段）,正则放宽括号内文案
+      ok(/^网损折价（受端承担部分[^）]*）\s*0\.0/.test(row), `网损行单价应显示 0.0，实际「${row.slice(0, 50)}」`);
       const landed = await page.evaluate(() => state._res.rows[0].landed);
       set(`lossBearer=0；comp.loss=0；网损行显示 0；落地单价 ${landed} 元/MWh`);
     },
@@ -501,6 +511,148 @@ const tests = [
     },
   },
 
+  /* ================= 运行时健壮性（harden-web-runtime） ================= */
+  {
+    id: 'HR-01', section: '运行时健壮性', title: '存储写入失败→可见提示+去重+功能不受影响',
+    steps: '把 setItem 替换为抛错版本，触发重算与方案切换',
+    expected: '测算页出现恰好一条存储故障提示；多次失败不重复弹条；测算与切换照常、无未捕获异常',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        window.__origSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function () { throw new Error('HR01 模拟配额超限'); };
+      });
+      await page.selectOption('#i-hops', '3');
+      await page.waitForTimeout(150);
+      const r1 = await page.evaluate(() => ({
+        warnN: [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length,
+        rows: state._res.rows.length,
+      }));
+      ok(r1.warnN === 1, `存储故障提示应恰好 1 条，实际 ${r1.warnN}`);
+      ok(r1.rows > 0, `存储故障下测算应正常，实际 ${r1.rows} 条`);
+      await page.locator('.rc').nth(1).click();
+      await page.selectOption('#i-hops', '4');
+      await page.waitForTimeout(150);
+      const r2 = await page.evaluate(() => [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length);
+      ok(r2 === 1, `多次写入失败后提示仍应 1 条，实际 ${r2}`);
+      await page.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
+      set(`提示恰好 1 条（多次失败去重，防渲染循环）；故障下重算 ${r1.rows} 条、切方案正常`);
+    },
+  },
+  {
+    id: 'HR-02', section: '运行时健壮性', title: '重渲染保持折叠态（完整明细 + 无 id 说明面板）',
+    steps: '展开「完整明细」与任一口径说明面板，改价格、切跳数触发重算',
+    expected: '重建后两者仍为展开态（修复前完整明细会被收回）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        document.getElementById('d-detail').open = true;
+        const ex = document.querySelector('details.explain'); if (ex) ex.open = true;
+      });
+      await page.fill('#i-pgen', '333');
+      await page.locator('#i-pgen').blur();
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.getElementById('d-detail').open), '改价格后完整明细应保持展开');
+      const ex1 = await page.evaluate(() => { const d = document.querySelector('details.explain'); return d ? d.open : null; });
+      await page.selectOption('#i-hops', '3');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.getElementById('d-detail').open), '切跳数后完整明细应保持展开');
+      const ex2 = await page.evaluate(() => [...document.querySelectorAll('details.explain')].some(d => d.open));
+      ok(ex2 === true, `无 id 说明面板展开态应保持，实际 ${ex2}`);
+      set(`d-detail 保持展开；说明面板 open=${ex1}→${ex2}`);
+    },
+  },
+  {
+    id: 'HR-03', section: '运行时健壮性', title: '错误态往返不发生错位恢复',
+    steps: '展开完整明细后切到无连通路径省对（错误态），再切回',
+    expected: '错误态正常渲染空态卡片；切回后 d-detail 按 id 恢复展开，无错位、无异常',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => { document.getElementById('d-detail').open = true; });
+      await page.selectOption('#i-from', 'BJ');
+      await page.selectOption('#i-hops', '1');
+      await page.waitForTimeout(150);
+      const err = await page.evaluate(() => ({ empty: !!document.querySelector('.empty'), dets: document.querySelectorAll('#v-calc details').length }));
+      ok(err.empty, '应进入错误空态');
+      await page.selectOption('#i-from', 'SC');
+      await page.waitForTimeout(150);
+      const back = await page.evaluate(() => ({
+        detailOpen: document.getElementById('d-detail').open,
+        cards: document.querySelectorAll('.rc').length,
+      }));
+      ok(back.cards > 0, '应恢复正常结果态');
+      ok(back.detailOpen, '切回后完整明细应按 id 恢复展开');
+      set(`错误态面板 ${err.dets} 个（数量守卫分支）；切回后卡片 ${back.cards} 张、d-detail 按 id 恢复展开`);
+    },
+  },
+  {
+    id: 'HR-04', section: '运行时健壮性', title: '最坏参数下持久化记录 < 2KB',
+    steps: '西藏→江苏、6 段、绕行不限（候选逾百条）后触发保存',
+    expected: 'iproute.v2.last 低于 2048 字节且不含求解结果（修复前最坏约 12MB）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        const setv = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
+        setv('i-from', 'XZ'); setv('i-to', 'JS'); setv('i-hops', '6'); setv('i-detour', '9');
+      });
+      await page.waitForTimeout(200);
+      const r = await page.evaluate(() => {
+        const raw = localStorage.getItem('iproute.v2.last') || '';
+        return { bytes: raw.length, hasRes: raw.includes('_res'), n: state._res.total };
+      });
+      ok(r.n > 50, `最坏省对候选应 >50 条，实际 ${r.n}`);
+      ok(r.bytes < 2048, `持久化记录应 <2KB，实际 ${r.bytes}B`);
+      ok(!r.hasRes, '持久化记录不得包含 _res 求解结果');
+      set(`候选 ${r.n} 条；记录 ${r.bytes}B（修复前最坏约 12MB）；含 _res=${r.hasRes}`);
+    },
+  },
+  {
+    id: 'HR-05', section: '运行时健壮性', title: '全局错误兜底：提示条去重计数且不吞控制台',
+    steps: '注入两次相同未捕获异常与一次不同异常',
+    expected: '提示条出现且相同错误合并为 ×2；不同错误单列；pageerror 事件照常触发（控制台留痕）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const errs = [];
+      page.on('pageerror', e => errs.push(String(e)));
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
+      await page.waitForTimeout(250);
+      let box = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return b ? b.innerText : ''; });
+      ok(box.includes('hr05-重复错误'), `提示条应含错误摘要，实际「${box.slice(0, 60)}」`);
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
+      await page.waitForTimeout(250);
+      const dup = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return (b ? b.innerText : '').includes('×2'); });
+      ok(dup, '相同错误第二次应合并为 ×2 而非新增一条');
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-另一错误'); }, 0));
+      await page.waitForTimeout(250);
+      const both = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return b ? b.innerText : ''; });
+      ok(both.includes('hr05-另一错误'), '不同错误应单独显示');
+      const n = errs.filter(e => e.includes('hr05')).length;
+      ok(n >= 3, `pageerror 应照常触发 ≥3 次（不吞控制台），实际 ${n}`);
+      set(`提示条含 2 类错误（重复项合并 ×2）；pageerror 触发 ${n} 次未被吞`);
+    },
+  },
+  {
+    id: 'HR-06', section: '运行时健壮性', title: '费率库整页重建保持卡片展开态',
+    steps: '展开第一张通道卡片后切到测算再切回费率库',
+    expected: '切回后第一张通道卡仍为展开态（此前 renderLib 整页替换会收起）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.locator('.libcard summary').first().click();
+      ok(await page.evaluate(() => document.querySelector('.libcard').open), '前置：卡片应已展开');
+      await page.click('#t-calc');
+      await page.click('#t-lib');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.querySelector('.libcard').open), '切回费率库后第一张通道卡应保持展开');
+      set('通道卡展开态跨 Tab 往返保持');
+    },
+  },
+
   /* ================= 响应式 ================= */
   {
     id: 'R-01', section: '响应式', title: '手机竖屏 375×667（iPhone SE）',
@@ -634,7 +786,8 @@ const tests = [
         await page.click('#t-lib');
         await page.locator('button', { hasText: /^省级参数/ }).click();
         const card = page.locator('.libcard').first();
-        await card.locator('summary').click();
+        // harden-web-runtime 后展开态跨 Tab 保持：二次循环进来的卡片可能已展开，盲点 summary 会把它收起，改为「收起才展开」
+        if ((await card.getAttribute('open')) === null) await card.locator('summary').click();
         const r = await card.evaluate(() => {
           const inputs = [...document.querySelectorAll('.libcard .lib-io input')].slice(0, 3);
           const labels = [...document.querySelectorAll('.libcard .lib-io label')].slice(0, 3);
@@ -697,6 +850,57 @@ const tests = [
     },
   },
   {
+    id: 'RQ-401', section: 'PRD-IPRO', title: 'REQ-401：容量电费测算器（折叠卡 · 电压档选择 · 不参与路径比选）',
+    steps: '打开测算页展开「容量电费测算」卡：断言默认档预选=1~10（20）千伏、P5 固定标注存在；容量方式输入 1000 kVA + 年用电量 12000 MWh → 年费用/分摊断言；切电压档 → 输出随之变化；年电量 0 → 分摊显示 —；西藏 → 暂无数据（负向）',
+    expected: '默认预选档规则（1~10（20）千伏，无此档取第一档）生效；北京按容量 33 元/kVA·月×1000×12=396,000 元/年、分摊 33.00 元/MWh；切 220千伏及以上档 → 336,000 元/年；P5 固定标注「容量电费与电量来自省内或省外无关，不参与路径比选」含发改价格〔2020〕1441号 / 〔2023〕532号；年电量 0 显示 — 不出 Infinity；西藏显示「暂无数据」',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const card = page.locator('#d-capfee');
+      ok(await card.getAttribute('open') === null, '容量电费卡默认应收起（独立折叠卡）');
+      await card.locator('summary').click();
+      ok(await card.getAttribute('open') !== null, '点击 summary 应展开');
+      // P5 固定标注（政策口径声明，含文号）
+      const note = await card.locator('.cap-note').innerText();
+      ok(note.includes('容量电费与电量来自省内或省外无关，不参与路径比选'), `P5 固定标注缺失：「${note.slice(0, 40)}」`);
+      ok(note.includes('1441') && note.includes('532'), 'P5 标注应含发改价格〔2020〕1441号 / 〔2023〕532号');
+      // 默认档预选：受端 JS(江苏) 默认档 = 1~10（20）千伏
+      ok(await page.locator('#i-captier').inputValue() === '1~10（20）千伏', `默认预选档应为 1~10（20）千伏，实际「${await page.locator('#i-captier').inputValue()}」`);
+      // 手算比对：北京按容量 33×1000×12=396000；按需量 52×1000×12=624000（默认档月单价）
+      const run = async (prov, mode, val, qty) => page.evaluate(([p, m, v, q]) => {
+        state.capProv = p; state.capTier = null; setCapMode(m);
+        const iv = document.getElementById('i-capval'); iv.value = String(v); iv.dispatchEvent(new Event('change', { bubbles: true }));
+        const iq = document.getElementById('i-capqty'); iq.value = String(q); iq.dispatchEvent(new Event('change', { bubbles: true }));
+        const mc = document.querySelectorAll('#d-capfee .mc .v');
+        return { annual: mc[1].textContent.trim(), per: mc[2].textContent.trim() };
+      }, [prov, mode, val, qty]);
+      let r = await run('BJ', 'cap', 1000, 12000);
+      ok(r.annual.replace(/,/g, '') === '396000元/年', `BJ 按容量年费用应 396,000 元/年，实际「${r.annual}」`);
+      ok(r.per === '33.00元/MWh', `BJ 按容量分摊应 33.00 元/MWh，实际「${r.per}」`);
+      r = await run('BJ', 'demand', 1000, 12000);
+      ok(r.annual.replace(/,/g, '') === '624000元/年', `BJ 按需量年费用应 624,000 元/年，实际「${r.annual}」`);
+      ok(r.per === '52.00元/MWh', `BJ 按需量分摊应 52.00 元/MWh，实际「${r.per}」`);
+      // 切档联动：220千伏及以上 容量 28 → 336,000
+      await page.evaluate(() => { state.capProv = 'BJ'; state.capTier = null; setCapMode('cap'); });
+      await page.selectOption('#i-captier', '220千伏及以上');
+      r = await page.evaluate(() => ({
+        annual: document.querySelectorAll('#d-capfee .mc .v')[1].textContent.trim(),
+        tier: document.getElementById('i-captier').value,
+      }));
+      ok(r.annual.replace(/,/g, '') === '336000元/年', `切 220千伏及以上档后年费用应 336,000 元/年，实际「${r.annual}」`);
+      // 负向 1：年电量 0 → 分摊显示 —（不报错、不出 Infinity）
+      await page.evaluate(() => {
+        const iq = document.getElementById('i-capqty'); iq.value = '0'; iq.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      const per0 = await page.evaluate(() => document.querySelectorAll('#d-capfee .mc .v')[2].textContent.trim());
+      ok(per0 === '—元/MWh' && !per0.includes('Infinity'), `年电量 0 时分摊应显示 —，实际「${per0}」`);
+      // 负向 2：西藏（缺省省）→ 暂无数据，不补估
+      await page.evaluate(() => { state.capProv = 'XZ'; renderCalc(); });
+      const xzTxt = await card.locator('.warn').innerText();
+      ok(xzTxt.includes('暂无数据'), `西藏应显示暂无数据，实际「${xzTxt.slice(0, 40)}」`);
+      set(`默认档预选=1~10（20）千伏；BJ 容量 396,000/33.00、需量 624,000/52.00；切档 336,000；年电量0→—；XZ→暂无数据`);
+    },
+  },
+  {
     id: 'RQ-705', section: 'PRD-IPRO', title: 'REQ-705：通道组件（直流）作为必经组件筛方案 + 说明文字可折叠',
     steps: '检查 details.explain 默认收起；放宽跳数/绕行让候选含多条直流；点选一个直流组件，再清除',
     expected: '长段说明默认收起、点击可展开；直流组件排在最前；点选后列表只保留含该通道的方案，且组件清单仍为完整候选集（其余组件仍可取消）；清除后恢复全量',
@@ -746,6 +950,305 @@ const tests = [
       const c = await page.evaluate(() => ({ must: state.mustHave.length, rows: state._res.rows.length }));
       ok(c.must === 0 && c.rows === b.rows, `清除后应恢复全量 ${b.rows} 条候选，实际 ${c.rows} 条`);
       set(`说明区 ${ex.length} 处默认收起；组件 ${b.chips} 个（直流优先）；筛出 ${a.rows}/${b.rows} 条；清除后恢复`);
+    },
+  },
+  {
+    id: 'RQ-602', section: 'PRD-IPRO', title: 'REQ-602：本地价格覆盖 priceVersion 校验',
+    steps: '预置旧版本地费率覆盖（pv=0000）后加载页面，自动「确定」丢弃',
+    expected: '出现提示并丢弃旧覆盖，CH 恢复当前核定值（64 条且内容非占位）',
+    async run(page, set) {
+      await page.addInitScript(() => {
+        window.__dialogSeen = false;
+        localStorage.setItem('iproute.v2.lib', JSON.stringify({
+          pv: '0000dead', at: 'old',
+          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+        }));
+      });
+      page.on('dialog', d => { page.__dialogSeen = true; d.accept(); });
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const seen = page.__dialogSeen === true;
+      const ch = await page.evaluate(() => ({ n: CH.length, first: CH[0].n, stale: !!state._libStale }));
+      ok(seen, '应弹出旧版本提示（confirm）');
+      ok(ch.n === 64 && !String(ch.first).includes('占位'), `旧覆盖应被丢弃恢复核定值，实际 CH[0].n=${ch.first}`);
+      set(`提示出现=${seen}；本地覆盖已丢弃，CH 恢复核定值（${ch.n} 条）`);
+    },
+  },
+  {
+    id: 'RQ-602b', section: 'PRD-IPRO', title: 'REQ-602b：保留旧版价格覆盖时费率库出现核对横幅',
+    steps: '预置旧版本地费率覆盖后加载，confirm 选「取消」暂保留，进入费率库；再点「恢复检索原始值」',
+    expected: '费率库顶部出现「旧版价格数据」核对横幅；恢复原始值后横幅消失',
+    async run(page, set) {
+      await page.addInitScript(() => {
+        window.__keepSeen = false;
+        localStorage.setItem('iproute.v2.lib', JSON.stringify({
+          pv: '0000dead', at: 'old',
+          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+        }));
+      });
+      let acceptNext = false;   // 第一个弹框=加载时旧版提示（dismiss=暂保留），第二个=resetLib 确认（accept）
+      page.on('dialog', async d => {
+        page.__keepSeen = true;
+        if (acceptNext) { acceptNext = false; await d.accept(); } else { await d.dismiss(); }
+      });
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const kept = await page.evaluate(() => ({ stale: !!state._libStale, first: CH[0].n }));
+      ok(page.__keepSeen === true, '应弹出旧版本提示（confirm）');
+      ok(kept.stale && String(kept.first).includes('占位'), '「取消」后应暂保留旧覆盖（_libStale=true）');
+      await page.click('#t-lib');
+      await page.waitForTimeout(150);
+      const banner = await page.evaluate(() => {
+        const w = [...document.querySelectorAll('#v-lib .warn')].find(x => x.textContent.includes('旧版价格数据'));
+        return w ? w.textContent.trim().slice(0, 40) : '';
+      });
+      ok(banner.includes('旧版价格数据'), `费率库应出现核对横幅，实际「${banner}」`);
+      acceptNext = true;
+      await page.locator('#v-lib button', { hasText: '恢复检索原始值' }).click();
+      await page.waitForTimeout(200);
+      const after = await page.evaluate(() => ({ stale: !!state._libStale, banner: [...document.querySelectorAll('#v-lib .warn')].some(x => x.textContent.includes('旧版价格数据')) }));
+      ok(!after.stale && !after.banner, '恢复原始值后横幅应消失');
+      set(`暂保留时横幅出现：「${banner}…」；恢复后横幅消失`);
+    },
+  },
+  {
+    id: 'RQ-02a', section: 'PRD-IPRO', title: 'REQ-201：方案含未确认联络线黄条',
+    steps: '江苏→上海 测算，查看方案区告警',
+    expected: '默认方案含苏沪联络线（tradable=false）时出现「未确认属于省间现货交易网络」黄条',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.selectOption('#i-to', 'SH');     // 先改受端，避免「江苏」作为当前受端被互斥禁用
+      await page.selectOption('#i-from', 'JS');
+      await page.waitForTimeout(150);
+      const hit = await page.evaluate(() =>
+        [...document.querySelectorAll('.col-main .warn')].some(w => w.textContent.includes('未确认属于省间现货交易网络')));
+      const viaSuhu = await page.evaluate(() => state._res.rows[0].edges.some(e => e.tradable === false));
+      ok(hit && viaSuhu, `黄条应出现（默认方案含未确认联络线=${viaSuhu}），实际黄条=${hit}`);
+      set(`JS→SH 默认方案含 tradable=false 段；黄条出现=${hit}`);
+    },
+  },
+  {
+    id: 'RQ-02b', section: 'PRD-IPRO', title: 'REQ-202：通道交易网络徽标',
+    steps: '费率库搜索「苏沪联络线」，展开卡片',
+    expected: '卡片摘要可见「交易网络·待确认」徽标；时间轴同款',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.fill('#lib-q', '苏沪');
+      await page.waitForTimeout(100);
+      const n = await page.locator('.libcard').count();
+      ok(n >= 1, '应至少匹配 1 条');
+      await page.locator('.libcard summary').first().click();
+      const badge = await page.evaluate(() => document.body.innerHTML.includes('交易网络·待确认'));
+      ok(badge, '应可见「交易网络·待确认」徽标');
+      set(`匹配 ${n} 条，徽标可见`);
+    },
+  },
+  {
+    id: 'RQ-02c', section: 'PRD-IPRO', title: 'REQ-203：仅按已确认可交易通道开关',
+    steps: '出发地北京、跳数 1，开启「仅按已确认可交易通道」',
+    expected: '北京相连通道均为未确认联络线，开启后为空态引导文案（非脚本报错）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.selectOption('#i-from', 'BJ');
+      await page.selectOption('#i-hops', '1');
+      await page.selectOption('#i-tradable', '1');
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => ({ err: state._res.err || '', empty: document.querySelector('.empty')?.textContent || '' }));
+      ok(!!r.err && r.empty.length > 0, `应为空态引导，实际 err=${r.err} empty=${r.empty.slice(0, 30)}`);
+      set(`空态：${r.err.slice(0, 40)}`);
+    },
+  },
+  {
+    id: 'RQ-03a', section: 'PRD-IPRO', title: 'REQ-301：容量校验口径声明',
+    steps: '查看方案区容量口径固定小字',
+    expected: '声明存在且含「ATC」',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const ok1 = await page.evaluate(() => document.getElementById('v-calc').innerText.includes('ATC'));
+      ok(ok1, '方案区应含 ATC 口径声明');
+      set('ATC 声明可见');
+    },
+  },
+  {
+    id: 'RQ-03b', section: 'PRD-IPRO', title: 'REQ-302：中长期占用扣减容量校验',
+    steps: '中长期占用填 30 后失焦',
+    expected: '方案区占用按 cap×(1−0.3) 放大约 1/(1−0.3) 倍，越限判定联动',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const m0 = await page.evaluate(() => state._res.rows[0].maxLoad);
+      await page.fill('#i-zyocc', '30');
+      await page.locator('#i-zyocc').blur();
+      await page.waitForTimeout(150);
+      const r = await page.evaluate(() => ({ m1: state._res.rows[0].maxLoad, occ: state.occPct }));
+      const ratio = r.m1 / m0;
+      ok(r.occ === 30 && Math.abs(ratio - 1 / 0.7) < 1e-6, `占用应放大约 ${1 / 0.7} 倍，实际 ${ratio}`);
+      set(`occ=30；maxLoad ${m0.toFixed(4)}→${r.m1.toFixed(4)}（×${ratio.toFixed(4)}）`);
+    },
+  },
+  {
+    id: 'RQ-04', section: 'PRD-IPRO', title: 'REQ-303：单时点测算声明',
+    steps: '查看方案区落地价下方声明',
+    expected: '声明存在且含「96 时段」',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const ok1 = await page.evaluate(() => document.getElementById('v-calc').innerText.includes('96 时段'));
+      ok(ok1, '应含 96 时段单时点声明');
+      set('单时点声明可见');
+    },
+  },
+  {
+    id: 'RQ-05', section: 'PRD-IPRO', title: 'REQ-304：口径三非结算口径标注',
+    steps: '查看「送端收益」按钮提示与⑦口径位置标注',
+    expected: '按钮 title 含「非结算口径」；⑦口径位置旁有同义标注',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const r = await page.evaluate(() => ({
+        btn: document.querySelector('#v-calc .seg.small button[title]')?.getAttribute('title') || '',
+        note: (document.getElementById('v-calc').textContent || '').includes('非结算口径'),
+      }));
+      ok(r.btn.includes('非结算口径') && r.note, `按钮 title=${r.btn}，标注=${r.note}`);
+      set(`title="${r.btn}"；⑦标注可见`);
+    },
+  },
+  {
+    id: 'RQ-06', section: 'PRD-IPRO', title: 'REQ-305：区域电网费适用性标注',
+    steps: '查看②区区域电网输电价格说明',
+    expected: '说明含 S14 3.4.2(a) 统一计入口径（新语义）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      // 说明文字已改为默认收起的 details.explain（RQ-705），innerText 不含未渲染内容，须先展开再断言
+      await page.evaluate(() => { document.querySelectorAll('details.explain').forEach(d => d.open = true); });
+      await page.waitForTimeout(80);
+      const r = await page.evaluate(() => {
+        const t = document.getElementById('v-calc').innerText;
+        return t.includes('3.4.2(a)') && t.includes('买方节点所在区域');
+      });
+      ok(r, '应含新口径说明（3.4.2(a) 统一计入买方区域）');
+      set('新口径说明可见');
+    },
+  },
+  {
+    id: 'RQ-306', section: 'PRD-IPRO', title: 'REQ-306：结算机制折叠区',
+    steps: '展开完整明细，查看「结算机制」',
+    expected: '折叠块存在且四条齐备（买方支出/卖方边际价/执行顺序/日清月结 D+5）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.evaluate(() => { document.getElementById('d-detail').open = true; });
+      await page.waitForTimeout(80);
+      const t = await page.evaluate(() => document.getElementById('d-detail').innerText);
+      ok(t.includes('结算机制') && t.includes('边际价格') && t.includes('D+5') && t.includes('执行电量'), '四条内容应齐备');
+      set('结算机制四条齐备');
+    },
+  },
+  {
+    id: 'RQ-307', section: 'PRD-IPRO', title: 'REQ-307：页脚定位声明',
+    steps: '任意 Tab 滚到底',
+    expected: '页脚存在「不构成交易建议」声明',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('footer');
+      const t = await page.evaluate(() => document.querySelector('footer')?.textContent || '');
+      ok(t.includes('不构成交易建议') && t.includes('电力交易中心公布'), `页脚文案=${t.slice(0, 40)}`);
+      set('页脚声明可见');
+    },
+  },
+  {
+    id: 'RQ-405', section: 'PRD-IPRO', title: 'REQ-405：费率库筛选扩展',
+    steps: '点击「含线损」「落地端计费」chips',
+    expected: '匹配计数与列表正确（当前数据各 9 条）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      const out = [];
+      for (const label of ['含线损', '落地端计费']) {
+        await page.locator('.seg.small button', { hasText: label }).click();
+        await page.waitForTimeout(80);
+        const cnt = await page.evaluate(() => parseInt(document.querySelector('.libcount')?.textContent.replace(/[^0-9]/g, '')) || 0);
+        const cards = await page.locator('#lib-list .libcard').count();
+        ok(cnt === 9 && cards === cnt, `${label} 应匹配 9 条，实际计数=${cnt} 卡片=${cards}`);
+        out.push(`${label}:${cnt}`);
+      }
+      set(out.join('；'));
+    },
+  },
+  {
+    id: 'RQ-402', section: 'PRD-IPRO', title: 'REQ-402：价格时效徽标',
+    steps: '费率库搜索「灵绍」，查看摘要徽标',
+    expected: '显示「现行」徽标含 558 号；展开可见 2 条调价历史',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.fill('#lib-q', '灵绍');
+      await page.waitForTimeout(100);
+      const sum = await page.locator('.libcard summary').first().innerText();
+      ok(sum.includes('现行') && sum.includes('558'), `徽标应含 现行/558，实际「${sum.replace(/\\s+/g, ' ').slice(0, 60)}」`);
+      await page.locator('.libcard summary').first().click();
+      await page.waitForTimeout(80);
+      const hist = await page.evaluate(() => (document.body.innerText.match(/调价历史/g) || []).length);
+      ok(hist >= 1, '展开后应含调价历史');
+      set(`徽标含 现行/558；调价历史区块=${hist}`);
+    },
+  },
+  {
+    id: 'RQ-404', section: 'PRD-IPRO', title: 'REQ-404：方案报告导出',
+    steps: '测算页点「导出报告」',
+    expected: '触发 Markdown 下载，含三口径、费用拆解、逐段文号与 priceVersion',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const [dl] = await Promise.all([
+        page.waitForEvent('download', { timeout: 5000 }),
+        page.locator('button', { hasText: '导出报告' }).click(),
+      ]);
+      const p = path.join(SHOTS, 'export-report.md');
+      await dl.saveAs(p);
+      const t = fs.readFileSync(p, 'utf8');
+      ok(t.includes('priceVersion') && t.includes('文号') && t.includes('落地成本') && t.includes('不构成交易建议'),
+        `报告应含 priceVersion/文号/落地成本/声明，实际长度 ${t.length}`);
+      set(`下载 ${dl.suggestedFilename()}，${t.length} 字符，含全部关键段`);
+    },
+  },
+  {
+    id: 'RQ-403', section: 'PRD-IPRO', title: 'REQ-403：价差敏感性分析',
+    steps: '展开「价差敏感性」折叠卡',
+    expected: '36 个价格档（100~800 步长 20）全量输出，含最优路线与落地成本列',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => { const d = document.getElementById('d-sens'); if (d) d.open = true; });
+      await page.waitForTimeout(80);
+      const r = await page.evaluate(() => {
+        const d = document.getElementById('d-sens');
+        return { rows: d ? d.querySelectorAll('table tr').length : 0, txt: d ? d.innerText : '' };
+      });
+      ok(r.rows === 37, `应 36 档 + 表头 = 37 行，实际 ${r.rows}`);
+      ok(r.txt.includes('100') && r.txt.includes('800'), '应覆盖 100~800 价格区间');
+      set(`敏感性表 ${r.rows - 1} 档`);
+    },
+  },
+  {
+    id: 'RQ-703', section: 'PRD-IPRO', title: 'REQ-703：底图切换不可用时弹框反馈',
+    steps: '非代理环境点击「腾讯地图」',
+    expected: '弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），不再静默',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      let dialogMsg = '';
+      page.on('dialog', async d => { dialogMsg = d.message(); await d.dismiss(); });
+      await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
+        await page.evaluate(() => go('map'));
+        await page.locator('#v-map button', { hasText: '腾讯地图' }).click();
+      });
+      await page.waitForTimeout(200);
+      const r = await page.evaluate(() => ({ p: state.mapProvider, on: document.querySelector('#v-map .seg.small button.on')?.textContent }));
+      ok(dialogMsg.includes('腾讯地图') && dialogMsg.includes('不可用'), `应弹框说明，实际「${dialogMsg.slice(0, 30)}」`);
+      ok(r.p === 'svg' && r.on === '拓扑图', '取消后应保持拓扑图');
+      set(`弹框="${dialogMsg.slice(0, 24)}…"；provider=${r.p}（原 svg）`);
     },
   },
 ];

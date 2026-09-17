@@ -1,8 +1,8 @@
 /* 费率库页：通道费率、省级参数、输电断面。 */
 /* ================= 费率库 ================= */
 let libTab='ch';
-function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b) b.innerHTML=renderLibList(); }
-function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b) b.innerHTML=renderPvList(); }
+function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderLibList(); restoreDetails(b,s); } }
+function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderPvList(); restoreDetails(b,s); } }
 function renderPvList(){
   const q=(state.pvQ||'').trim().toLowerCase();
   const ids=Object.keys(PV).filter(k=>{
@@ -24,7 +24,7 @@ function renderPvList(){
         </summary>
         <div class="lc-body">
           <div class="lib-io" style="grid-template-columns:1fr 1fr 1fr">
-            <div><label>出清价 元/MWh</label><input type="number" step="5" value="${p.clear??''}" onchange="setPv('${k}','clear',this.value)"></div>
+            <div><label>演示参考报价 元/MWh</label><input type="number" step="5" value="${p.clear??''}" onchange="setPv('${k}','clear',this.value)"></div>
             <div><label>省网输配电价 元/MWh</label><input type="number" step="0.1" value="${p.net??''}" onchange="setPv('${k}','net',this.value)"></div>
             <div><label>基金附加 元/MWh</label><input type="number" step="0.1" value="${p.fund??''}" onchange="setPv('${k}','fund',this.value)"></div>
           </div>
@@ -46,31 +46,40 @@ function renderLibList(){
     if(flt==='region'&&c.tier!=='region') return false;
     if(flt==='capacity'&&c.priceType!=='capacity') return false;
     if(flt==='noCap'&&c.capActual!=null) return false;
+    if(flt==='incLoss'&&c.incLoss!==true) return false;                 // REQ-405
+    if(flt==='dd'&&!(c.bill||'').includes('落地端')) return false;      // REQ-405
     if(!q) return true;
     return (c.n+' '+(c.fn||'')+' '+N(c.from)+' '+N(c.to)+' '+(c.doc||'')+' '+(c.kv||'')+' '+(c.status||'')).toLowerCase().includes(q);
   };
   const list=CH.map((c,i)=>({c,i})).filter(x=>hit(x.c));
   if(!list.length) return '<p class="note">没有匹配的通道，试试其它关键词。</p>';
+  const TODAY=new Date().toISOString().slice(0,10);
+  const effBadge=c=>{                                   // REQ-402：价格时效徽标
+    const fut=(c.hist||[]).find(h=>/^\d{4}-\d{2}-\d{2}$/.test(h.effective_from||'') && h.effective_from>TODAY);
+    if(fut) return '<span class="lc-tag">即将生效 '+esc(fut.effective_from)+'</span>';
+    return c.doc?'<span class="lc-tag">现行 '+esc((c.doc||'').replace(/^.*(〔\d+〕\d+号).*$/,'$1'))+'</span>':'';
+  };
   return '<div class="libcount">匹配 '+list.length+' 条</div>'+list.map(({c,i})=>`<details class="libcard">
     <summary>
-      <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}</span>
-      <span class="lc-p">${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
+      <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}${effBadge(c)}${c.tradable===false?'<span class="lc-tag">交易网络·待确认</span>':''}</span>
+      <span class="lc-p">${c.regional?'送出省参考价 ':''}${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
       <span class="lc-m">${esc(N(c.from))}→${esc(N(c.to))} · ${esc(c.kv)} · 线损 ${c.loss==null?'—':fmt(c.loss,2)+'%'} · ${c.capActual!=null?c.capActual+' MW':(c.cap!=null?'额定 '+c.cap+' MW':'容量待补')}</span>
       <span class="lc-b">${tierTag(c.tier)}</span>
     </summary>
     <div class="lc-body">
       <div class="lib-io">
-        <div><label>输电价 元/MWh</label><input type="number" step="0.1" value="${c.t==null?'':c.t}" onchange="setCh(${i},'t',this.value)"></div>
+        <div><label>${c.regional?'送出省参考价':'输电价'} 元/MWh</label><input type="number" step="0.1" value="${c.t==null?'':c.t}" onchange="setCh(${i},'t',this.value)"></div>
         <div><label>线损率 %</label><input type="number" step="0.05" value="${c.loss==null?'':c.loss}" onchange="setCh(${i},'loss',this.value)"></div>
         <div><label>容量 MW</label><input type="number" step="100" value="${c.cap==null?'':c.cap}" onchange="setCh(${i},'cap',this.value)" placeholder="待补"></div>
       </div>
       <div class="lc-kv">
-        <div><span>送端省</span>${esc(N(c.from))}　<b>送出省输电价格</b> ${c.sendFee>0?fmt(c.sendFee,1)+' 元/MWh':'已含在通道价中'}</div>
+        <div><span>送端省</span>${esc(N(c.from))}　<b>送出省输电价格</b> ${c.regional?fmt(c.t,1)+' 元/MWh（仅交易起点计入）':c.sendFee>0?fmt(c.sendFee,1)+' 元/MWh（仅交易起点计入）':'已含在通道价中'}</div>
         <div><span>受端省</span>${esc(N(c.to))}</div>
-        <div><span>容量口径</span>${c.capBasis==='cap'?'实际输送能力（非 ATC）':c.capBasis==='rated'?'仅额定容量':'未获取'}${c.capActual!=null?'　实际 '+c.capActual+' MW':''}${c.capRated!=null?'　额定 '+c.capRated+' MW':''}</div>
+        <div><span>容量口径</span>${c.capBasis==='cap'?'实际输送能力（非 ATC）':c.capBasis==='rated'?'仅额定容量':c.capBasis==='estimate'?'模型估算（非 ATC）':'未获取'}${c.capActual!=null?'　实际 '+c.capActual+' MW':''}${c.capRated!=null?'　额定 '+c.capRated+' MW':''}</div>
         <div><span>容量来源</span>${esc(c.capSrc||'—')}</div>
         ${c.priceType==='capacity'?`<div><span>计价方式</span>单一容量电价制　容量电价 ${c.capPrice?c.capPrice.容量电价+' '+c.capPrice.单位:''}　折算等效 ${c.capEq!=null?fmt(c.capEq,2)+' 元/MWh':''}（按 ${DATA._capHours||4500} 小时）</div>`:''}
         ${c.sendFee>0?`<div><span>送端省内段</span>按送端省「送出省输电价格」计，发改价格〔2018〕1227号第五条</div>`:''}
+        ${c.regional?'<div><span>区域接口</span>不单独收通道费，不叠加过境省外送费；区域共用交流接口计费损耗为 0，原线损仅作容量估算。</div>':''}
         <div><span>计费口径</span>${esc(c.bill)}${c.incLoss?'（含线损）':'（不含线损）'}${c.tax?'　含税':'　不含税'}</div>
         ${c.status?`<div><span>状态</span>${esc(c.status)}</div>`:''}
         ${c.stFrom?`<div><span>送端落点</span>${esc(stName(c.stFrom))} @ ${esc(stAddr(c.stFrom))}</div>`:''}
@@ -88,7 +97,12 @@ function renderLibList(){
   </details>`).join('');
 }
 function renderLib(){
-  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`;
+  // 重渲染稳定性：整页重建前快照展开的通道/省份卡片，重建后恢复（切 Tab 不丢展开态）
+  const _host=document.getElementById('v-lib');
+  const _snap=snapDetails(_host);
+  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`
+  // REQ-602：加载时用户选择「暂保留」旧版价格覆盖（state.js 置 _libStale），费率库必须给出常驻提示
+  +(state._libStale?`<div class="warn" style="margin-top:8px">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
   out+=`<div class="card tight seg">
     <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
     <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
@@ -100,7 +114,7 @@ function renderLib(){
       <div class="sec-title">通道费率<span class="hint">共 ${CH.length} 条</span></div>
       <input id="lib-q" type="search" placeholder="搜索通道名 / 别名 / 省份 / 文号…" value="${esc(state.libQ||'')}" oninput="libSearch(this.value)" style="margin-bottom:8px">
       <div class="seg small" style="flex-wrap:wrap">
-        ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量']].map(([k,t])=>
+        ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量'],['incLoss','含线损'],['dd','落地端计费']].map(([k,t])=>
           `<button class="${(state.libFilter||'all')===k?'on':''}" onclick="state.libFilter='${k}';state._libScr=window.scrollY;renderLib()">${t}</button>`).join('')}
       </div>
       <div id="lib-list">${renderLibList()}</div>
@@ -117,7 +131,7 @@ function renderLib(){
       <div class="lib-nm"><span>${esc(s.n)}</span><em>${s.limit} MW</em></div>
       <div class="lib-src">${esc(s.note)}<br>来源：${esc(s.src)}${s.edges&&s.edges.length?'　关联通道：'+esc(s.edges.join('、')):'　<span class="tier est">未映射到本图通道</span>'}</div>
     </div>`).join('');
-    out+=`</div><p class="note"><b>重要边界</b>：断面限额属向注册市场成员披露的信息，不是公众信息。以上数值来自公开报道与学术文献，与交易中心实际运行限额可能有差异。国网省间现货按「交易路径」建模，南网区域市场按「断面潮流约束（GSDF）」建模，两套口径不能共用同一约束结构。</p></div>`;
+    out+=`</div><p class="note"><b>重要边界</b>：断面限额属向注册市场成员披露的信息，不是公众信息。以上数值来自公开报道与学术文献，与交易中心实际运行限额可能有差异。本页供中长期成本测算参考，真实可交易能力须由对应交易机构与调度机构确认；南方及跨经营区另核适用规则。</p></div>`;
   }
 
   out+=`<div class="card tight"><div class="sec-title">数据管理</div>
@@ -127,6 +141,7 @@ function renderLib(){
     <p class="note">Web 版与手机端共用同一份数据：构建时同时产出 <code>shared/app-data.json</code>，两端的 priceVersion 一致即表示数值同源。</p></div>`;
 
   document.getElementById('v-lib').innerHTML=out;
+  restoreDetails(_host,_snap);
 }
 function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); state._res=null;
   const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }

@@ -29,12 +29,16 @@ const run = (cmd, opts = {}) => {
 
 // ── 1. 构建 ──
 run(`${NODE} tools/build.mjs`);
+const iosWeb=path.join(root,'ios/app/InterprovinceRoute/InterprovinceRoute/index.html');
+if(fs.existsSync(iosWeb)) fs.copyFileSync(path.join(root,'index.html'),iosWeb);
 
 // ── 2. 全量测试 ──
 const tests = [
   ['模块结构与算法纯度', 'tools/test-modules.mjs'],
   ['两端数据一致性', 'tools/test-data-share.mjs'],
   ['算法回归基线', 'tools/baseline-check.mjs'],
+  ['全模型独立公式与适用期', 'tools/test-model-audit.mjs'],
+  ['全国区域计费回归', 'tools/test-regional-billing.mjs'],
   ['受端参数预填行为', 'tools/test-prefill.mjs'],
   ['交互行为回归', 'tools/test-interaction.mjs'],
 ];

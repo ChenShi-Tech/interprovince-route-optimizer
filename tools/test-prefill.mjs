@@ -49,7 +49,7 @@ ok(uniformFund === 0, '无省份仍在使用 26.6 占位值');
 const fundSet = new Set(Object.values(PV1).map((v) => String(v.fund)));
 ok(fundSet.size >= 20, `基金附加取值分散（${fundSet.size} 个不同值）`);
 const srcOK = Object.values(PV1).filter((v) => /1077号/.test(v.netSrc)).length;
-ok(srcOK === 30, `30 个省的来源均指向发改价格〔2026〕1077号（实际 ${srcOK}）`);
+ok(srcOK === 29 && PV1.XZ.netSrc.includes('xizang.gov.cn'), `29 省引用1077号，西藏引用自治区原文（实际 ${srcOK}）`);
 
 console.log('\n══ 二、启动时的预填 ══');
 ok(G(c1, 'state.pNet') === PV1.JS.net, `默认受端江苏 → 输配电价 ${G(c1, 'state.pNet')}`);
@@ -86,7 +86,7 @@ console.log('\n══ 六、西藏基金缺失的显式处理 ══');
 G(c1, "state.to='XZ';applyToProv();");
 ok(G(c1, 'state.fundMissing') === true, '选定西藏为受端 → fundMissing 标记为真');
 ok(G(c1, 'state.fund') === 0, '西藏基金按 0 计（避免 NaN）');
-G(c1, 'state._res=solve(state, algoData());renderCalc();');
+G(c1, 'state.includeDstCost=true;state._res=solve(state, algoData());renderCalc();');
 const xzHtml = G(c1, "__dom['v-calc'].innerHTML");
 ok(xzHtml.includes('暂未获取官方标准'), '界面显式告警西藏基金未获取');
 

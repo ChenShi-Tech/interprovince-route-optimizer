@@ -1,0 +1,972 @@
+{
+  "checkedAt": "2026-09-17",
+  "source": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/202607/P020260710613207914509.pdf",
+  "sourceLocal": "docs/原始文件/S11-附件1-省级电网输配电价表.pdf",
+  "sha256": "5221497528032f3680b84b14413e8ac3e3445682d4bd66e90579727270274038",
+  "method": "独立解析PDF：29个主体默认高压两部制电量价、注3/注4四参数；另核842附件历史工程表。不认证基金/用户适用性或历史价格现行性。",
+  "provinces": [
+    {
+      "code": "BJ",
+      "table": "北京",
+      "status": "match",
+      "published": {
+        "net": 150,
+        "inLoss": 3.11,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 150,
+        "inLoss": 3.11,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "TJ",
+      "table": "天津",
+      "status": "match",
+      "published": {
+        "net": 105.2,
+        "inLoss": 2.54,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 105.2,
+        "inLoss": 2.54,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "HE",
+      "table": "河北",
+      "status": "match",
+      "published": {
+        "net": 72.6,
+        "inLoss": 4.08,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 72.6,
+        "inLoss": 4.08,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "SX",
+      "table": "山西",
+      "status": "match",
+      "published": {
+        "net": 29,
+        "inLoss": 3.52,
+        "export": 21.7,
+        "exportLoss": 0.19
+      },
+      "stored": {
+        "net": 29,
+        "inLoss": 3.52,
+        "export": 21.7,
+        "exportLoss": 0.19
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "NM",
+      "table": "蒙西",
+      "status": "match",
+      "published": {
+        "net": 42.9,
+        "inLoss": 2.81,
+        "export": 30,
+        "exportLoss": 0.18
+      },
+      "stored": {
+        "net": 42.9,
+        "inLoss": 2.81,
+        "export": 30,
+        "exportLoss": 0.18
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "LN",
+      "table": "辽宁",
+      "status": "match",
+      "published": {
+        "net": 57.1,
+        "inLoss": 3.78,
+        "export": 25.9,
+        "exportLoss": 0.69
+      },
+      "stored": {
+        "net": 57.1,
+        "inLoss": 3.78,
+        "export": 25.9,
+        "exportLoss": 0.69
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "JL",
+      "table": "吉林",
+      "status": "match",
+      "published": {
+        "net": 111.3,
+        "inLoss": 5.17,
+        "export": 25.1,
+        "exportLoss": 0.45
+      },
+      "stored": {
+        "net": 111.3,
+        "inLoss": 5.17,
+        "export": 25.1,
+        "exportLoss": 0.45
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "HL",
+      "table": "黑龙江",
+      "status": "match",
+      "published": {
+        "net": 76.30000000000001,
+        "inLoss": 6.46,
+        "export": 23.5,
+        "exportLoss": 1.54
+      },
+      "stored": {
+        "net": 76.3,
+        "inLoss": 6.46,
+        "export": 23.5,
+        "exportLoss": 1.54
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "SH",
+      "table": "上海",
+      "status": "match",
+      "published": {
+        "net": 85.1,
+        "inLoss": 2.61,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 85.1,
+        "inLoss": 2.61,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "JS",
+      "table": "江苏",
+      "status": "match",
+      "published": {
+        "net": 51.8,
+        "inLoss": 2.83,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 51.8,
+        "inLoss": 2.83,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "ZJ",
+      "table": "浙江",
+      "status": "match",
+      "published": {
+        "net": 66.3,
+        "inLoss": 3.07,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 66.3,
+        "inLoss": 3.07,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "AH",
+      "table": "安徽",
+      "status": "match",
+      "published": {
+        "net": 54.800000000000004,
+        "inLoss": 3.9,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 54.8,
+        "inLoss": 3.9,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "FJ",
+      "table": "福建",
+      "status": "match",
+      "published": {
+        "net": 46.199999999999996,
+        "inLoss": 3.37,
+        "export": 22,
+        "exportLoss": 1.1
+      },
+      "stored": {
+        "net": 46.2,
+        "inLoss": 3.37,
+        "export": 22,
+        "exportLoss": 1.1
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "JX",
+      "table": "江西",
+      "status": "match",
+      "published": {
+        "net": 93.5,
+        "inLoss": 3.68,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 93.5,
+        "inLoss": 3.68,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "SD",
+      "table": "山东",
+      "status": "match",
+      "published": {
+        "net": 89,
+        "inLoss": 3.07,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 89,
+        "inLoss": 3.07,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "HA",
+      "table": "河南",
+      "status": "match",
+      "published": {
+        "net": 98,
+        "inLoss": 4.82,
+        "export": 25.5,
+        "exportLoss": 0.57
+      },
+      "stored": {
+        "net": 98,
+        "inLoss": 4.82,
+        "export": 25.5,
+        "exportLoss": 0.57
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "HB",
+      "table": "湖北",
+      "status": "match",
+      "published": {
+        "net": 69.4,
+        "inLoss": 4.55,
+        "export": 32.800000000000004,
+        "exportLoss": 0.82
+      },
+      "stored": {
+        "net": 69.4,
+        "inLoss": 4.55,
+        "export": 32.800000000000004,
+        "exportLoss": 0.82
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "HN",
+      "table": "湖南",
+      "status": "match",
+      "published": {
+        "net": 85.2,
+        "inLoss": 4.95,
+        "export": 24,
+        "exportLoss": 0.88
+      },
+      "stored": {
+        "net": 85.2,
+        "inLoss": 4.95,
+        "export": 24,
+        "exportLoss": 0.88
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "GD",
+      "table": "广东",
+      "status": "match",
+      "published": {
+        "net": 44.900000000000006,
+        "inLoss": 3.31,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "stored": {
+        "net": 44.9,
+        "inLoss": 3.31,
+        "export": 30,
+        "exportLoss": 0
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "GX",
+      "table": "广西",
+      "status": "match",
+      "published": {
+        "net": 29.3,
+        "inLoss": 4.67,
+        "export": 18,
+        "exportLoss": 0.52
+      },
+      "stored": {
+        "net": 29.3,
+        "inLoss": 4.67,
+        "export": 18,
+        "exportLoss": 0.52
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "GZ",
+      "table": "贵州",
+      "status": "match",
+      "published": {
+        "net": 46.800000000000004,
+        "inLoss": 4.5,
+        "export": 30.200000000000003,
+        "exportLoss": 1.13
+      },
+      "stored": {
+        "net": 46.8,
+        "inLoss": 4.5,
+        "export": 30.200000000000003,
+        "exportLoss": 1.13
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "YN",
+      "table": "云南",
+      "status": "match",
+      "published": {
+        "net": 47.5,
+        "inLoss": 4.24,
+        "export": 47.800000000000004,
+        "exportLoss": 1.47
+      },
+      "stored": {
+        "net": 47.5,
+        "inLoss": 4.24,
+        "export": 47.800000000000004,
+        "exportLoss": 1.47
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "SC",
+      "table": "四川",
+      "status": "match",
+      "published": {
+        "net": 46.6,
+        "inLoss": 5.64,
+        "export": 35,
+        "exportLoss": 0.99
+      },
+      "stored": {
+        "net": 46.6,
+        "inLoss": 5.64,
+        "export": 35,
+        "exportLoss": 0.99
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "CQ",
+      "table": "重庆",
+      "status": "match",
+      "published": {
+        "net": 86.8,
+        "inLoss": 4.18,
+        "export": 21.6,
+        "exportLoss": 0.85
+      },
+      "stored": {
+        "net": 86.8,
+        "inLoss": 4.18,
+        "export": 21.6,
+        "exportLoss": 0.85
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "SN",
+      "table": "陕西电网（不含榆林地区）",
+      "status": "match",
+      "published": {
+        "net": 73.1,
+        "inLoss": 4.24,
+        "export": 34.8,
+        "exportLoss": 0.59
+      },
+      "stored": {
+        "net": 73.1,
+        "inLoss": 4.24,
+        "export": 34.8,
+        "exportLoss": 0.59
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "GS",
+      "table": "甘肃",
+      "status": "match",
+      "published": {
+        "net": 69.3,
+        "inLoss": 2.31,
+        "export": 28,
+        "exportLoss": 1.01
+      },
+      "stored": {
+        "net": 69.3,
+        "inLoss": 2.31,
+        "export": 28,
+        "exportLoss": 1.01
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "QH",
+      "table": "青海",
+      "status": "match",
+      "published": {
+        "net": 60,
+        "inLoss": 2.9,
+        "export": 33.9,
+        "exportLoss": 1.39
+      },
+      "stored": {
+        "net": 60,
+        "inLoss": 2.9,
+        "export": 33.9,
+        "exportLoss": 1.39
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "NX",
+      "table": "宁夏",
+      "status": "match",
+      "published": {
+        "net": 49.099999999999994,
+        "inLoss": 2.58,
+        "export": 25,
+        "exportLoss": 0.5
+      },
+      "stored": {
+        "net": 49.1,
+        "inLoss": 2.58,
+        "export": 25,
+        "exportLoss": 0.5
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "XJ",
+      "table": "新疆",
+      "status": "match",
+      "published": {
+        "net": 48.5,
+        "inLoss": 3.45,
+        "export": 34.3,
+        "exportLoss": 0.27
+      },
+      "stored": {
+        "net": 48.5,
+        "inLoss": 3.45,
+        "export": 34.3,
+        "exportLoss": 0.27
+      },
+      "reviewFields": []
+    },
+    {
+      "code": "XZ",
+      "status": "separate_source",
+      "note": "附件1无该主体，须另行核对自治区原文"
+    }
+  ],
+  "projects": [
+    {
+      "name": "龙政线",
+      "matched": "龙政直流（龙泉—政平）",
+      "published": {
+        "tariff": 67.5,
+        "loss": 7.5
+      },
+      "stored": {
+        "tariff": 67.5,
+        "loss": 7.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "葛南线",
+      "matched": "葛南直流（葛洲坝—南桥）",
+      "published": {
+        "tariff": 55.8,
+        "loss": 7.5
+      },
+      "stored": {
+        "tariff": 55.8,
+        "loss": 7.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "林枫直流",
+      "matched": "林枫直流（团林—枫泾）",
+      "published": {
+        "tariff": 43.9,
+        "loss": 7.5
+      },
+      "stored": {
+        "tariff": 43.9,
+        "loss": 7.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "宜华线",
+      "matched": "宜华直流（宜都—华新）",
+      "published": {
+        "tariff": 68.5,
+        "loss": 7.5
+      },
+      "stored": {
+        "tariff": 68.5,
+        "loss": 7.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "江城直流",
+      "matched": "江城直流（江陵—鹅城，湖北→广东）",
+      "published": {
+        "tariff": 38.5,
+        "loss": 7.65
+      },
+      "stored": {
+        "tariff": 38.5,
+        "loss": 7.65
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "三峡送华中",
+      "matched": "三峡送华中（三峡电源群送出）",
+      "published": {
+        "tariff": 45.1,
+        "loss": 0.7
+      },
+      "stored": {
+        "tariff": 45.1,
+        "loss": 0.7
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "阳城送出",
+      "matched": "阳城送出（阳城电厂点对网送出）",
+      "published": {
+        "tariff": 20.7,
+        "loss": 3
+      },
+      "stored": {
+        "tariff": 20.7,
+        "loss": 3
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "锦界送出",
+      "matched": "锦界送出（锦界电厂点对网送出）",
+      "published": {
+        "tariff": 18.1,
+        "loss": 2.5
+      },
+      "stored": {
+        "tariff": 18.1,
+        "loss": 2.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "府谷送出",
+      "matched": "府谷送出（府谷电厂点对网送出）",
+      "published": {
+        "tariff": 14.5,
+        "loss": 2.5
+      },
+      "stored": {
+        "tariff": 14.5,
+        "loss": 2.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "中俄直流",
+      "matched": "中俄直流（阿穆尔—黑河背靠背）",
+      "published": {
+        "tariff": 37.1,
+        "loss": 1.3
+      },
+      "stored": {
+        "tariff": 37.1,
+        "loss": 1.3
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "呼辽直流",
+      "matched": "呼辽直流（伊敏—穆家）",
+      "published": {
+        "tariff": 42,
+        "loss": 4.12
+      },
+      "stored": {
+        "tariff": 42,
+        "loss": 4.12
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "青藏直流",
+      "matched": "青藏直流（青藏联网）",
+      "published": {
+        "tariff": 60,
+        "loss": 13.7
+      },
+      "stored": {
+        "tariff": 60,
+        "loss": 13.7
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "锦苏直流",
+      "matched": "锦苏直流（锦屏—苏南±800kV特高压直流）",
+      "published": {
+        "tariff": 51.1,
+        "loss": 7
+      },
+      "stored": {
+        "tariff": 51.1,
+        "loss": 7
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "向上工程",
+      "matched": "复奉直流（向家坝—上海，即「向上工程」）",
+      "published": {
+        "tariff": 57.1,
+        "loss": 7
+      },
+      "stored": {
+        "tariff": 57.1,
+        "loss": 7
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "宾金工程",
+      "matched": "宾金直流（溪洛渡左岸—浙江金华）",
+      "published": {
+        "tariff": 45.4,
+        "loss": 6.5
+      },
+      "stored": {
+        "tariff": 45.4,
+        "loss": 6.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "灵宝直流",
+      "matched": "灵宝直流（西北—华中背靠背联网）",
+      "published": {
+        "tariff": 40.3,
+        "loss": 1
+      },
+      "stored": {
+        "tariff": 40.3,
+        "loss": 1
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "德宝直流",
+      "matched": "德宝直流（德阳—宝鸡）",
+      "published": {
+        "tariff": 33.6,
+        "loss": 3
+      },
+      "stored": {
+        "tariff": 33.6,
+        "loss": 3
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "高岭直流",
+      "matched": "高岭直流（东北—华北背靠背）",
+      "published": {
+        "tariff": 23.5,
+        "loss": 1.7
+      },
+      "stored": {
+        "tariff": 23.5,
+        "loss": 1.7
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "辛洹线",
+      "matched": "辛洹线（辛安—洹安，华北—华中交流联络线）",
+      "published": {
+        "tariff": 40,
+        "loss": 0
+      },
+      "stored": {
+        "tariff": 40,
+        "loss": 0
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "晋南荆工程",
+      "matched": "长南荆特高压交流（晋东南—南阳—荆门）",
+      "published": {
+        "tariff": 25.1,
+        "loss": 1.5
+      },
+      "stored": {
+        "tariff": 25.1,
+        "loss": 1.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "哈郑直流",
+      "matched": "天中直流（哈密—郑州±800kV特高压直流，即「哈郑直流」）",
+      "published": {
+        "tariff": 61.3,
+        "loss": 7.2
+      },
+      "stored": {
+        "tariff": 61.3,
+        "loss": 7.2
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "宁东直流",
+      "matched": "银东直流（宁东—山东±660kV，即「宁东直流」）",
+      "published": {
+        "tariff": 50.8,
+        "loss": 7
+      },
+      "stored": {
+        "tariff": 50.8,
+        "loss": 7
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "宁绍直流",
+      "matched": "灵绍直流（宁东—绍兴±800kV特高压直流，即「宁绍直流」）",
+      "published": {
+        "tariff": 65.9,
+        "loss": 6.5
+      },
+      "stored": {
+        "tariff": 48.8,
+        "loss": 4.26
+      },
+      "status": "superseded_separate_document",
+      "document": "发改价格〔2022〕558号"
+    },
+    {
+      "name": "酒湖直流",
+      "matched": "祁韶直流（酒泉—湖南湘潭±800kV特高压直流，即「酒湖直流」）",
+      "published": {
+        "tariff": 60.2,
+        "loss": 6.5
+      },
+      "stored": {
+        "tariff": 63.7,
+        "loss": 4.14
+      },
+      "status": "superseded_separate_document",
+      "document": "发改价格〔2022〕558号"
+    },
+    {
+      "name": "溪广线",
+      "matched": "溪广线（溪洛渡—广东）",
+      "published": {
+        "tariff": 49.5,
+        "loss": 6.5
+      },
+      "stored": {
+        "tariff": 49.5,
+        "loss": 6.5
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "云南送广东",
+      "matched": "云南送广东（南网超高压）",
+      "published": {
+        "tariff": 75.5,
+        "loss": 6.57
+      },
+      "stored": {
+        "tariff": 75.5,
+        "loss": 6.57
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "贵州送广东",
+      "matched": "贵州送广东（南网超高压）",
+      "published": {
+        "tariff": 75.5,
+        "loss": 7.05
+      },
+      "stored": {
+        "tariff": 75.5,
+        "loss": 7.05
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "云南送广西",
+      "matched": "云南送广西（南网）",
+      "published": {
+        "tariff": 53.8,
+        "loss": 2.98
+      },
+      "stored": {
+        "tariff": 53.8,
+        "loss": 2.98
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "贵州送广西",
+      "matched": "贵州送广西（南网）",
+      "published": {
+        "tariff": 53.8,
+        "loss": 3.47
+      },
+      "stored": {
+        "tariff": 53.8,
+        "loss": 3.47
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "天生桥送广东",
+      "matched": "天生桥送广东（南网）",
+      "published": {
+        "tariff": 59.5,
+        "loss": 5.63
+      },
+      "stored": {
+        "tariff": 59.5,
+        "loss": 5.63
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    },
+    {
+      "name": "天生桥送广西",
+      "matched": "天生桥送广西（南网）",
+      "published": {
+        "tariff": 37.8,
+        "loss": 2
+      },
+      "stored": {
+        "tariff": 37.8,
+        "loss": 2
+      },
+      "status": "match",
+      "document": "发改价格〔2019〕842号"
+    }
+  ]
+}

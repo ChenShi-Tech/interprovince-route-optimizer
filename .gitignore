@@ -15,3 +15,9 @@ npm-debug.log*
 
 # 本地运行时（便携 Node、会话产物，不入库）
 .runtime/
+
+# 功能开发的 worktree（见 docs/开发约定与操作手册.md 纪律 5）
+.worktrees/
+
+# 本次浏览器验证使用的依赖符号链接
+node_modules

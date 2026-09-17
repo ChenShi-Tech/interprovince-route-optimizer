@@ -4,7 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#ffffff">
-<title>省间路径优选测算 v2</title>
+<title>省间中长期交付成本与报价测算</title>
+<script>
+/* 全局错误兜底（spec: runtime-error-feedback）：head 最先安装，先于腾讯地图脚本，
+   捕获启动期第三方脚本错误。提示按消息去重并计数（上限 4 条）；不吞错误——
+   onerror 返回 false、rejection 不 preventDefault，控制台照常留痕。 */
+(function(){
+  var items={}, order=[];
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function flush(){
+    if(!document.body){ document.addEventListener('DOMContentLoaded',flush,{once:true}); return; }
+    var box=document.getElementById('gerr-box');
+    if(!order.length){ if(box) box.remove(); return; }
+    if(!box){ box=document.createElement('div'); box.id='gerr-box';
+      box.style.cssText='position:fixed;left:10px;right:10px;bottom:64px;z-index:3900;display:flex;flex-direction:column;gap:6px';
+      document.body.appendChild(box); }
+    box.innerHTML=order.map(function(k){
+      return '<div style="background:#FCEBEB;color:#A32D2D;border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.55;box-shadow:0 4px 14px rgba(0,0,0,.14);display:flex;gap:8px;align-items:flex-start">'
+        +'<div style="flex:1;word-break:break-all">⚠ 运行时错误'+(items[k]>1?' ×'+items[k]:'')+'：<code>'+esc(k)+'</code></div>'
+        +'<button data-gerr-close style="border:0;background:rgba(163,45,45,.12);color:#A32D2D;border-radius:6px;padding:3px 8px;font-size:11px;flex:none;cursor:pointer">关闭</button></div>';
+    }).join('');
+  }
+  function report(m){
+    m=String(m==null?'未知错误':(m&&m.message)||m).slice(0,160);
+    if(items[m]==null){ items[m]=1; order.push(m); if(order.length>4){ var drop=order.shift(); delete items[drop]; } }
+    else items[m]++;
+    flush();
+  }
+  window.onerror=function(m){ report(m); return false; };
+  window.addEventListener('unhandledrejection',function(e){ report(e.reason); });
+  document.addEventListener('click',function(ev){
+    if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
+  });
+})();
+</script>
 <script type="text/javascript">
 window._TMapSecurityConfig = {
   serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
@@ -33,7 +66,7 @@ header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdro
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
 main{flex:1;padding:14px 16px 96px;overflow-x:hidden}
-nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
 nav .ic{width:20px;height:20px;display:block}
@@ -149,6 +182,10 @@ td b{font-weight:600}
 .prow .pn{font-size:12px;font-weight:500}
 .prow input{padding:5px 6px;font-size:12px;border-radius:6px}
 #map-view,#fallback{width:100%;height:calc(100vh - 290px);min-height:320px;border-radius:var(--r);overflow:hidden;background:#EDEFEF;border:.5px solid var(--line)}
+/* 地图 API（天地图/腾讯）内部图层 z-index 高达 200~1000+：容器若不建立层叠上下文，
+   这些图层会在根层叠环境里压过 z-index:30 的固定底栏（容器延伸到视口底时必现）。
+   contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
+#map-view{contain:paint;position:relative;z-index:0}
 /* REQ-603+702：svg 拓扑模式容器高度随绘制纵横比自适应（viewBox 660×430），
    仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则 */
 #map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430}
@@ -352,7 +389,7 @@ details.adv.boxed summary{font-size:12.5px}
   <header>
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
-      <span class="badge" id="verBadge">真实数据 · 2026 第四监管周期</span>
+      <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
     </div>
   </header>
   <main>
@@ -360,6 +397,8 @@ details.adv.boxed summary{font-size:12.5px}
     <section id="v-map" hidden></section>
     <section id="v-lib" hidden></section>
   </main>
+  <!-- REQ-307：页脚定位声明，三 Tab 共用 -->
+  <footer style="padding:10px 16px 4px;text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>

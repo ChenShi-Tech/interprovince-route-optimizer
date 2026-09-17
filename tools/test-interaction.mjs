@@ -155,13 +155,13 @@ ok(hEx.includes('已按口径排除'), '费用表标注受端省内费用已排�
 ok(!hEx.includes('<td>受端省网输配电价</td>'), '费用表不再列出受端输配电价行');
 G('state.includeDstCost=true;state._res=solve(state, algoData());renderCalc();');
 const hIn = G("document.getElementById('v-calc').innerHTML");
-ok(hIn.includes('元/MWh 落地') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
+ok(hIn.includes('到户已列费用小计') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
 
 console.log('══ 七、行进方向、区域电网费与含线损计费口径 ══');
 {
   const RGOF = G('REGION_OF'), RG = G('RG');
   const ENV = "({REGION_OF:DATA.RGOF||{},RG:DATA.RG,includeRegion:true})";
-  G('state.showBad=true;state.includeRegion=true;state.includeDstCost=true;');
+  G("state.showBad=true;state.includeRegion=true;state.includeDstCost=true;state.regionChargeMode='buyer';");
 
   // ① 通行方向由数据逐条给定：锦苏为单向送电直流，德宝为双向互济直流
   const jsCh = G("CH.find(c=>c.n==='锦苏直流')"), db = G("CH.find(c=>c.n==='德宝直流')");
@@ -209,7 +209,9 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
     if (r.err) continue;
     for (const x of r.rows) {
       const buyer = RGOF[t];
-      const expect = (RG[buyer] || 0) * 1000 + x.segs.filter((s) => s.e.regional && RGOF[s.b] !== buyer).reduce((a, s) => a + (RG[RGOF[s.b]] || 0) * 1000 * s.qOut, 0);
+      const exits = new Map();
+      for(const s of x.segs) if(s.e.regional && RGOF[s.b] !== buyer) exits.set(RGOF[s.b],s);
+      const expect = (RG[buyer] || 0) * 1000 + [...exits.values()].reduce((a,s)=>a+(RG[RGOF[s.b]]||0)*1000*s.qOut,0);
       checked++;
       if (Math.abs(x.comp.reg - expect) > 1e-6) bad++;
     }
@@ -220,12 +222,12 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
   G("state.from='CQ';state.to='SC';state.maxHops=1;state.maxDetour=9;applyBothProv();state._res=solve(state, algoData());");
   const r3 = G('state._res');
   const cs = !r3.err && r3.rows.find((x) => x.edges[0].n === '川渝联络线');
-  ok(!!cs && link.tRev !== link.t && cs.segs[0].t === link.tRev,
-    `重庆→四川 反向经川渝联络线，输电价取重庆送出省价格 ${cs && cs.segs[0].t}（存储方向四川为 ${link.t}）`);
+  ok(!!cs && link.tRev !== link.t && cs.segs[0].sf0 === link.tRev && cs.segs[0].t === 0,
+    `重庆→四川 反向经川渝联络线，输电价取重庆送出省价格 ${cs && cs.segs[0].sf0}（存储方向四川为 ${link.t}）`);
   G("state.from='SC';state.to='CQ';state._res=solve(state, algoData());");
   const r3b = G('state._res');
   const sc = !r3b.err && r3b.rows.find((x) => x.edges[0].n === '川渝联络线');
-  ok(!!sc && sc.segs[0].t === link.t, `四川→重庆 正向经川渝联络线，输电价取四川送出省价格 ${link.t}`);
+  ok(!!sc && sc.segs[0].sf0 === link.t && sc.segs[0].t === 0, `四川→重庆 正向经川渝联络线，输电价取四川送出省价格 ${link.t}`);
 
   // ④ 计费口径（规则 4.3.1 / 3.3.2）：所有段输电费 = t × 段后电量；含线损段不再收网损
   G("state.from='NX';state.to='ZJ';state.maxHops=1;applyBothProv();state._res=solve(state, algoData());");
@@ -246,7 +248,7 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
   const js2 = !r7.err && r7.rows.find((x) => x.edges[0].n === '锦苏直流');
   ok(!!js2 && js2.comp.inLoss === 0 && Math.abs(js2.landed - js.border) < 1e-9, '只算到省界时不计受端上网环节线损，落地价 = 省界价');
   G("state.includeDstCost=true;");
-  ok(!!js && Math.abs(js.yuan.total / js.qty - js.landed) < 1e-6, '费用总额 ÷ 电量 = 落地单价（改口径后仍自洽）');
+  ok(!!js && Math.abs(js.yuan.total / js.consumerQty - js.landed) < 1e-6, '费用总额 ÷ 终端电量 = 到户单价（改口径后仍自洽）');
   // ⑥ 容量制工程：辛洹线边际 0，云霄取输电权报价下限
   const xh = G("CH.find(c=>c.n==='辛洹线')"), yx = G("CH.find(c=>c.n==='云霄直流')");
   ok(!!xh && xh.t === 0 && !!yx && yx.t === 25.6 && xh.bidir && yx.bidir, '辛洹线 t=0、云霄直流 t=25.6（输电权报价下限），均为双向');
