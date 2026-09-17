@@ -340,12 +340,17 @@ function renderMap(){
 }
 function switchMap(p){
   // REQ-703：不可用底图必须给出明确反馈，不得静默回退（真机 APK 以 file:// 加载，
-  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）
+  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）。原生 confirm 在 WebView 中
+  // 不显示且恒按「取消」返回，改用应用内确认框 uiConfirm（见 state.js）
   if(p==='qq'&&!isProxyEnv()){
-    if(confirm('腾讯地图需要本地代理环境，当前环境不可用。\n\n「确定」改用天地图（需自行填入密钥）；「取消」保持内置拓扑图。')){
-      state.mapProvider='td'; tdReady=false;
-    } else { state.mapProvider='svg'; }
-  } else state.mapProvider=p;
+    uiConfirm('腾讯地图不可用','腾讯地图需要本地代理环境，当前环境不可用。','改用天地图','保持内置拓扑图').then(ok=>{
+      state.mapProvider=ok?'td':'svg';
+      if(ok) tdReady=false;
+      saveMap(); renderMap();
+    });
+    return;
+  }
+  state.mapProvider=p;
   saveMap(); renderMap();
 }
 function applyTk(){

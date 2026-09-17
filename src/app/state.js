@@ -11,6 +11,35 @@ let state={
   mapProvider:'svg', tiandituKey:''
 };
 let stored=null;
+/* 应用内确认框：原生 confirm() 在安卓 WebView（壳未设 WebChromeClient）与 iOS WKWebView
+   （未挂 WKUIDelegate）中都不显示、且恒按「取消」返回 false，故三端统一自绘。
+   返回 Promise<boolean>；已有弹框未关闭时再次调用直接按「取消」结算，避免叠层。 */
+let _cfmOpen=false;
+function uiConfirm(title,msg,okText,cancelText){
+  if(_cfmOpen) return Promise.resolve(false);
+  _cfmOpen=true;
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(20,24,32,.45);display:flex;align-items:center;justify-content:center;padding:28px';
+    ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.22)">
+      <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">${esc(title)}</div>
+      <div style="font-size:12.5px;color:var(--ink2);line-height:1.7;white-space:pre-line">${esc(msg)}</div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn ghost" data-r="0" style="flex:1">${esc(cancelText)}</button>
+        <button class="btn" data-r="1" style="flex:1;font-size:14px;padding:10px">${esc(okText)}</button>
+      </div></div>`;
+    const done=ok=>{ _cfmOpen=false; ov.remove(); document.removeEventListener('keydown',onKey); res(ok); };
+    const onKey=e=>{ if(e.key==='Escape') done(false); };
+    ov.addEventListener('click',e=>{
+      const b=e.target.closest('button[data-r]');
+      if(b) done(b.dataset.r==='1');
+      else if(e.target===ov) done(false);   // 点遮罩视为取消
+    });
+    document.addEventListener('keydown',onKey);
+    document.body.appendChild(ov);
+    ov.querySelector('button[data-r="1"]').focus();
+  });
+}
 /* ================= 存储 ================= */
 function loadStored(){
   try{
@@ -21,9 +50,18 @@ function loadStored(){
       // 否则由用户决定丢弃或暂留——静默使用旧覆盖会算出过期结果
       if(s.ch&&s.ch.length===CH.length){
         if(s.pv&&s.pv===PRICE_VERSION){ CH=s.ch; }
-        else if(confirm('本地费率修改基于旧版价格数据（priceVersion 不一致），继续使用可能算出过期结果。\n\n「确定」丢弃本地修改，恢复当前核定值；「取消」暂保留（费率库会提示核对）。')){
-          localStorage.removeItem(LS_LIB);
-        } else { CH=s.ch; state._libStale=true; }
+        else{
+          // REQ-602：priceVersion 不一致必须由用户决定丢弃或暂留。确认框是异步的，
+          // 先按保守口径暂留并置 _libStale（费率库会提示核对，等同原「取消」分支），
+          // 用户选「丢弃」再回滚核定值并重算
+          CH=s.ch; state._libStale=true;
+          uiConfirm('费率本地修改版本不一致','本地费率修改基于旧版价格数据（priceVersion 不一致），继续使用可能算出过期结果。','丢弃本地修改','暂保留').then(ok=>{
+            if(!ok) return;
+            localStorage.removeItem(LS_LIB);
+            CH=DATA.CH.map(c=>({...c})); state._libStale=false;
+            state._res=solve(state, algoData()); renderCalc();
+          });
+        }
       }
     }
     const b=localStorage.getItem(LS_LAST);
