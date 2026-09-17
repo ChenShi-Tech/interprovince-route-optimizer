@@ -116,9 +116,9 @@ console.log('\n=== 渲染冒烟测试 ===');
 const c3 = makeCtx();
 const checks = [
   ['renderCalc() 测算页', 'state.from="SC";state.to="SH";state.sel=0;state._res=solve(state, algoData());renderCalc();', 'v-calc',
-    ['出发地', '目的地', '可选路线', '落地成本', '途经节点与线路', '完整明细', '逐段溯源', '口径位置', '送端省内段', '成本阈值',
+    ['出发地', '目的地', '可选路线', '落地成本', '交易连接与区域计费', '完整明细', '逐段溯源', '口径位置', '送端省内段', '成本阈值',
      '条候选', '送端收益', 'tl-seg-card', 'rc-price', '在网架图上查看', '原文摘录', '调价历史']],
-  ['方案切换 sel=1', 'state.sel=1;renderCalc();', 'v-calc', ['方案 #2', '途经节点与线路', '段入口功率', '段损耗电量']],
+  ['方案切换 sel=1', 'state.sel=1;renderCalc();', 'v-calc', ['方案 #2', '交易连接与区域计费', '段入口功率', '段损耗电量']],
   ['renderMap() 内置拓扑图', "state.mapProvider='svg';renderMap();", 'v-map', ['内置拓扑图', '全网架', '不依赖任何外部地图服务', '拓扑图']],
   ['响应式结构（桌面双栏）', 'state.from="SC";state.to="SH";state._res=solve(state, algoData());renderCalc();', 'v-calc', ['class="topbar"', 'class="layout"', 'class="col-side"', 'class="col-main"']],
   ['renderLib() 通道页', "state.libQ='';state.libFilter='all';libTab='ch';renderLib();", 'v-lib', ['搜索通道名', 'libcard', '匹配', '容量制', '实际输送能力', '送出省输电价格']],

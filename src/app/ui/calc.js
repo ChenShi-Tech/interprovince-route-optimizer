@@ -255,6 +255,119 @@ function pick(i){ state.sel=i; saveLast(); renderCalc();
   const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
 
 /* ---------- 选中路线详情 ---------- */
+/* 连续的区域内共用交流接口仅在展示层合并；不改动计价路径、容量链或区域计费位置。 */
+function sharedRegionOf(s){
+  const region=REGION_OF[s.a];
+  return s.e.regional && s.e.type==='AC' && region && region===REGION_OF[s.b]?region:null;
+}
+function routeDisplayBlocks(r){
+  const blocks=[];
+  r.segs.forEach((s,i)=>{
+    const region=sharedRegionOf(s),last=blocks[blocks.length-1];
+    if(region && last?.region===region) last.end=i;
+    else blocks.push({start:i,end:i,region});
+  });
+  return blocks;
+}
+function renderRouteNode(r,i){
+  const nd=r.nodes[i];
+  const isEnd=i===0||i===r.nodes.length-1;
+  const stationAt=(e,code)=>e[e.from===code?'stFrom':'stTo'];
+  const stUse=i===0?stationAt(r.edges[0],nd):i===r.edges.length?stationAt(r.edges[i-1],nd):(stationAt(r.edges[i],nd)||stationAt(r.edges[i-1],nd));
+  return `<div class="tl-node ${isEnd?'end':''}">
+    <div class="tl-dot"></div>
+    <div class="tl-info">
+      <div class="tl-name">${esc(N(nd))}${isEnd?`<span class="pill">${i===0?'送端':'受端'}</span>`:''}</div>
+      ${stUse?`<div class="tl-st">${esc(stName(stUse))}<span class="tl-ad">@ ${esc(stAddr(stUse))}</span></div>`
+        :(isEnd?`<div class="tl-st" style="color:var(--ink3)">落点站点待补</div>`:'')}
+    </div>
+  </div>`;
+}
+function renderRouteSegment(r,i){
+  const s=r.segs[i], e=s.e;
+  return `<div class="tl-seg">
+    <div class="tl-seg-line"></div>
+    <div class="tl-seg-card">
+      <div class="tl-seg-hd"><span>${esc(e.n)}</span><span class="pill ${e.type==='DC'?'':'g'}">${esc(e.type)} ${esc(e.kv)}</span>${e.tradable===false?'<span class="pill g" title="本笔中长期交易是否可使用待交易中心确认">交易网络·待确认</span>':''}</div>
+      <div class="tl-seg-g">
+        <div>${sharedRegionOf(s)?'长度参考':'长度'}<b>${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}</b></div>
+        <div>容量<b>${e.cap?e.cap+' MW':'待补'}</b></div>
+        <div>${e.regional?'单独通道费':'输电价'}<b>${fmt(s.t)} 元/MWh</b></div>
+        <div>计费线损率<b>${fmt(s.billLossPct,2)}%</b></div>
+        <div>段入口功率（物理估算）<b>${fmt(s.inMW,0)} MW</b></div>
+        <div>段损耗电量（物理估算）<b>${fmt(s.lossMwh,2)} MWh</b></div>
+      </div>
+      ${s.util!=null?`<div class="meter"><i class="${s.util>1?'over':(s.util>0.8?'hi':'')}" style="width:${Math.min(s.util*100,100).toFixed(1)}%"></i></div>
+        <div class="tl-cap">占用 ${fmt(s.util*100,1)}%　剩余 ${fmt(s.headroom,0)} / ${e.cap} MW</div>`
+        :`<div class="tl-cap">核定容量待补，无法校验占用</div>`}
+      ${e.regional?`<p class="note">${e.tariffStatus==='unknown'?'独立输电价待核，当前未计此项；':'区域共用网络接口，不逐个收通道费；'}${i===0?'送出省费用只在交易起点计一次。':'不收过境省外送费。'}${e.type==='AC' && s.billLossPct===0?'计费损耗 0，物理损耗仅作容量估算。':'背靠背损耗为估算，须核对备案标准。'}</p>`:''}
+      <div class="tl-src">${sharedRegionOf(s)?'接口资料（非独立收费依据）':tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　生效 '+esc(e.eff):''}</div>
+    </div>
+  </div>`;
+}
+function renderRegionalCharge(r,region){
+  const item=r.regionItems?.find(x=>x.region===region);
+  const rate=Number.isFinite(RG[region])?(item?.rate ?? RG[region]*1000):null;
+  const hasLoss=item && item.status!=='missing';
+  const lossLabel=!item?'本情景未计入':!hasLoss?'未计入（缺项）':fmt(item.pct,2)+'%';
+  const lossStatus=!item?'区域费开关关闭时，区域网损也排除。':!hasLoss?'未计入不代表已核定为 0%。'
+    :item.status==='historical'?'第三监管周期参考值，当前适用性待核实。'
+    :item.status==='custom'?'用户手填假设，待核实。':'使用已核实的区域参数。';
+  return `<div class="region-charge" id="region-charge-${esc(region)}" data-region="${esc(region)}">
+    <div class="region-charge-hd"><b>区域计费</b><span class="pill ${item?'':'g'}">${item?(rate!=null?'全路径合并计 1 次':'区域电量价缺项'):'本情景未计入'}</span></div>
+    <div class="region-charge-grid">
+      <div><span>区域电量价</span><b>${rate!=null?fmt(rate,2)+'<small> 元/MWh</small>':'待核实'}</b></div>
+      <div><span>折合节点交付费用</span><b>${item?(rate!=null?fmt(item.fee,2)+'<small> 元/MWh</small>':'待核实（未计）'):'—'}</b></div>
+      <div><span>区域网损</span><b>${lossLabel}</b></div>
+    </div>
+    <p class="region-charge-note">${lossStatus}${hasLoss?' 本次区域计费损耗 '+fmt(item.lossMwh,2)+' MWh，已纳入总损耗。':''}</p>
+    ${rate==null?'<p class="region-charge-note">本区域电量价未收录，当前未计入该项，不代表免费。</p>':''}
+    <p class="region-charge-note">电量价不含线损；折合费用按本次区域出口电量计算。收费范围以当前测算情景为准，须按交易公告确认。</p>
+  </div>`;
+}
+function renderRouteTimeline(r){
+  const blocks=routeDisplayBlocks(r),shownRegions=new Set();
+  const regionCount=new Set(blocks.filter(b=>b.region).map(b=>b.region)).size;
+  let out=`<div class="card route-timeline">
+    <div class="sec-title">交易连接与区域计费<span class="hint">${r.nodes.length} 个交易节点${regionCount?' · '+regionCount+' 个区域共用网络':''}</span></div>
+    <p class="route-explainer">展示交易连接关系与计费归属。区域内电能按实际网架潮流分布，接口组合不代表指定的物理送电路线。</p>
+    <div class="tl">`;
+  for(const block of blocks){
+    out+=renderRouteNode(r,block.start);
+    if(!block.region){ out+=renderRouteSegment(r,block.start);continue; }
+    const {region,start,end}=block,segs=r.segs.slice(start,end+1);
+    const charge=shownRegions.has(region)
+      ?`<p class="region-charge-note">已合并至<a href="#region-charge-${esc(region)}">${esc(region)}区域计费</a>，本处不重复归集。</p>`
+      :renderRegionalCharge(r,region);
+    shownRegions.add(region);
+    const provinces=[...new Set(r.nodes.slice(start,end+2))].map(N).join('、');
+    const exceeds=segs.some(s=>s.util>1);
+    // ID 包含完整路径与区块位置，避免切换方案后展开到另一组接口。
+    const detailId='d-interfaces-'+r.nodes.join('-')+'-'+r.edges.map(e=>e.id).join('-')+'-'+start;
+    out+=`<div class="tl-seg region-seg"><div class="tl-seg-line"></div><div class="region-network" data-region="${esc(region)}">
+      <div class="region-network-hd"><h3>${esc(region)}区域共用网络</h3><span class="pill g">交易连接示意</span></div>
+      <div class="region-connection"><span>${esc(N(r.nodes[start]))}<small>区域接入</small></span><i aria-hidden="true">↔</i><strong>${esc(region)}交流网架</strong><i aria-hidden="true">↔</i><span>${esc(N(r.nodes[end+1]))}<small>${end===r.segs.length-1?'节点交付':'网架转接'}</small></span></div>
+      <p class="region-members">涉及省份：${esc(provinces)}<br>参考接口：${segs.map(s=>esc(s.e.n)).join('、')}</p>
+      ${charge}
+      <p class="region-rule">本区域内的共用接口不按长度逐条计费、计损；区域费与所选区域网损统一归集。</p>
+      <p class="region-capacity ${exceeds?'exceeded':''}">${exceeds?'参考容量存在越限，请展开核查。':'接口容量与功率仅作估算参考。'}当期可交易性及可用输电容量（ATC）待确认。</p>
+      <details class="region-interfaces" id="${esc(detailId)}"><summary>查看 ${segs.length} 个接口与容量参考</summary><div class="region-interface-body">
+        <p class="note">以下保留模型中的连接次序、参考长度和容量估算，不作为区域通道费或网损的逐条计费依据。</p>
+        ${segs.map((s,j)=>`<div class="region-interface-label">${esc(N(s.a))} ↔ ${esc(N(s.b))}</div>`+renderRouteSegment(r,start+j)).join('')}
+      </div></details>
+    </div></div>`;
+  }
+  out+=renderRouteNode(r,r.nodes.length-1)+'</div>';
+  // 背靠背、跨区域接口或公告要求的受端区域可能没有区域内交流区块；仍展示求解器已计入的区域费。
+  for(const item of r.regionItems||[]){
+    if(shownRegions.has(item.region)) continue;
+    out+=`<div class="region-network region-settlement"><div class="region-network-hd"><h3>${esc(item.region)}区域计费</h3><span class="pill g">当前情景适用区域</span></div>${renderRegionalCharge(r,item.region)}</div>`;
+    shownRegions.add(item.region);
+  }
+  if(r.segs.some(s=>s.kmEst)) out+='<p class="note">* 展开详情中的参考长度按站点直线距离估算，实际路径长度待补。</p>';
+  return out+'</div>';
+}
+
 function renderDetail(res,r){
   if(!r) return '';
   const costName=state.includeDstCost!==false?'落地成本':'省界成本';
@@ -269,7 +382,7 @@ function renderDetail(res,r){
     <div class="sec-title">方案 #${state.sel+1}<span class="hint">${r.feasible?'<span style="color:var(--teal)">参考参数未越限 · ATC待核实</span>':'<span style="color:var(--red)">存在越限</span>'}</span></div>
     <div class="hd-route">${routeStr(r.nodes)}</div>
     <div class="lines">
-      ${r.edges.map(e=>`<span class="ln ${e.type==='DC'?'dc':'ac'}">${esc(e.n)}</span>`).join('<span class="plus">+</span>')}
+      ${routeDisplayBlocks(r).map(b=>`<span class="ln ${b.region?'ac':r.edges[b.start].type==='DC'?'dc':'ac'}">${esc(b.region?b.region+'区域共用网络':r.edges[b.start].n)}</span>`).join('<span class="plus">+</span>')}
     </div>
     <div class="big">${fmt(r.landed)}<span class="u">元/MWh ${state.includeDstCost===false?'省间节点费用小计':'到户已列费用小计'}</span></div>
     ${r.pricingIssues?.length?`<details class="warn" open><summary>适用条件与缺项（${r.pricingIssues.length}）</summary>${r.pricingIssues.map(v=>`<p class="note">${esc(v)}</p>`).join('')}</details>`:''}
@@ -282,8 +395,8 @@ function renderDetail(res,r){
       <span class="chip info">过网费 ${fmt(r.channelOnly)}</span>
       <span class="chip info">可接受送端报价 ${fmt(r.senderNet)}</span>
       <span class="chip">${r.hops} 段</span>
-      <span class="chip">${fmt(r.dist,0)} km</span>
-      <span class="chip">网损 ${fmt((1-r.D)*100,2)}%${Math.abs(r.Dphys-r.D)>1e-9?'（物理 '+fmt((1-r.Dphys)*100,2)+'%）':''}</span>
+      <span class="chip">长度参考 ${fmt(r.dist,0)} km</span>
+      <span class="chip">网损 ${fmt((1-r.D)*100,2)}%${Math.abs(r.Dphys-r.D)>1e-9?'（参考估损 '+fmt((1-r.Dphys)*100,2)+'%）':''}</span>
       <span class="chip">占用 ${fmt(r.maxLoad*100,0)}%</span>
       <span class="chip ${r.unverified?'warn':'ok'}">${r.unverified? r.unverified+' 段非核定':'全部发改委核定'}</span>
     </div>
@@ -297,47 +410,7 @@ function renderDetail(res,r){
     </div>
   </div>`;
 
-  // 节点与线路时间轴
-  out+=`<div class="card">
-    <div class="sec-title">途经节点与线路<span class="hint">${r.nodes.length} 个节点 · ${r.segs.length} 段线路</span></div>
-    <div class="tl">`;
-  r.nodes.forEach((nd,i)=>{
-    const isEnd=i===0||i===r.nodes.length-1;
-    const st=i===0?r.edges[0].stFrom:(i<r.edges.length?r.edges[i].stFrom:null);
-    const stationAt=(e,code)=>e[e.from===code?'stFrom':'stTo'];
-    const stUse=i===0?stationAt(r.edges[0],nd):i===r.edges.length?stationAt(r.edges[i-1],nd):(stationAt(r.edges[i],nd)||stationAt(r.edges[i-1],nd));
-    out+=`<div class="tl-node ${isEnd?'end':''}">
-      <div class="tl-dot"></div>
-      <div class="tl-info">
-        <div class="tl-name">${esc(N(nd))}${isEnd?`<span class="pill">${i===0?'送端':'受端'}</span>`:''}</div>
-        ${stUse?`<div class="tl-st">${esc(stName(stUse))}<span class="tl-ad">@ ${esc(stAddr(stUse))}</span></div>`
-          :(isEnd?`<div class="tl-st" style="color:var(--ink3)">落点站点待补</div>`:'')}
-      </div>
-    </div>`;
-    if(i<r.edges.length){
-      const s=r.segs[i], e=s.e;
-      out+=`<div class="tl-seg">
-        <div class="tl-seg-line"></div>
-        <div class="tl-seg-card">
-          <div class="tl-seg-hd"><span>${esc(e.n)}</span><span class="pill ${e.type==='DC'?'':'g'}">${esc(e.type)} ${esc(e.kv)}</span>${e.tradable===false?'<span class="pill g" title="本笔中长期交易是否可使用待交易中心确认">交易网络·待确认</span>':''}</div>
-          <div class="tl-seg-g">
-            <div>长度<b>${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}</b></div>
-            <div>容量<b>${e.cap?e.cap+' MW':'待补'}</b></div>
-            <div>${e.regional?'单独通道费':'输电价'}<b>${fmt(s.t)} 元/MWh</b></div>
-            <div>计费线损率<b>${fmt(s.billLossPct,2)}%</b></div>
-            <div>段入口功率（物理估算）<b>${fmt(s.inMW,0)} MW</b></div>
-            <div>段损耗电量（物理估算）<b>${fmt(s.lossMwh,2)} MWh</b></div>
-          </div>
-          ${s.util!=null?`<div class="meter"><i class="${s.util>1?'over':(s.util>0.8?'hi':'')}" style="width:${Math.min(s.util*100,100).toFixed(1)}%"></i></div>
-            <div class="tl-cap">占用 ${fmt(s.util*100,1)}%　剩余 ${fmt(s.headroom,0)} / ${e.cap} MW</div>`
-            :`<div class="tl-cap">核定容量待补，无法校验占用</div>`}
-          ${e.regional?`<p class="note">${e.tariffStatus==='unknown'?'独立输电价待核，当前未计此项；':'区域共用网络接口，不逐个收通道费；'}${i===0?'送出省费用只在交易起点计一次。':'不收过境省外送费。'}${e.type==='AC' && s.billLossPct===0?'计费损耗 0，物理损耗仅作容量估算。':'背靠背损耗为估算，须核对备案标准。'}</p>`:''}
-          <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　生效 '+esc(e.eff):''}</div>
-        </div>
-      </div>`;
-    }
-  });
-  out+=`</div>${r.segs.some(s=>s.kmEst)?`<p class="note">* 该段线路长度以站点直线距离估算，实际路径长度待补。</p>`:''}</div>`;
+  out+=renderRouteTimeline(r);
 
   // 完整明细
   out+=`<details class="adv boxed" id="d-detail"><summary>完整明细：费用 · 断面 · 溯源 · 口径</summary><div class="inner">
