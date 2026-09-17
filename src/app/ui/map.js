@@ -90,6 +90,17 @@ const TD_COOLDOWN_MS=10*60*1000;
    因此必须等绘制真正用到的类齐备；下面这份清单与 drawMapTD 里用到的 T.* 一一对应。 */
 const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
 const TD_WAIT_MS=5000, TD_POLL_MS=100;
+/* tkVis：密钥输入框的可见性状态（默认掩码）。切换只改 DOM 的 type/图标，不走 renderMap——
+   整卡重渲染会打断输入焦点；renderMap 重绘时按 tkVis 恢复上次选择的可见性。 */
+let tkVis=false;
+const SVG_EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const SVG_EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function toggleTkVis(){
+  tkVis=!tkVis;
+  const inp=document.getElementById('i-tk'), btn=document.querySelector('.tk-eye');
+  if(inp) inp.type=tkVis?'text':'password';
+  if(btn){ btn.innerHTML=tkVis?SVG_EYE_OFF:SVG_EYE; btn.setAttribute('aria-label',tkVis?'隐藏密钥':'显示密钥'); btn.title=btn.getAttribute('aria-label'); }
+}
 function tdApiReady(){
   if(typeof T==='undefined') return false;
   return TD_REQUIRED.every(k=>typeof T[k]==='function');
@@ -284,13 +295,15 @@ function renderMap(){
   }
   if(mode==='td'){
     out+=`<label class="f"><span>天地图密钥（tk）</span>
-      <input id="i-tk" type="text" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里"></label>
+      <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
+        <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
+      </div></label>
       <div class="row2" style="margin-bottom:10px">
         <button class="btn ghost" onclick="applyTk()">应用密钥</button>
         <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
       <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
-      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥仅存本机，代码中不内嵌任何有效密钥。</p>`;
+      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥默认掩码显示，点右侧小眼睛可见；仅存本机，代码中不内嵌任何有效密钥。</p>`;
   }
   if(mode==='svg'){
     out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
