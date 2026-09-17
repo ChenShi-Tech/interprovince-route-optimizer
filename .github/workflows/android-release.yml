@@ -1,0 +1,105 @@
+name: android-release
+# 安卓 APK 只在「发布 GitHub Release」时打包，普通提交与合并请求一律不打包。
+# 执行机：南洋自托管 runner irp-nanyang-1（label irp-linux，专用无特权用户 irp-runner）。
+# 工具链预装在 runner 用户的 ~/android-toolchain（JDK 17 + Gradle 8.7 + Android SDK 34），
+# 布局与 android/build-apk.mjs 的探测约定一致；Gradle 依赖缓存在 runner 用户的 ~/.gradle。
+# 流程：发布 Release（标签 vX.Y.Z）→ 校验版本号 → 构建 + 7 组测试 → 打包 → 签名核验 → APK 挂到该 Release。
+# 补打包：Actions 页手动运行本工作流，填已发布的标签。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要补打包的已发布 Release 标签（如 v1.1.5）
+        required: true
+
+permissions:
+  contents: write   # 上传 APK 到 Release
+
+concurrency:
+  group: android-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: [self-hosted, irp-linux]
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 标签与安卓版本号一致性
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::标签 $TAG 不是 vX.Y.Z 格式"; exit 1; }
+          NAME=$(sed -nE 's/^[[:space:]]*versionName "([^"]+)".*/\1/p' android/app/build.gradle)
+          CODE=$(sed -nE 's/^[[:space:]]*versionCode ([0-9]+).*/\1/p' android/app/build.gradle)
+          if [ "v$NAME" != "$TAG" ]; then
+            echo "::error::android/app/build.gradle 的 versionName=$NAME 与标签 $TAG 不一致——发版前先改版本号（versionCode 同步 +1）"
+            exit 1
+          fi
+          echo "versionName=$NAME versionCode=$CODE"
+
+      # 先构建再测：测试读的是 index.html，这样测到的就是即将打进 APK 的内容
+      - name: 构建与发版前测试（任一失败不出包）
+        run: |
+          node --version
+          node tools/build.mjs
+          for t in test-modules test-data-share baseline-check test-model-audit test-regional-billing test-prefill test-interaction; do
+            # 补打包早期标签时部分测试尚未引入（如 v1.1.5 无 test-model-audit），缺失只告警
+            [ -f "tools/$t.mjs" ] || { echo "::warning::该标签没有 tools/$t.mjs，跳过"; continue; }
+            echo "::group::$t"
+            node "tools/$t.mjs"
+            echo "::endgroup::"
+          done
+
+      - name: 检查南洋安卓工具链
+        run: |
+          TC="$HOME/android-toolchain"
+          JDK=""
+          for d in "$TC"/jdk-17*; do [ -d "$d" ] && JDK="$d" && break; done
+          for p in "$JDK" "$TC/gradle-8.7/bin/gradle" "$TC/sdk/platforms/android-34" "$TC/sdk/build-tools/34.0.0"; do
+            [ -n "$p" ] && [ -e "$p" ] || { echo "::error::runner 缺安卓工具链组件：${p:-jdk-17}（重装见 android/README.md「发版自动打包」）"; exit 1; }
+          done
+          echo "JAVA_HOME=$JDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$TC/sdk" >> "$GITHUB_ENV"
+
+      - name: 打包 APK
+        run: node android/build-apk.mjs
+
+      # 签名证书变了，手机上已装的旧版无法覆盖升级（只能卸载重装、丢本地数据），发出去前拦住
+      - name: 签名核验与命名
+        env:
+          EXPECTED_SIGNER: ${{ vars.ANDROID_SIGNER_SHA256 }}
+        run: |
+          APK="iproute-${TAG}-debug.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$APK" | tee apk-cert.txt
+          SIGNER=$(sed -nE 's/^Signer #1 certificate SHA-256 digest: ([0-9a-f]+)$/\1/p' apk-cert.txt)
+          [ -n "$SIGNER" ] || { echo "::error::未解析出签名证书指纹"; exit 1; }
+          if [ -z "$EXPECTED_SIGNER" ]; then
+            echo "::warning::未设置仓库变量 ANDROID_SIGNER_SHA256，跳过签名连续性校验（本次签名 $SIGNER）"
+          elif [ "$SIGNER" != "$EXPECTED_SIGNER" ]; then
+            echo "::error::APK 签名证书 $SIGNER 与约定的 $EXPECTED_SIGNER 不一致——已安装旧版的手机无法覆盖升级，已中止发布"
+            exit 1
+          fi
+          sha256sum "$APK" > "$APK.sha256"
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          {
+            echo "### 安卓 APK ${TAG}"
+            echo "- 文件：\`$APK\`（$(du -h "$APK" | cut -f1)）"
+            echo "- SHA-256：\`$(cut -d' ' -f1 "$APK.sha256")\`"
+            echo "- 签名证书 SHA-256：\`$SIGNER\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传到 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$APK" "$APK.sha256" --clobber --repo "$GITHUB_REPOSITORY"

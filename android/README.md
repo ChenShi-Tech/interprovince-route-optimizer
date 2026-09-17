@@ -21,6 +21,31 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 3. `sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"`；
 4. 修改 `local.properties` 的 `sdk.dir` 指向本机 SDK。
 
+## 发版自动打包（南洋 CI）
+
+对外分发的 APK **只在发布 GitHub Release 时打包**，普通提交与合并请求不打包。
+工作流 `.github/workflows/android-release.yml`，跑在南洋自托管 runner `irp-nanyang-1`（label `irp-linux`）。
+
+发版步骤：
+
+1. 发版提交里改 `android/app/build.gradle`：`versionName` 与标签一致（去掉 `v`），`versionCode` +1，合入 `main`；
+2. 发布 Release，标签 `vX.Y.Z`：`gh release create vX.Y.Z --target main --title "…" --notes "…"`
+   （网页上只保存草稿不触发，点「Publish release」才触发）；
+3. 工作流依次：标签与 `versionName` 一致性 → 构建 + 7 组测试 → 打包 → 签名核验 →
+   把 `iproute-vX.Y.Z-debug.apk` 与 `.sha256` 挂到该 Release（同名文件覆盖）；
+4. 失败后补打包：Actions → android-release → Run workflow，填已发布的标签。
+
+注意：
+
+- **不要再在本机打包后手动上传**——同名文件会被 CI 覆盖，且各机器的 debug 签名密钥不同。
+- **签名连续性**：仓库变量 `ANDROID_SIGNER_SHA256` 设为约定签名证书的 SHA-256 指纹后，签名对不上的 APK 会被拦下不上传
+  （手机上已装旧版的无法覆盖升级，只能卸载重装并丢失本地数据）；未设置时只告警。
+- 用 `GITHUB_TOKEN` 在别的工作流里创建的 Release 不会触发本工作流（GitHub 防递归），发版须由人发布。
+
+南洋工具链位于 runner 用户 `irp-runner` 的 `~/android-toolchain/`（Temurin JDK 17 + Gradle 8.7 +
+SDK `platform-tools` / `platforms;android-34` / `build-tools;34.0.0`），签名密钥为该用户的 `~/.android/debug.keystore`。
+重装按上面「在新机器上重建工具链」前三步以 `irp-runner` 身份执行；SDK 路径由工作流注入 `ANDROID_HOME`，无需 `local.properties`。
+
 ## 安装到手机
 
 APK 为 debug 签名（首次构建自动生成于 `~/.android/debug.keystore`），可直接侧载：
