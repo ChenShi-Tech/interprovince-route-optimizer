@@ -154,13 +154,13 @@ for (const [a, b, n, kv, cap, loss, type, kvText, extraNote] of AC_LINKS) {
     kv: kvText || (kv + 'kV'), type: type || 'AC', cap, lenKm: null,
     dirNote: extraNote || '省间交流联络线，潮流双向',
     sendFeeRev: null, marginalNote: '',
-    t: exportOf(a) * 1000,      // 省间交流联络线未单独核价，其自身即按送出省输电价格计（存储方向 a→b，取 a 的价格）
+    t: exportOf(a) * 1000,      // 送出省参考价，仅路径起点使用；不是接口独立通道费
     tRaw: exportOf(a) * 1000,
     tRev: exportOf(b) * 1000,   // 反向行进 b→a 时送端省是 b，取 b 的送出省输电价格
     bidir: true,                // 交流联络线可双向通行
-    regional: true,             // 经区域共用交流网络输送，按到达省所在区域计区域电网电量电价（1490号附件3第十一条）
+    regional: true,             // 共用网络接口：区域费用按整条路径去重归集
     capEq: null,
-    sendFee: 0,                 // 上行的送出省价已含在 t 中，不重复计
+    sendFee: 0,                 // 起点送出省参考价存于 t/tRev，算法归入 send，不重复计
     loss, tier: 'region',
     doc: '送出省输电价格（第四监管周期）',
     docTitle: '各省第四监管周期输配电价通知',
@@ -171,7 +171,7 @@ for (const [a, b, n, kv, cap, loss, type, kvText, extraNote] of AC_LINKS) {
     bill: '送出省输电价格', status: '口径待确认',
     priceType: 'energy', capRated: cap, capActual: cap, capBasis: 'rated', capSrc: '设计容量',
     tradable: false,   // 省间交流联络线未单独核定输电价格，是否属于省间现货交易网络待确认
-    note: '省间联络线未单独核定输电价格，此处按第四监管周期送端省「外送电送出省输电价格」口径取值（反向行进取对侧省的价格）；该段属区域共用网络，买方所在区域的电量电价在路径层面统一计一次，过境其它区域再按该区域电量电价计。'
+    note: '省间联络接口无单独核定通道价；t/tRev 仅保存正反方向送出省参考价，只有作为交易起点时计入送端省内段，过境时不收。区域共用网络按区域去重计费；区域内交流接口计费损耗为 0，原线损仅作容量估算，背靠背直流保留自身计费损耗。'
       + (extraNote ? '　' + extraNote : ''),
     docVersion: '', sourceIssue: '',
   });
@@ -275,9 +275,10 @@ const appData = {
     'CH[].tier 为数据可信度：gov=发改委核定 / grid=国网披露 / region=区域或送出省口径。',
     'CH[].cap 为用于容量校验的容量，已优先取「实际输送能力」，缺失时回退额定；capBasis 标明口径。',
     'CH[].priceType 为 energy（电量制）或 capacity（容量制，t 为折算的等效度电成本）。',
-    'CH[].sendFee 为送端省内段费用（送出省输电价格），AC 联络线为 0（其价格已含在该段 t 中）。',
+    'CH[].sendFee 仅在交易起点计入送端省内段。regional 接口的 t/tRev 为两侧省送出参考价，仅首段归入 send，不作独立通道收费。',
     'CH[].bidir：能否双向通行。专项工程默认 false；数据文件标「双向」的 7 条（德宝、青藏、长南荆、辛洹、灵宝、高岭、云霄）与全部联络线为 true。反向行进时联络线输电价取 tRev，专项工程送端省内段费用取 sendFeeRev；dirNote 为方向依据。',
-    'CH[].regional：仅联络线为 true，表示属区域共用网络。区域电网电量电价按《省间电力现货交易规则》(2026-04) 3.4.2(a) 统一计买方所在区域一次，过境其它区域的联络线段再按该区域计一次。',
+    'CH[].regional：仅联络接口为 true，区域费按整条路径去重，买方区域一次，其它共用网络每个区域一次。',
+    '区域内部共用交流接口的计费线损为 0；CH[].loss 原值仅作物理功率和容量估算。专项工程与背靠背直流按自身计费口径处理。',
     'CH[].incLoss 为 true 的段「输电价格已包含网损」，按规则 3.3.2 不再向买方收该段网损；所有段的输电费均按规则 4.3.1 以该段段后电量计。',
     'CH[].marginalNote：容量制工程（辛洹、云霄）的 t 为交易方的边际输电价（辛洹 0，云霄取输电权报价下限），说明见此字段。',
     'PV[].inLoss / exportLoss：受端省内上网环节线损率 / 送省外上网环节线损率（%），1077号附件1 注3、注4；exportKind 标明送出省价格是「核定外送」还是「临时互济条款」。',

@@ -209,7 +209,9 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
     if (r.err) continue;
     for (const x of r.rows) {
       const buyer = RGOF[t];
-      const expect = (RG[buyer] || 0) * 1000 + x.segs.filter((s) => s.e.regional && RGOF[s.b] !== buyer).reduce((a, s) => a + (RG[RGOF[s.b]] || 0) * 1000 * s.qOut, 0);
+      const exits = new Map();
+      for(const s of x.segs) if(s.e.regional && RGOF[s.b] !== buyer) exits.set(RGOF[s.b],s);
+      const expect = (RG[buyer] || 0) * 1000 + [...exits.values()].reduce((a,s)=>a+(RG[RGOF[s.b]]||0)*1000*s.qOut,0);
       checked++;
       if (Math.abs(x.comp.reg - expect) > 1e-6) bad++;
     }
@@ -220,12 +222,12 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
   G("state.from='CQ';state.to='SC';state.maxHops=1;state.maxDetour=9;applyBothProv();state._res=solve(state, algoData());");
   const r3 = G('state._res');
   const cs = !r3.err && r3.rows.find((x) => x.edges[0].n === '川渝联络线');
-  ok(!!cs && link.tRev !== link.t && cs.segs[0].t === link.tRev,
-    `重庆→四川 反向经川渝联络线，输电价取重庆送出省价格 ${cs && cs.segs[0].t}（存储方向四川为 ${link.t}）`);
+  ok(!!cs && link.tRev !== link.t && cs.segs[0].sf0 === link.tRev && cs.segs[0].t === 0,
+    `重庆→四川 反向经川渝联络线，输电价取重庆送出省价格 ${cs && cs.segs[0].sf0}（存储方向四川为 ${link.t}）`);
   G("state.from='SC';state.to='CQ';state._res=solve(state, algoData());");
   const r3b = G('state._res');
   const sc = !r3b.err && r3b.rows.find((x) => x.edges[0].n === '川渝联络线');
-  ok(!!sc && sc.segs[0].t === link.t, `四川→重庆 正向经川渝联络线，输电价取四川送出省价格 ${link.t}`);
+  ok(!!sc && sc.segs[0].sf0 === link.t && sc.segs[0].t === 0, `四川→重庆 正向经川渝联络线，输电价取四川送出省价格 ${link.t}`);
 
   // ④ 计费口径（规则 4.3.1 / 3.3.2）：所有段输电费 = t × 段后电量；含线损段不再收网损
   G("state.from='NX';state.to='ZJ';state.maxHops=1;applyBothProv();state._res=solve(state, algoData());");

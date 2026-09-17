@@ -182,14 +182,14 @@ function showMapFallback(){
     r[sel].segs.forEach((s,i)=>{
       t+=`<div style="padding:6px 0;border-bottom:.5px solid rgba(0,0,0,.06);line-height:1.6">
         <b>第 ${i+1} 段　${N(s.a)} → ${N(s.b)}</b><br>
-        ${s.e.n}　${s.e.kv}　${s.e.t} 元/MWh　线损 ${s.e.loss}%<br>
+        ${s.e.n}　${s.e.kv}　${s.t} 元/MWh　计费线损 ${s.billLossPct}%（物理估算 ${s.e.loss}%）<br>
         <span style="color:#8A8A85">段入口 ${Math.round(s.inMW)} MW　占用 ${s.util!=null?(s.util*100).toFixed(0)+'%':'待补'}</span></div>`;
     });
   }
   t+='<div style="font-weight:600;margin:14px 0 6px">全部通道（'+CH.length+' 条）</div>';
   CH.forEach(c=>{
     const on=r&&r.some(row=>row.edges.some(e=>e.id===c.id))?' ●':'';
-    t+=`<div style="padding:3px 0;border-bottom:.5px solid rgba(0,0,0,.06)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
+    t+=`<div style="padding:3px 0;border-bottom:.5px solid rgba(0,0,0,.06)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
   });
   fb.innerHTML=t;
 }
@@ -326,7 +326,7 @@ function renderMap(){
     out+=`<div style="margin-top:11px;padding-top:11px;border-top:.5px solid var(--line2)">
       <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">选中方案 #${state.sel+1}　${esc(selR.nodes.map(N).join(' → '))}</div>
       ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:.5px solid var(--line2);line-height:1.6">
-        <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.e.t)} 元/MWh　线损 ${fmt(s.e.loss,2)}%
+        <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.t)} 元/MWh　计费线损 ${fmt(s.billLossPct,2)}%（物理估算 ${fmt(s.e.loss,2)}%）
         <span style="color:var(--ink3)">｜入口 ${fmt(s.inMW,0)} MW　${s.util!=null?'占用 '+fmt(s.util*100,0)+'%':'容量待补'}</span>
       </div>`).join('')}
     </div>`;
@@ -334,10 +334,10 @@ function renderMap(){
   out+=`<p class="note" style="margin-top:10px">站点位置为县/市级近似（精确站址见费率库中各通道的送受端地址）。落点未采集的通道以省会位置示意。</p></div>`;
 
   out+=`<div class="card tight"><div class="sec-title">通道费用分布<span class="hint">按输电价升序</span></div>
-    <table><tr><th style="width:40%">通道</th><th>输电价</th><th>线损</th><th>容量</th></tr>
+    <table><tr><th style="width:40%">通道</th><th>输电价 / 送出省参考价</th><th>物理估算线损</th><th>容量</th></tr>
     ${[...CH].filter(c=>c.t!=null).sort((a,b)=>a.t-b.t).map(c=>`<tr>
       <td>${esc(c.n)}<br><span style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
-      <td>${fmt(c.t)}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>
+      <td>${fmt(c.t)}${c.regional?'（仅起点送出省）':''}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>
   </div>`;
 
   document.getElementById('v-map').innerHTML=out;
