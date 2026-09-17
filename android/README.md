@@ -31,7 +31,7 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 1. 发版提交里改 `android/app/build.gradle`：`versionName` 与标签一致（去掉 `v`），`versionCode` +1，合入 `main`；
 2. 发布 Release，标签 `vX.Y.Z`：`gh release create vX.Y.Z --target main --title "…" --notes "…"`
    （网页上只保存草稿不触发，点「Publish release」才触发）；
-3. 工作流依次：标签与 `versionName` 一致性 → 工具链检查 → 附件查重 → 构建 + 7 组测试 → 打包 → 签名核验 →
+3. 工作流依次：标签与 `versionName` 一致性 → 工具链检查 → 标签提交须已在 `main` 上 → 附件查重 → 构建 + 7 组测试 → 打包 → 签名核验 →
    把 `iproute-vX.Y.Z-debug.apk` 与 `.sha256` 挂到该 Release；
 4. 失败后补打包：Actions → android-release → Run workflow，填已发布的标签；
    勾选 `dry_run` 则只打包、在运行摘要里给出签名指纹，不改动 Release 附件（验证流水线或核对签名时用）。
@@ -45,6 +45,7 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 - ⚠️ **v1.1.0～v1.1.5 是协作者本机 debug 密钥签的，与南洋密钥不同。** 签名方案拍板并设好上面的变量之前不要发新版；
   若决定改用新密钥，首个 CI 版本的 Release 说明里必须写明「已装用户需卸载重装（本地费率修改、地图与模型密钥会丢）」。
 - 标签只支持 `vX.Y.Z`；预发布（pre-release / rc 标签）发布时工作流会报格式错误、不出包。
+- 标签必须打在已合入 `main` 的提交上（`--target main`）；打在未合并的功能分支提交上会被拦下，防止未审查的代码作为正式包发出。
 - **不做覆盖式上传**：Release 已有同名附件（含上次上传到一半留下的）时直接中止，防止上传失败把原附件弄丢。
   确需替换：先勾 `dry_run` 跑一次核对签名，再在 Release 页面删除 `iproute-vX.Y.Z-debug.apk` 与 `.sha256`，最后正常重跑。
 - 用 `GITHUB_TOKEN` 在别的工作流里创建的 Release 不会触发本工作流（GitHub 防递归），发版须由人发布。
