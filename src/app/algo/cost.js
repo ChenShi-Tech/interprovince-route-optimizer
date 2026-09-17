@@ -132,6 +132,12 @@ function evalPath(path, ctx, env){
   });
   const regBuyer = env.includeRegion ? regionRate(env, nodes[n]) : 0;   // 买方区域电量电价 × 交付电量
   const regFee = regTransit + regBuyer;
+  // S11 附件2 注1：区域电量电价不含线损。当前尚未核实适用于本期交易的区域网损率，
+  // 必须随结果返回缺项；接口计费损耗为 0 不代表区域网损费用为 0。
+  const regionLossMissing=[...new Set([
+    ...(regBuyer>0?[buyerRegion]:[]),
+    ...segs.filter(s=>s.rg>0).map(s=>env.REGION_OF[s.b]),
+  ])];
   const g=ctx.lossBearer;
   const cGen=ctx.pGen, cLossBuyer=cGen*g*lossQty, cSend=sendTotal, cTrans=trans, cReg=regFee;
   const border=cGen+cLossBuyer+cSend+cTrans+cReg;                 // 送到受端省界的价格
@@ -192,7 +198,7 @@ function evalPath(path, ctx, env){
     inLossPct, exportLossPct, cExportLoss, exportLossQty,
     dist, straight, dcCount:vsCount, acCount:n-vsCount,
     kvList:[...vset].filter(Boolean), typeList:[...tset], regionList:[...rset].filter(Boolean),
-    stationList:[...stset], tiers, unverified, buyerRegion,
+    stationList:[...stset], tiers, unverified, buyerRegion, regionLossMissing,
     comp:{gen:cGen,loss:cLossBuyer,send:cSend,trans:cTrans,reg:cReg,inLoss:cInLoss,net:cNet,fund:cFund},
     capUnknown:edges.filter(e=>e.capBasis==='unknown').length,
     capEqUsed:edges.filter(e=>e.capEq!=null).length};

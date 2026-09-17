@@ -20,6 +20,7 @@ try{
    if(i<0)throw new Error('截图路径未找到');state.sel=i;renderCalc();
   });
   const big=await page.locator('.big').first().innerText();assert.match(big,/387\.0/);
+  assert.match(await page.locator('#v-calc').innerText(),/区域网损费用待补：华东/);
   const cards=page.locator('.tl-seg-card');assert.equal(await cards.count(),3);
   for(const i of [1,2]){
    const text=await cards.nth(i).innerText();
@@ -35,6 +36,7 @@ try{
   const file=await download;
   const report=fs.readFileSync(await file.path(),'utf8');
   assert.match(report,/387\.0/);assert.match(report,/计费线损率 0\.00%/);assert.match(report,/不收过境省外送费/);
+  assert.match(report,/区域网损费用待补：华东/);
   await page.evaluate(()=>{state.mapProvider='svg';go('map');});
   const mapText=await page.locator('#v-map').innerText();
   assert.match(mapText,/计费线损 0\.00%（物理估算 0\.90%）/);

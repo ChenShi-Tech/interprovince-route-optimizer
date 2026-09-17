@@ -224,6 +224,7 @@ function renderDetail(res,r){
       ${r.edges.map(e=>`<span class="ln ${e.type==='DC'?'dc':'ac'}">${esc(e.n)}</span>`).join('<span class="plus">+</span>')}
     </div>
     <div class="big">${fmt(r.landed)}<span class="u">元/MWh ${state.includeDstCost===false?'送到受端省界':'落地'}</span></div>
+    ${r.regionLossMissing.length?`<p class="warn" style="margin:0 0 8px">区域网损费用待补：${esc(r.regionLossMissing.join('、'))}电量电价不含线损（1077号附件2注1），本期适用网损率尚未核实，当前价格未计此项。接口零计费损耗不代表区域网损免费。</p>`:''}
     <p class="note" style="margin:-2px 0 8px">单时点测算：省间现货按 D 日 96 时段（每 15 分钟一段，S14 规则 4.1）组织出清，时段价差与通道功率爬坡未建模。</p>
     ${state.includeDstCost===false?'<p class="note" style="margin:-4px 0 8px">当前口径<b>不含</b>受端省网输配电价与政府性基金及附加，仅为送到受端省界的价格。</p>':''}
     <div class="bar">${comp.map((c,j)=>`<div style="width:${(c[1]/tot*100).toFixed(2)}%;background:${colors[j%6]}"></div>`).join('')}</div>
@@ -432,6 +433,7 @@ function exportReport(){
   L.push('- 电量：'+state.qty+' MWh / '+state.hours+' h　网损承担：'+(state.lossBearer==1?'受端':state.lossBearer==0.5?'两端各半':'送端'));
   L.push('- 价格参数：出清价 '+state.pGen+' / 受端结算价 '+state.pDst+' / 受端输配电价 '+state.pNet+' / 基金及附加 '+state.fund+' 元/MWh');
   L.push('- 口径：'+(state.includeDstCost===false?'只算到受端省界':'完整落地价')+'　区域电网费：'+(state.includeRegion?'计入':'不计入'));
+  if(r.regionLossMissing.length) L.push('- 区域网损费用待补：'+r.regionLossMissing.join('、')+'电量电价不含线损；本期适用网损率尚未核实，当前价格未计此项。');
   L.push('');
   L.push('## 三口径结果');
   L.push('- 落地成本：'+fmt(r.landed)+' 元/MWh（全局排名 #'+r.rankA+'）');

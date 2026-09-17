@@ -32,6 +32,7 @@ near(xj.border,expected,'新疆→上海省界价');
 near(xj.comp.trans,82.9,'只计吉泉独立通道费');
 near(xj.comp.send,34.3/d,'只计新疆送出省费用');
 near(xj.comp.reg,9.2,'华东区域费一次');
+yes(xj.regionLossMissing.length===1 && xj.regionLossMissing[0]==='华东','区域网损未核实时返回缺项，不冒充已知零');
 near(xj.genMWhPhys,1000/physicalD,'物理送端估算电量');
 near(xj.genMWh,1000/d,'计费送端电量仅补吉泉损耗');
 yes(xj.segs.slice(1).every(s=>s.billLossPct===0 && s.billLossMwh===0),'华东内部计费损耗为零');
@@ -40,6 +41,7 @@ yes(xj.segs.slice(1).every(s=>s.t===0 && s.fee===0 && s.sf===0),'两条过境接
 const noRegion=app.evalPath(xjPath,ctx,{...env,includeRegion:false});
 near(xj.border-noRegion.border,9.2,'关闭区域费不重新启用接口费');
 near(noRegion.Dphys,xj.Dphys,'区域费开关不影响物理损耗');
+yes(noRegion.regionLossMissing.length===0,'排除区域费用后不声明已计区域费的网损缺项');
 const full=app.evalPath(xjPath,{...ctx,includeDstCost:true,pNet:80,fund:20},env);
 near(full.landed,xj.border/(1-data.LOSS_OF.SH.inLoss/100)+100,'完整落地价同步修正');
 near(full.channelOnly,xj.channelOnly,'受端费用不影响过网费');
