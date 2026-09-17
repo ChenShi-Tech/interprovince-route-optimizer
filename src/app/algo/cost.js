@@ -41,7 +41,7 @@ function billingLossOf(env, e){
 function approxW(env, e, fromCode, toCode){
   const rho = billingLossOf(env,e);
   return (e.regional?0:tariffOf(e, fromCode))
-    +(fromCode===env.source && env.sourceQuote!=='export'?sendFeeOf(e, fromCode):0)+rho/100*env.pGen;
+    +(fromCode===env.source && env.sourceQuote!=='export'?(env.srcSendFee ?? sendFeeOf(e, fromCode)):0)+rho/100*env.pGen;
 }
 
 /** 对一条路径做精确计价。
@@ -99,7 +99,8 @@ function evalPath(path, ctx, env){
     const q=1/sufT[i], qOut=1/(sufT[i+1]*after[i]);        // 计费链
     const qP=1/sufP[i], qOutP=1/sufP[i+1];      // 物理链
     const t=e.regional?0:tariffOf(e,nodes[i]);
-    const sf0=i===0 && ctx.sourceQuote!=='export'?sendFeeOf(e,nodes[i]):0;
+    // 送端电站专属送出价（1077号附件1 川滇等表注4 对特定电站 / 额度另定）：用户选定时覆盖通用送出价
+    const sf0=i===0 && ctx.sourceQuote!=='export'?(ctx.srcSendFee ?? sendFeeOf(e,nodes[i])):0;
     const fee=t*qOut;                           // S14 4.3.1：输电价 × 段后电量
     const sf=sf0*q;                             // 送出省段：出口电量 = 本段入口电量
     const rg=regionItems.filter(r=>r.index===i && r.region!==buyerRegion).reduce((a,r)=>a+r.fee,0);
@@ -130,7 +131,7 @@ function evalPath(path, ctx, env){
   const regionLossMissing=regionItems.filter(r=>r.status==='missing').map(r=>r.region);
   const g=ctx.lossBearer;
   const cGen=ctx.pGen, cLossBuyer=cGen*g*lossQty, cSend=sendTotal, cTrans=trans, cReg=regFee;
-  const exportLossPct=(LOSS[nodes[0]]||{}).exportLoss;
+  const exportLossPct=ctx.srcExportLossPct ?? (LOSS[nodes[0]]||{}).exportLoss;
   const exportLossQty=exportLossPct!=null ? genQty*(exportLossPct/100)/(1-exportLossPct/100) : 0;
   const cExportLoss=cGen*exportLossQty;
   const originSeparate=ctx.sourceQuote!=='export' && ctx.originLossMode==='separate';
@@ -139,17 +140,21 @@ function evalPath(path, ctx, env){
   // 受端省内费用：省网输配电价、基金附加、上网环节线损费用（1077号附件1 注3，在输配电价外单列）。
   // 上网环节线损：用户拿到 1 MWh 需从省界买入 1/(1−ρ) MWh，费用 = 省界价 × ρ/(1−ρ)。
   const dst=ctx.includeDstCost!==false;
-  const inLossPct=(LOSS[nodes[n]]||{}).inLoss;
+  // 受端电网主体可选（河北/冀北、蒙西/蒙东、陕西/榆林、深圳等分表，注3 线损率随主体不同）：给出时覆盖省默认值
+  const inLossPct=ctx.dstInLossPct ?? (LOSS[nodes[n]]||{}).inLoss;
   const cInLoss=(dst && inLossPct!=null) ? border*(inLossPct/100)/(1-inLossPct/100) : 0;
   const cNet=dst?ctx.pNet:0;
   const cFund=dst?ctx.fund:0;
-  const landed=border+cInLoss+cNet+cFund;
+  // 到户扩展的两项用户侧费用（元/到户MWh，缺省 0）：两部制容（需）量电费按用户负荷假设分摊、系统运行费手填
+  const cCap=dst?(ctx.dstCapFee||0):0;
+  const cSysOp=dst?(ctx.dstSysOpFee||0):0;
+  const landed=border+cInLoss+cNet+cFund+cCap+cSysOp;
   const consumerQty=dst && inLossPct!=null ? qty*(1-inLossPct/100) : qty;
   const amountQty=dst?consumerQty:qty;
   const channelOnly=cSend+cTrans;   // 口径二：过网费 = 送端省内段 + 跨省通道费，不含网损、区域电网费与省网费用
-  // 以同一费用约定反求送端报价；不是现货边际价，也不是卖方利润。
+  // 以同一费用约定反求送端报价；不是现货边际价，也不是卖方利润。未给受端目标交付价时为 null。
   const quoteFactor=1+g*lossQty+(originSeparate?exportLossQty:0);
-  const maxSourceQuote=(ctx.pDst-cSend-cTrans-cReg)/quoteFactor;
+  const maxSourceQuote=ctx.pDst==null ? null : (ctx.pDst-cSend-cTrans-cReg)/quoteFactor;
   const senderNet=maxSourceQuote; // 保留旧字段名供排序/端侧兼容，新语义见数据契约。
   const deliverMW=qty/h;
   const segLd=segs.map(s=>({name:s.e.n,mw:s.inMW,cap:s.e.cap,effCap:s.e.cap?s.e.cap*occFactor:null,over:s.e.cap? s.inMW>s.e.cap*occFactor : false}));
@@ -176,8 +181,9 @@ function evalPath(path, ctx, env){
     gen:cGen*amountQty, send:cSend*amountQty, trans:cTrans*amountQty,
     reg:cReg*amountQty, loss:cLossBuyer*amountQty,
     inLoss:cInLoss*amountQty, net:cNet*amountQty, fund:cFund*amountQty, originLoss:cOriginLoss*amountQty,
+    cap:cCap*amountQty, sysOp:cSysOp*amountQty,
   };
-  yuan.total=yuan.gen+yuan.send+yuan.trans+yuan.reg+yuan.loss+yuan.inLoss+yuan.net+yuan.fund+yuan.originLoss;
+  yuan.total=yuan.gen+yuan.send+yuan.trans+yuan.reg+yuan.loss+yuan.inLoss+yuan.net+yuan.fund+yuan.originLoss+yuan.cap+yuan.sysOp;
   const tiers={gov:0,grid:0,region:0,est:0};
   edges.forEach(e=>{tiers[e.tier]=(tiers[e.tier]||0)+1;});
   const unverified=edges.filter(e=>e.tier!=='gov').length;
@@ -191,7 +197,7 @@ function evalPath(path, ctx, env){
     stationList:[...stset], tiers, unverified, buyerRegion, regionLossMissing, regionItems,
     priceComplete:regionItems.every(r=>r.status==='verified'),
     capacityStatus:overSeg.length || secOver.length ? 'exceeded' : 'unconfirmed',
-    comp:{gen:cGen,loss:cLossBuyer,send:cSend,trans:cTrans,reg:cReg,inLoss:cInLoss,net:cNet,fund:cFund,originLoss:cOriginLoss},
+    comp:{gen:cGen,loss:cLossBuyer,send:cSend,trans:cTrans,reg:cReg,inLoss:cInLoss,net:cNet,fund:cFund,originLoss:cOriginLoss,cap:cCap,sysOp:cSysOp},
     capUnknown:edges.filter(e=>e.cap==null || e.capBasis==='unknown' || e.capBasis==='estimate').length,
     capEqUsed:edges.filter(e=>e.capEq!=null).length};
 }

@@ -28,6 +28,7 @@ function enumPaths(adj,src,dst,maxHops,cap,weightOf){
     if(edges.length>=maxHops) return;
     for(const nb of ord[u]||[]){
       if(visited.has(nb.to)) continue;
+      if(nb.e.originOnly && u!==src) continue;   // 点对网电厂送出工程只能作首段，不作过境通道
       visited.add(nb.to); nodes.push(nb.to); edges.push(nb.e);
       dfs(nb.to);
       edges.pop(); nodes.pop(); visited.delete(nb.to);

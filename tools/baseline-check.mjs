@@ -63,7 +63,9 @@ for (const c of baseline.cases) {
     `Object.assign(state,{from:${JSON.stringify(c.from)},to:${JSON.stringify(c.to)},
       pGen:${p.pGen},pDst:${p.pDst},pNet:${p.pNet},fund:${p.fund},
       lossBearer:${p.lossBearer},qty:${p.qty},hours:${p.hours},showBad:true,sortBy:"A",showAll:true,
-      maxHops:${p.maxHops},maxDetour:${p.maxDetour},K:6,includeRegion:${p.includeRegion}});`, ctx);
+      maxHops:${p.maxHops},maxDetour:${p.maxDetour},K:6,includeRegion:${p.includeRegion},
+      // 基线在「送端省内网损不另计、区域网损不计入」口径下生成；界面默认值改变不应让基线漂移
+      originLossMode:'included',regionLossMode:'exclude'});`, ctx);
   const R = vm.runInContext('solve(state, algoData())', ctx);
   if (R.err) { failed++; problems.push(`${c.from}→${c.to}: 基线有解但现引擎报错「${R.err}」`); continue; }
   if (R.rows.length !== c.routeTotal) {

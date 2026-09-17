@@ -49,7 +49,7 @@ ok(uniformFund === 0, '无省份仍在使用 26.6 占位值');
 const fundSet = new Set(Object.values(PV1).map((v) => String(v.fund)));
 ok(fundSet.size >= 20, `基金附加取值分散（${fundSet.size} 个不同值）`);
 const srcOK = Object.values(PV1).filter((v) => /1077号/.test(v.netSrc)).length;
-ok(srcOK === 29 && PV1.XZ.netSrc.includes('xizang.gov.cn'), `29 省引用1077号，西藏引用自治区原文（实际 ${srcOK}）`);
+ok(srcOK === 30 && PV1.XZ.netSrc.includes('xizang.gov.cn'), `30 省引用1077号（海南本次补录），西藏引用自治区原文（实际 ${srcOK}）`);
 
 console.log('\n══ 二、启动时的预填 ══');
 ok(G(c1, 'state.pNet') === PV1.JS.net, `默认受端江苏 → 输配电价 ${G(c1, 'state.pNet')}`);
@@ -90,10 +90,10 @@ G(c1, 'state.includeDstCost=true;state._res=solve(state, algoData());renderCalc(
 const xzHtml = G(c1, "__dom['v-calc'].innerHTML");
 ok(xzHtml.includes('暂未获取官方标准'), '界面显式告警西藏基金未获取');
 
-console.log('\n══ 七、价格与口径折叠默认展开 ══');
+console.log('\n══ 七、参数弹出面板与取值依据 ══');
 G(c1, "state.to='JS';applyToProv();state._res=solve(state, algoData());renderCalc();");
-const h2 = G(c1, "__dom['v-calc'].innerHTML");
-ok(/<details class="adv boxed" open>/.test(h2), '折叠块带 open 属性');
+const h2 = G(c1, "__dom['v-calc'].innerHTML") + G(c1, "__dom['sheet-body'].innerHTML");
+ok(G(c1, "__dom['sheet-body'].innerHTML").includes('id="i-dstcost"') && h2.includes('id="btn-params"'), '参数在弹出面板中，主卡有「参数」入口');
 ok(h2.includes('当前取值依据'), '显示当前取值依据');
 ok(h2.includes('恢复核定值'), '输入框带恢复按钮');
 ok(h2.includes('发改价格〔2026〕1077号'), '取值依据中标出文号');

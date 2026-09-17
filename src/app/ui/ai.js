@@ -16,6 +16,7 @@ const AI_PRESETS = {
   custom:   { name: '自定义（OpenAI 兼容）', base: '', model: '' },
 };
 const AI_MAX_ROUTES = 40;   // 送给模型的候选上限，超出时按当前排序取前 N 条
+const AI_ENABLED = false;  // 测算页暂时隐藏智能推荐卡片（2026-09-17）；逻辑保留，改回 true 即恢复
 
 let aiState = { provider: 'deepseek', base: AI_PRESETS.deepseek.base, model: AI_PRESETS.deepseek.model, key: '', prompt: '', showCfg: false };
 
@@ -49,7 +50,6 @@ function aiRouteDigest(res){
       段数: r.hops,
       落地成本_元每MWh: f1(r.landed),
       过网费_元每MWh: f1(r.channelOnly),
-      可接受送端报价_元每MWh: f1(r.senderNet),
       综合线损率_pct: f1((1-r.D)*100),
       最高通道占用_pct: f1(r.maxLoad*100),
       里程_km: Math.round(r.dist),
@@ -61,7 +61,7 @@ function aiRouteDigest(res){
       费率来源: r.edges.map(e=>e.n+':'+(TIER[e.tier]||e.tier)).join('；'),
       经过断面: r.secHits.map(h=>h.sec.n+' 利用率'+f1(h.util*100)+'%').join('；')||'无',
       容量待补段数: r.capUnknown,
-      排名_落地成本: r.rankA, 排名_过网费: r.rankB, 排名_可接受送端报价: r.rankC,
+      排名_落地成本: r.rankA, 排名_过网费: r.rankB,
     })),
   };
 }
@@ -81,7 +81,7 @@ function aiBuildMessages(res){
   ].join('');
   const user = [
     `送端：${N(state.from)}；受端：${N(state.to)}；电量 ${state.qty} MWh，时段 ${state.hours} h；`,
-    `送端报价 ${state.pGen} 元/MWh，受端目标交付价 ${state.pDst} 元/MWh；网损承担方：${state.lossBearer==1?'受端':state.lossBearer==0?'送端':'两端各半'}；`,
+    `送端报价 ${state.pGen} 元/MWh；网损承担方：${state.lossBearer==1?'受端':state.lossBearer==0?'送端':'两端各半'}；`,
     `主指标口径：${costName}。`,
     d.sent<d.total ? `参考路径共 ${d.total} 条，按当前排序只给出前 ${d.sent} 条。` : `参考路径共 ${d.total} 条，全部列出。`,
     '\n候选路径（JSON）：\n', JSON.stringify(d.routes),

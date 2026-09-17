@@ -77,7 +77,7 @@ for(const profile of audit.scope.profiles){
   for(const from of Object.keys(data.PV)) for(const to of Object.keys(data.PV)){
     if(from===to)continue;
     audit.scope.pairs++;
-    const input={...app.state,...profile,regionChargeMode:'buyer',from,to,pGen:data.PV[from].clear,pDst:data.PV[to].clear,pNet:data.PV[to].net,fund:data.PV[to].fund,qty:1000,hours:1,includeRegion:true,includeDstCost:false,showAll:true,showBad:true,mustHave:[],tradableOnly:false,occPct:0};
+    const input={...app.state,...profile,originLossMode:'included',regionLossMode:'exclude',regionChargeMode:'buyer',from,to,pGen:data.PV[from].clear,pDst:data.PV[to].clear,pNet:data.PV[to].net,fund:data.PV[to].fund,qty:1000,hours:1,includeRegion:true,includeDstCost:false,showAll:true,showBad:true,mustHave:[],tradableOnly:false,occPct:0};
     const res=app.solve(input,data);
     if(res.err)continue;
     for(const r of res.rows){

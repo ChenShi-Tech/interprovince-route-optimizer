@@ -213,13 +213,14 @@ const tests = [
 
   /* ================= 交互 ================= */
   {
-    id: 'I-01', section: '交互', title: '省份下拉：30 省齐全 + 同省互斥禁用',
+    id: 'I-01', section: '交互', title: '省份下拉：省份齐全 + 同省互斥禁用',
     steps: '检查出发地下拉选项数；检查目的地中「四川」是否禁用',
-    expected: '选项 30 个；目的地中与出发地相同的省份 disabled',
+    expected: '选项数与省级参数表一致；目的地中与出发地相同的省份 disabled',
     async run(page, set) {
       await page.goto(G, DCL);
       const n = await page.locator('#i-from option').count();
-      ok(n === 30, `应 30 个省份选项，实际 ${n}`);
+      const exp = await page.evaluate(() => Object.keys(DATA.PV).length);
+      ok(n === exp, `省份下拉应含全部 ${exp} 个省份（含 2026-09-17 补录的海南），实际 ${n}`);
       const dis = await page.evaluate(() => { const o = [...document.getElementById('i-to').options].find(o => o.value === 'SC'); return o && o.disabled; });
       ok(dis === true, '目的地中四川应被禁用');
       set(`下拉 30 项；目的地中四川 disabled=${dis}`);
@@ -958,14 +959,18 @@ const tests = [
   {
     id: 'RQ-602', section: 'PRD-IPRO', title: 'REQ-602：本地价格覆盖 priceVersion 校验',
     steps: '预置旧版本地费率覆盖（pv=0000）后加载页面，应用内确认框点「丢弃本地修改」',
-    expected: '出现应用内提示并丢弃旧覆盖，CH 恢复当前核定值（64 条且内容非占位）',
+    expected: '出现应用内提示并丢弃旧覆盖，CH 恢复当前核定值（条数与 DATA.CH 一致且内容非占位）',
     async run(page, set) {
-      await page.addInitScript(() => {
+      // 覆盖存档的通道条数必须与当前 CH 一致，否则 state.js 的版本校验分支会被整段跳过
+      // （state.js：if (s.ch && s.ch.length === CH.length)）。故先取实际条数再预置。
+      await page.goto(G, DCL);
+      const NCH = await page.evaluate(() => DATA.CH.length);
+      await page.addInitScript((n) => {
         localStorage.setItem('iproute.v2.lib', JSON.stringify({
           pv: '0000dead', at: 'old',
-          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+          ch: Array.from({ length: n }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
         }));
-      });
+      }, NCH);
       await page.goto(G, DCL);
       const dlg = page.locator('[role="dialog"]');
       await dlg.waitFor({ state: 'visible', timeout: 5000 });
@@ -974,7 +979,7 @@ const tests = [
       await dlg.locator('button', { hasText: '丢弃本地修改' }).click();
       await page.waitForTimeout(200);
       const ch = await page.evaluate(() => ({ n: CH.length, first: CH[0].n, stale: !!state._libStale }));
-      ok(ch.n === 64 && !String(ch.first).includes('占位') && !ch.stale, `旧覆盖应被丢弃恢复核定值，实际 CH[0].n=${ch.first} stale=${ch.stale}`);
+      ok(ch.n === NCH && !String(ch.first).includes('占位') && !ch.stale, `旧覆盖应被丢弃恢复核定值（应 ${NCH} 条），实际 CH[0].n=${ch.first} stale=${ch.stale}`);
       set(`应用内提示出现（priceVersion 不一致）；丢弃后 CH 恢复核定值（${ch.n} 条）`);
     },
   },
@@ -983,12 +988,16 @@ const tests = [
     steps: '预置旧版本地费率覆盖后加载，应用内确认框选「暂保留」，进入费率库；再点「恢复检索原始值」',
     expected: '费率库顶部出现「旧版价格数据」核对横幅；应用内确认恢复后横幅消失',
     async run(page, set) {
-      await page.addInitScript(() => {
+      // 覆盖存档的通道条数必须与当前 CH 一致，否则 state.js 的版本校验分支会被整段跳过
+      // （state.js：if (s.ch && s.ch.length === CH.length)）。故先取实际条数再预置。
+      await page.goto(G, DCL);
+      const NCH = await page.evaluate(() => DATA.CH.length);
+      await page.addInitScript((n) => {
         localStorage.setItem('iproute.v2.lib', JSON.stringify({
           pv: '0000dead', at: 'old',
-          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+          ch: Array.from({ length: n }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
         }));
-      });
+      }, NCH);
       await page.goto(G, DCL);
       const dlg = page.locator('[role="dialog"]');
       await dlg.waitFor({ state: 'visible', timeout: 5000 });

@@ -48,7 +48,8 @@ const keys = Object.keys(PV);
 function runOn(c, f, t) {
   vm.runInContext(`Object.assign(state,{from:${JSON.stringify(f)},to:${JSON.stringify(t)},
     qty:1000,hours:1,pGen:${PV[f].clear},pDst:${PV[t].clear},pNet:${PV[t].net},fund:${PV[t].fund},
-    lossBearer:1,K:6,maxHops:3,maxDetour:2,includeRegion:true,showBad:true,sortBy:"A",showAll:true});`, c);
+    lossBearer:1,K:6,maxHops:3,maxDetour:2,includeRegion:true,showBad:true,sortBy:"A",showAll:true,
+    originLossMode:'included',regionLossMode:'exclude'});`, c);
   return vm.runInContext('solve(state, algoData())', c);
 }
 
@@ -98,7 +99,10 @@ const probs = [];
 for (const c of baseline.cases) {
   const R = runOn(ctx2, c.from, c.to);
   if (R.err) { failed++; probs.push(`${c.from}→${c.to} 报错`); continue; }
-  if (R.rows.length !== c.routes.length) { failed++; probs.push(`${c.from}→${c.to} 路径数 ${R.rows.length}≠${c.routes.length}`); continue; }
+  // 基线只保存前 25 条路线（routes），总数另存在 routeTotal；比对总数必须用 routeTotal，
+  // 不能拿截断后的 routes.length 当总数（路线数超过 25 的省对会误报）。
+  const total = c.routeTotal != null ? c.routeTotal : c.routes.length;
+  if (R.rows.length !== total) { failed++; probs.push(`${c.from}→${c.to} 路径数 ${R.rows.length}≠${total}`); continue; }
   for (let k = 0; k < c.routes.length; k++) {
     const e = c.routes[k], a = R.rows[k];
     checked++;

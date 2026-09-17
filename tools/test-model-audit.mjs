@@ -10,8 +10,10 @@ const {solve,evalPath,enumPaths,data,state}=vm.runInContext('({solve,evalPath,en
 let checks=0;
 const ok=(v,m)=>{assert.ok(v,m);checks++;};
 const near=(a,b,m)=>ok(Number.isFinite(a)&&Math.abs(a-b)<1e-7,`${m}: ${a} vs ${b}`);
-const input={...state,from:'XJ',to:'SH',pGen:240,pDst:460,pNet:85.1,fund:29.115,qty:1000,hours:1,maxHops:3,maxDetour:9,includeDstCost:false,showBad:true,tradeDate:'2026-09-17'};
-const exact=res=>res.rows.find(r=>r.edges.map(e=>e.n).join(',')==='吉泉直流,皖苏联络线,苏沪联络线');
+// 手算用例固定「送端省内网损不另计、区域网损不计入」基准口径，与界面默认值解耦
+const input={...state,originLossMode:'included',regionLossMode:'exclude',from:'XJ',to:'SH',pGen:240,pDst:460,pNet:85.1,fund:29.115,qty:1000,hours:1,maxHops:3,maxDetour:9,includeDstCost:false,showBad:true,tradeDate:'2026-09-17'};
+// 区域网架内等价走法已合并为一条，按「吉泉直流 + 华东区域网架」识别，不依赖具体联络线
+const exact=res=>res.rows.find(r=>r.edges[0].n==='吉泉直流'&&r.edges.length>1&&r.edges.slice(1).every(e=>e.regional&&e.type==='AC'&&data.REGION_OF[e.from]==='华东'&&data.REGION_OF[e.to]==='华东'));
 const base=exact(solve(input,data)),hist=exact(solve({...input,regionLossMode:'historical'},data));
 const B=(240+34.3)/.93+82.9+9.2;
 ok(state.marketMode==='mlt'&&state.includeDstCost===false,'默认中长期省间节点交付');
