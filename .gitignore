@@ -15,3 +15,9 @@ npm-debug.log*
 
 # 本地运行时（便携 Node、会话产物，不入库）
 .runtime/
+
+# OpenSpec 规划产物（本地使用，不入库）
+openspec/
+
+# ZCode 项目级 AI 配置
+.zcode/
