@@ -18,10 +18,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 node tools/build.mjs               # 构建：src/ + data/ → index.html + shared/app-data.json(.min)
 node tools/baseline-check.mjs      # 算法回归基线，全绿才算通过（条数随数据修正变化，2026-09-18 实测 425 省对 / 987 条）
 node tools/baseline2.mjs           # 重生成基线 + 渲染冒烟 + 底图合规检查（改了费率/通道数据后先跑这个）
-node tools/release.mjs "提交信息"   # 一键发版：构建 → 7 组测试 → 数据审计 → 提交 → 推送（任一不过即中止）
+node tools/release.mjs "提交信息"   # 一键发版：构建 → 8 组测试 → 数据审计 → 提交 → 推送（任一不过即中止）
 node tools/release.mjs "提交信息" --no-push
 
-# 发版必跑的 7 组，可单独执行
+# 发版必跑的 8 组，可单独执行
 node tools/test-modules.mjs          # 模块结构 + 算法层纯度守卫
 node tools/test-data-share.mjs       # Web 与端侧数据一致性
 node tools/baseline-check.mjs        # 数值回归基线
@@ -29,10 +29,13 @@ node tools/test-model-audit.mjs      # 全模型独立公式与适用期
 node tools/test-regional-billing.mjs # 全国区域计费回归
 node tools/test-prefill.mjs          # 受端参数预填行为
 node tools/test-interaction.mjs      # 交互与计价口径回归
+node tools/test-design-tokens.mjs    # 设计令牌守卫：颜色/圆角字面值只在 src/tokens.css、令牌引用有定义、字号在允许集合内
 
 node tools/baseline-check.mjs <你的引擎.js>   # 校验外部引擎（RN/Swift 移植后包装成同名接口即可）
 node tests/dev-server.mjs            # 仓库根挂到 http://127.0.0.1:8734/（需另开终端常驻）
 node tests/e2e.mjs                   # Playwright 端到端（需先在 tests/ 下 npm install）
+node tools/ui-shots.mjs [目录]       # 界面截图（390×844@2x 与 1280×900，默认存 .runtime/ui-shots/）；--theme <名字> 设 data-theme
+node tools/ui-shots.mjs --compare <A> <B>   # 两套截图逐像素比较，有差异退出码非 0（改样式/令牌后验「像素零变化」）
 node tools/audit-fees.mjs            # 费率库内部审计：单位换算、数值合理性、来源可追溯
 node tools/audit-voltage-tariffs.mjs .   # 用 pdftotext 逐值回对 S11 原件（不在发版必跑列表）
 node android/build-apk.mjs           # 安卓 APK（工具链在 ~/android-toolchain）
@@ -41,13 +44,14 @@ node tools/restore-from-remote.mjs <commit_sha> [文件...]   # 从历史提交�
 
 ## 架构
 
-### 构建管线：三进一出
+### 构建管线：四进一出
 
 | 输入 | 职责 |
 |---|---|
 | `data/fixed-prices.json` | **所有价格数值的唯一来源**（改价只改这里） |
 | `src/extra.json` | 非价格数据：站点、断面、经纬度、容量、线路长度 |
-| `src/template.html` | 页面骨架 + 样式 + 两处注入占位符 |
+| `src/template.html` | 页面骨架 + 样式 + 三处注入占位符（`__TOKENS__` / `__DATA__` / `__APP__`） |
+| `src/tokens.css` | 设计令牌（`:root` 变量）：全站唯一允许写颜色 / 阴影 / 圆角字面值的地方，构建时注入 `<style>` 开头 |
 
 产出 `index.html`（Web，数据内联）、`shared/app-data.json`（端侧，含 `schema`/`priceVersion`/`dataHash`/`counts`）、`shared/app-data.min.json`。**这三个都是构建产物，不要手改。** `docs/tariff.json` 是采集档案，不参与构建。
 
@@ -56,11 +60,12 @@ node tools/restore-from-remote.mjs <commit_sha> [文件...]   # 从历史提交�
 `src/app/*.js` **不是 ES 模块**，构建时按 `build.mjs` 的 `APP_FILES` 顺序字符串拼接进一个 `<script>`，共享全局作用域。顺序有硬约束：
 
 ```
-config → format → data → state → algo/{network,cost,paths,solve} → ui/{calc,lib,map,ai} → boot
+config → format → data → state → algo/{network,cost,paths,solve} → ui/{theme,calc,lib,map,ai} → boot
 ```
 
 - `boot.js` **必须最后**——它是唯一含顶层执行语句的模块
-- `src/template.html` 的 `/*__DATA__*/` 与 `/*__APP__*/` **必须各自独占一行**，残留文字会变成悬空代码
+- `src/template.html` 的 `/*__TOKENS__*/`、`/*__DATA__*/` 与 `/*__APP__*/` **必须各自独占一行**，残留文字会变成悬空代码
+- 样式与界面脚本**只写 `var(--令牌)`**，不写颜色 / 圆角字面值（`tools/test-design-tokens.mjs` 守住）；腾讯地图 / 天地图样式对象、data: URI、canvas 这类不认 CSS 变量的地方用 `ui/theme.js` 的 `tokenColor('--x')` 在绘制时取实际值
 - 新增模块要同步改 `build.mjs` 的 `APP_FILES` 和 `tools/test-modules.mjs` 的同一份列表
 
 ### 算法层必须是纯函数

@@ -50,6 +50,7 @@ const tests = [
   ['全国区域计费回归', 'tools/test-regional-billing.mjs'],
   ['受端参数预填行为', 'tools/test-prefill.mjs'],
   ['交互行为回归', 'tools/test-interaction.mjs'],
+  ['设计令牌守卫', 'tools/test-design-tokens.mjs'],
 ];
 let failed = 0;
 for (const [name, f] of tests) {

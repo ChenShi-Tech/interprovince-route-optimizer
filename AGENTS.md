@@ -21,5 +21,5 @@
 ```bash
 node tools/build.mjs               # 构建
 node tools/baseline-check.mjs      # 基线全绿才算完成（条数以脚本输出为准；基线变更用 baseline2.mjs --accept 显式接受）
-node tools/release.mjs "提交信息"   # 一键发版：构建 → 7 组测试 → 审计 → 提交推送（仅 main 上跑）
+node tools/release.mjs "提交信息"   # 一键发版：构建 → 8 组测试 → 审计 → 提交推送（仅 main 上跑）
 ```

@@ -20,7 +20,8 @@ open index.html             # 手机浏览器直接打开即可
 `````
 index.html                        构建产物（自包含单文件，可直接分发）
 src/
-  template.html                   页面骨架 + 样式 + 两处注入占位符
+  template.html                   页面骨架 + 样式 + 三处注入占位符（TOKENS / DATA / APP）
+  tokens.css                      设计令牌（:root 变量），全站唯一允许写颜色 / 圆角字面值的地方
   app/
     config.js                     构建期常量与本地存储键
     format.js                     显示格式化与徽标
@@ -32,6 +33,7 @@ src/
       paths.js                    简单路径枚举（按近似成本优先展开）
       solve.js                    求解编排（唯一入口）
     ui/                           界面层
+      theme.js                    主题工具：tokenColor() 读设计令牌实际值（地图 SDK / data: URI / canvas 用）
       calc.js                     测算页：参数、方案列表、方案详情
       lib.js                      费率库：通道、省级参数、断面
       map.js                      网架图：内置拓扑图 / 腾讯地图 / 天地图
