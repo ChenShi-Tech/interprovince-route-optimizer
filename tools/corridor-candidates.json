@@ -1,0 +1,435 @@
+{
+  "_note": "走廊几何候选池（design D11 默认范围：在运直流优先）。采集流程：逐条查公开资料（可研/环评/新闻稿中的途经省 mnemonic）→ 整理 wp 中间点（WGS-84 两位小数，不含起止站）→ 填 src 来源 → status 改 ready → node tools/corridor-collect.mjs draft → 人工审核 → 誊入 src/extra.json corridors。",
+  "candidates": [
+    {
+      "id": "g0",
+      "n": "灵宝直流",
+      "from": "SN",
+      "to": "HA",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g1",
+      "n": "德宝直流",
+      "from": "SC",
+      "to": "SN",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g2",
+      "n": "锦苏直流",
+      "from": "SC",
+      "to": "JS",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g3",
+      "n": "高岭直流",
+      "from": "LN",
+      "to": "HE",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g4",
+      "n": "龙政直流",
+      "from": "HB",
+      "to": "JS",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g5",
+      "n": "葛南直流",
+      "from": "HB",
+      "to": "SH",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g6",
+      "n": "林枫直流",
+      "from": "HB",
+      "to": "SH",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g7",
+      "n": "宜华直流",
+      "from": "HB",
+      "to": "SH",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g8",
+      "n": "江城直流",
+      "from": "HB",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g9",
+      "n": "青藏直流",
+      "from": "QH",
+      "to": "XZ",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g10",
+      "n": "呼辽直流",
+      "from": "NM",
+      "to": "LN",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g15",
+      "n": "溪广线",
+      "from": "YN",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g16",
+      "n": "复奉直流",
+      "from": "SC",
+      "to": "SH",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g17",
+      "n": "宾金直流",
+      "from": "SC",
+      "to": "ZJ",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g19",
+      "n": "天中直流",
+      "from": "XJ",
+      "to": "HA",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g20",
+      "n": "银东直流",
+      "from": "NX",
+      "to": "SD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g21",
+      "n": "灵绍直流",
+      "from": "NX",
+      "to": "ZJ",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g22",
+      "n": "祁韶直流",
+      "from": "GS",
+      "to": "HN",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g23",
+      "n": "锡泰直流",
+      "from": "NM",
+      "to": "JS",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g24",
+      "n": "雁淮直流",
+      "from": "SX",
+      "to": "JS",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g25",
+      "n": "扎青直流",
+      "from": "NM",
+      "to": "SD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g27",
+      "n": "雅湖直流",
+      "from": "SC",
+      "to": "JX",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g28",
+      "n": "陕武直流",
+      "from": "SN",
+      "to": "HB",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g29",
+      "n": "建苏直流",
+      "from": "SC",
+      "to": "JS",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g30",
+      "n": "金塘直流",
+      "from": "SC",
+      "to": "ZJ",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g31",
+      "n": "云霄直流",
+      "from": "FJ",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g32",
+      "n": "青豫直流",
+      "from": "QH",
+      "to": "HA",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g33",
+      "n": "吉泉直流",
+      "from": "XJ",
+      "to": "AH",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g34",
+      "n": "昭沂直流",
+      "from": "NM",
+      "to": "SD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g35",
+      "n": "金永直流",
+      "from": "XZ",
+      "to": "HB",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g36",
+      "n": "中衡直流",
+      "from": "NX",
+      "to": "HN",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g37",
+      "n": "坤渝直流",
+      "from": "XJ",
+      "to": "CQ",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g38",
+      "n": "庆东直流",
+      "from": "GS",
+      "to": "SD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g39",
+      "n": "宝合直流",
+      "from": "SN",
+      "to": "AH",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g49",
+      "n": "新东直流",
+      "from": "YN",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g50",
+      "n": "昆柳龙直流",
+      "from": "YN",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g51",
+      "n": "昆柳龙直流",
+      "from": "YN",
+      "to": "GX",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g52",
+      "n": "云广直流",
+      "from": "YN",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g53",
+      "n": "普侨直流",
+      "from": "YN",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g54",
+      "n": "高肇直流",
+      "from": "GZ",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g55",
+      "n": "兴安直流",
+      "from": "GZ",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "g56",
+      "n": "禄高肇",
+      "from": "YN",
+      "to": "GD",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    },
+    {
+      "id": "a59",
+      "n": "渝鄂联络线",
+      "from": "CQ",
+      "to": "HB",
+      "wp": [],
+      "src": "",
+      "url": "",
+      "status": "pending"
+    }
+  ]
+}

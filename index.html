@@ -43,7 +43,6 @@ window._TMapSecurityConfig = {
   serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
 };
 </script>
-<script src="https://map.qq.com/api/gljs?v=1.exp"></script>
 <style>
 :root{
   --ink:#1F2328; --ink2:#5F5E5A; --ink3:#8A8A85;
@@ -65,6 +64,8 @@ header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdro
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
+/* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
+.help-link{border:.5px solid rgba(24,95,165,.35);background:#fff;color:var(--blue);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
@@ -95,6 +96,16 @@ textarea{resize:vertical;min-height:64px;line-height:1.5;font-size:13px}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
 input[type=number]{font-variant-numeric:tabular-nums}
 input:disabled{cursor:not-allowed}
+/* FR-1（PRD-体验问题修复）三层防御之显示层与 CSS 兜底：
+   超限输入红框 + 输入框下方红字提示（sanNum 钳制，修正后消失）；
+   hero 大字与容量三卡对任意异常值不再破版（V3 原型实测三条规则即可消除溢出） */
+input.clamp-bad{border-color:var(--red);box-shadow:0 0 0 3px rgba(163,45,45,.10)}
+.clamp-hint{color:var(--red);font-size:11px;line-height:1.5;margin-top:4px}
+.hero-v{overflow-wrap:anywhere}
+.g3>*{min-width:0}
+.mc .v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 批次 B：tier 线型图例样本（虚/点线用 border 复刻 SVG dasharray 语义） */
+.lg-line{display:inline-block;width:16px;height:0;vertical-align:middle;margin-right:4px}
 /* 密钥输入框：掩码显示 + 右侧小眼睛切换可见性（toggleTkVis 在 ui/map.js） */
 .tk-wrap{position:relative}
 .tk-wrap input{padding-right:38px}
@@ -602,7 +613,10 @@ details.adv.boxed>summary{font-size:12.5px}
   <header>
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
-      <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
+      <div style="display:flex;align-items:center;gap:8px;flex:none">
+        <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
+        <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
+      </div>
     </div>
   </header>
   <main>
@@ -645,10 +659,11 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-17 14:42';
+const BUILD_TIME='2026-09-18 08:55';
 const PRICE_VERSION='7beba05860e0fc86';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
+const LS_GUIDE='iproute.v2.guide';   // FR-3：新手导览完成标记（存在即不再自动弹出；仅清应用数据重置）
 
 /* ===== src/app/format.js ===== */
 /* 显示格式化与徽标。纯函数，不依赖任何数据。 */
@@ -657,6 +672,80 @@ const num=v=>(v===null||v===undefined||isNaN(v))?'—':Math.round(v).toLocaleStr
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const TIER={gov:'发改委核定',grid:'国网披露',region:'区域/送出省口径',est:'待补'};
 const tierTag=t=>`<span class="tier ${t}">${TIER[t]||t}</span>`;
+/* ---------- FR-1（PRD-体验问题修复-20260918）：数值输入防御与展示缩略 ---------- */
+/* 数值输入业务上限（决策 D-3）：lim = {max,fallback}。PRD 只定义上限钳制；
+   0/负数的回落沿用各输入项旧口径（电量/时长 >0 否则取默认、报价 +v||0 等，
+   e2e B-02/B-03 为此行为锁），sanNum 不改变下限语义。界面红框红字反馈见 calc.js。 */
+const NUM_LIMITS={
+  quote:{max:10000,fallback:0},        // 送端报价 / 各类费率 ≤ 10,000 元/MWh
+  qty:{max:10000000,fallback:1000},    // 省间交付电量 ≤ 10,000,000 MWh（非法回退默认 1000）
+  hours:{max:8760,fallback:1},         // 时长 ≤ 8,760 h
+  capacity:{max:1000000,fallback:0},   // 容量/需量 ≤ 1,000,000 kVA(kW)
+  annualQty:{max:10000000,fallback:0}, // 年用电量 ≤ 10,000,000 MWh
+  pct:{max:99.999,fallback:0},         // 百分比类维持现有上限
+};
+const sanNum=(v,lim)=>{
+  const s=String(v==null?'':v).trim();
+  let n=s===''?NaN:Number(s);   // 空串按非法处理（Number('')===0，不走此分支会错把空输入当 0）
+  if(!Number.isFinite(n)) n=(lim&&lim.fallback!=null)?lim.fallback:0;
+  if(lim&&n>lim.max) n=lim.max;
+  return n;
+};
+/* 大数缩略显示：|v| ≥ 1e8 → "X.X亿"、≥ 1e4 → "X.X万"，其余按原格式透传
+   （传 d 走 toFixed(d)，缺省走千分位整数）——正常量级显示与现状逐字符一致。
+   仅用于 hero 大字与容量电费三卡等展示位；表格内精组数字保持原样（数据可信感）。 */
+const fmtCompact=(v,d)=>{
+  if(v===null||v===undefined||isNaN(v)) return '—';
+  const n=Number(v);
+  if(!Number.isFinite(n)) return '—';   // Infinity 等非有限值不进万/亿换算（避免渲染 "Infinity亿"）
+  const a=Math.abs(n);
+  if(a>=1e8) return (Math.round(n/1e7)/10)+'亿';
+  if(a>=1e4) return (Math.round(n/1e3)/10)+'万';
+  return d!=null?n.toFixed(d):num(n);
+};
+
+/* ---------- 批次 B（grid-map P1，change: grid-map-p1-and-ux-fixes）：tier 线型与地图搜索纯函数 ---------- */
+/* tier 线型编码（spec: 仅作用于候选/全网弱化层，选中层保持统一强视觉）：
+   gov 实线 / grid 细实线（宽度系数 0.7）/ region 长虚线 / est 短虚线。
+   dash 为 SVG stroke-dasharray 字符串；天地图 dasharray / 腾讯 dashArray 的数组形式由消费方 split。 */
+const TIER_STYLE={
+  gov:{dash:'',w:1},
+  grid:{dash:'',w:0.7},
+  region:{dash:'8 5',w:1},
+  est:{dash:'2 4',w:1},
+};
+const tierStyle=t=>TIER_STYLE[t]||TIER_STYLE.gov;
+/* 地图搜索匹配（spec: 按名称子串匹配站点与通道；不改选中方案与必经过滤状态）。
+   站点匹配站名+站址，通道匹配名称+别名。纯函数，ST/CH 由参数传入。 */
+const mapSearchHits=(q,ST,CH)=>{
+  const s=String(q||'').trim().toLowerCase();
+  if(!s) return {stations:[],channels:[]};
+  const stations=Object.keys(ST||{}).filter(k=>((ST[k].n||'')+' '+(ST[k].a||'')).toLowerCase().includes(s));
+  const channels=(CH||[]).filter(c=>((c.n||'')+' '+(c.fn||'')).toLowerCase().includes(s)).map(c=>c.id);
+  return {stations,channels};
+};
+/* 区域归属上图（批次 B 增补）：区域→颜色调色板。按区域名排序后固定分配，
+   同一名单下颜色稳定（图例与节点一致）；跳过 _note 等元数据键。 */
+const REGION_COLORS=['#185FA5','#0F6E56','#B0651A','#8E8AD6','#993C1D','#5DCAA5','#7FA7A0','#854F0B'];
+const regionPalette=rgof=>{
+  const names=[...new Set(Object.keys(rgof||{}).filter(k=>!k.startsWith('_')).map(k=>rgof[k]))].sort();
+  const out={};
+  names.forEach((n,i)=>{ out[n]=REGION_COLORS[i%REGION_COLORS.length]; });
+  return out;
+};
+
+/* 选中方案的地图标注清单：每段线路名+段序号，路径起止及途经站名（去重）。
+   纯函数：输入选中方案行与站点表，不引用任何界面全局；拓扑图与天地图共用同一清单（spec: grid-map 标注同源）。 */
+const routeLabelList=(row,ST)=>{
+  const out=[],seen=new Set();
+  ((row&&row.segs)||[]).forEach((s,i)=>{
+    out.push({kind:'seg',no:i+1,name:s.e.n,stFrom:s.e.stFrom,stTo:s.e.stTo});
+    [s.e.stFrom,s.e.stTo].forEach(st=>{
+      if(st&&ST[st]&&!seen.has(st)){ seen.add(st); out.push({kind:'station',st,name:ST[st].n}); }
+    });
+  });
+  return out;
+};
 
 /* ===== src/app/data.js ===== */
 /* 数据装载与访问。
@@ -725,7 +814,9 @@ let state={
   // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
   mustHave:[],
-  mapProvider:'svg', tiandituKey:''
+  mapProvider:'svg', tiandituKey:'', mapNet:'dim',   // mapNet：全网架层显示模式 'dim'=弱化显示 / 'off'=隐藏（spec: grid-map 分层）
+  // 批次 B（grid-map P1）会话内视图状态，不入档（saveLast 剥离）：mapSec=断面高亮选择、mapQ=搜索词、mapFocusLL=搜索聚焦包围盒（度）、mapRegion=按区域着色
+  mapSec:null, mapQ:'', mapFocusLL:null, mapRegion:false
 };
 let stored=null;
 /* 应用内确认框：原生 confirm() 在安卓 WebView（壳未设 WebChromeClient）与 iOS WKWebView
@@ -799,6 +890,15 @@ function loadStored(){
       delete s._pdv;
       Object.assign(state,s);
       state._stalePrice=!sameBuild;
+      // FR-1 边界：FR-1 之前的旧存档没有上限钳制，恢复时统一钳一次，
+      // 保证"杀进程重开后输入为合法值"对历史存档同样成立（PRD AC3）
+      state.pGen=sanNum(state.pGen,NUM_LIMITS.quote);
+      state.pNet=sanNum(state.pNet,NUM_LIMITS.quote);
+      state.fund=sanNum(state.fund,NUM_LIMITS.quote);
+      state.qty=sanNum(state.qty,NUM_LIMITS.qty); if(!(state.qty>0)) state.qty=NUM_LIMITS.qty.fallback;
+      state.hours=sanNum(state.hours,NUM_LIMITS.hours); if(!(state.hours>0)) state.hours=NUM_LIMITS.hours.fallback;
+      state.capValue=sanNum(state.capValue,NUM_LIMITS.capacity); if(!(state.capValue>0)) state.capValue=0;
+      state.capQty=sanNum(state.capQty,NUM_LIMITS.annualQty); if(!(state.capQty>0)) state.capQty=0;
     }
     const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
   }catch(e){}
@@ -813,10 +913,11 @@ function saveLast(){
     const s=Object.assign({},state,{_bt:BUILD_TIME,_pdv:PARAM_DEFAULTS_VER});
     delete s.tradableOnly; delete s.occPct; delete s.tradeDate;
     delete s._res; delete s._ai; delete s._libStale; delete s._stalePrice;
+    delete s.mapSec; delete s.mapQ; delete s.mapFocusLL; delete s.mapRegion;   // 会话内视图状态不入档
     localStorage.setItem(LS_LAST,JSON.stringify(s));
   }catch(e){ _storageBroken=true; }
 }
-function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){ _storageBroken=true; } }
+function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey,mapNet:state.mapNet}));}catch(e){ _storageBroken=true; } }
 
 /* ===== src/app/algo/network.js ===== */
 /* 图结构与几何工具。
@@ -1524,6 +1625,7 @@ function renderCalc(){
   document.getElementById('v-calc').innerHTML=out;
   renderParamSheet(res);
   restoreDetails(document.getElementById('v-calc'),_detailSnap);
+  reapplyClampMarks();   // FR-1：重绘后重放越限红框红字（输入修正前提示常驻）
   if(_fid){
     const el=document.getElementById(_fid);
     if(el){
@@ -1719,7 +1821,7 @@ function renderHeroResult(res){
   const tag=state.sel===0?((res.mustHave||[]).length?'所选通道最低价 #1':'最低价方案 #1'):'方案 #'+(Math.min(state.sel,res.rows.length-1)+1);
   return `<div class="hero-res">
     <div class="hero-lb">${costName}<span class="hero-tag">${tag}</span></div>
-    <div class="hero-v">${fmt(r.landed,2)}<small>元/MWh</small></div>
+    <div class="hero-v" title="完整值 ${fmt(r.landed,2)} 元/MWh">${fmtCompact(r.landed,2)}<small>元/MWh</small></div>
     <div class="hero-sub">${stops.map(s=>esc(s.name)).join(' → ')}${landings.length?'　落点 '+landings.map(s=>esc(s.landing)).join('、'):''}</div>
   </div>`;
 }
@@ -1831,6 +1933,7 @@ function renderChannelSelect(res){
 }
 /* 求解当前状态。界面只提供单选通道；换省对后已选通道不在候选里时自动取消，避免筛成空结果。 */
 function solveState(){
+  if(state.mapFocusLL) state.mapFocusLL=null;   // 批次 B：任何重算让位搜索聚焦（聚焦只由搜索触发）
   if((state.mustHave||[]).length>1) state.mustHave=state.mustHave.slice(0,1);
   let res=solve(solveInput(), algoData());
   const avail=new Set((res.availChannels||[]).map(c=>c.id));
@@ -2222,6 +2325,41 @@ function exportReport(){
   a.download='省间测算报告-'+N(r.nodes[0])+'-'+N(r.nodes[r.nodes.length-1])+'.md'; a.click();
 }
 
+/* ---------- FR-1（PRD-体验问题修复）：输入钳制与红框红字反馈 ----------
+   sanNum（format.js）只管数值；这里负责界面反馈：越限时输入框红框 + 输入框下方红字，
+   修正后消失。越限状态显式记入 _clampBad（而不是重绘后按当前值重判——重绘后输入框
+   已是钳制值，重判永远"合法"，提示会被自己擦掉），renderCalc 整块重绘后重放。 */
+const _clampBad={};
+function clampApply(el,entry){
+  if(!el) return;
+  el.classList.toggle('clamp-bad',!!entry);
+  const box=el.parentElement;
+  let hint=box?box.querySelector('.clamp-hint'):null;
+  if(entry){
+    if(!hint&&box){ hint=document.createElement('div'); hint.className='clamp-hint'; box.appendChild(hint); }
+    if(hint) hint.textContent='超出上限，已按 '+sanNum(entry.n,entry.lim)+' 计算';
+  } else if(hint) hint.remove();
+}
+function clampRegister(el,raw,lim){
+  if(!el) return;
+  const s=String(raw==null?'':raw).trim();
+  const n=Number(s);
+  const bad=s!==''&&Number.isFinite(n)&&n>lim.max;   // PRD 只定义上限钳制，红字仅报超上限
+  if(bad) _clampBad[el.id]={lim,n}; else delete _clampBad[el.id];
+  clampApply(el,bad?{lim,n}:null);
+}
+/* 读输入框并按业务上限钳制；nonNeg=true 时沿用旧口径：0/负数回落默认值（B-02/B-03 行为锁） */
+function readSan(g,id,lim,nonNeg){
+  const el=g(id); if(!el) return lim.fallback;
+  let v=sanNum(el.value,lim);
+  if(nonNeg&&!(v>0)) v=lim.fallback;
+  clampRegister(el,el.value,lim);
+  return v;
+}
+function reapplyClampMarks(){
+  for(const id of Object.keys(_clampBad)) clampApply(document.getElementById(id),_clampBad[id]);
+}
+
 function doSolve(){
   readInputs(); state._res=solveState();
   const n=state._res.rows?state._res.rows.length:0;
@@ -2232,18 +2370,19 @@ function readInputs(){
   const g=id=>document.getElementById(id);
   if(!g('i-from')) return;
   state.from=g('i-from').value; state.to=g('i-to').value;
-  // 电量必须为正：负数是真值，`+v||1000` 拦不住，需显式归一化
-  const _q=+g('i-qty').value; state.qty=_q>0?_q:1000;
-  const _h=+g('i-hours').value; state.hours=_h>0?_h:1;
-  state.pGen=+g('i-pgen').value||0;
+  // FR-1：数值输入按业务上限钳制（NUM_LIMITS），超上限红框红字提示，state 只存钳制后值；
+  // 电量/时长维持旧口径 0/负数回落默认值（nonNeg）
+  state.qty=readSan(g,'i-qty',NUM_LIMITS.qty,true);
+  state.hours=readSan(g,'i-hours',NUM_LIMITS.hours,true);
+  state.pGen=readSan(g,'i-pgen',NUM_LIMITS.quote);
   // 受端输配电价 / 基金及附加只在「到户已列费用」口径下渲染；按渲染时的口径决定是否读取，未渲染时保留预填值
   if(state.includeDstCost!==false){
     const pn=g('i-pnet'), fd=g('i-fund'), lf=g('i-dstlf'), so=g('i-dstsysop');
-    if(pn) state.pNet=+pn.value||0;
-    if(fd) state.fund=+fd.value||0;
+    if(pn) state.pNet=readSan(g,'i-pnet',NUM_LIMITS.quote);
+    if(fd) state.fund=readSan(g,'i-fund',NUM_LIMITS.quote);
     const num=el=>{ const v=String(el.value??'').trim(); return v===''||!Number.isFinite(+v)||+v<0?null:+v; };
     if(lf && state.dstCapMode && state.dstCapMode!=='none'){ const v=num(lf); state.dstLoadFactor=v!=null&&v>0&&v<=100?v:null; }
-    if(so) state.dstSysOpFee=num(so);
+    if(so){ const s=String(so.value??'').trim(); state.dstSysOpFee=s===''||!Number.isFinite(+s)?null:sanNum(so.value,NUM_LIMITS.quote); clampRegister(so,so.value,NUM_LIMITS.quote); }
   }
   state.lossBearer=+g('i-bearer').value;
   state.includeRegion=g('i-region').value==='1';
@@ -2252,10 +2391,13 @@ function readInputs(){
   state.regionChargeMode=g('i-regioncharge')?.value||state.regionChargeMode;
   state.regionLossMode=g('i-regionloss')?.value||state.regionLossMode||'exclude';
   state.regionLossRates=state.regionLossRates||{};
-  for(const k of Object.keys(DATA.RLOSS||{})){const el=g('i-rloss-'+k);if(el)state.regionLossRates[k]=el.value.trim()===''?null:Number(el.value);}
+  for(const k of Object.keys(DATA.RLOSS||{})){
+    const el=g('i-rloss-'+k);
+    if(el){ const s=el.value.trim(); state.regionLossRates[k]=s===''?null:sanNum(s,NUM_LIMITS.pct); if(s!=='') clampRegister(el,el.value,NUM_LIMITS.pct); }
+  }
   state.includeDstCost=g('i-dstcost').value==='1';
   state.tradableOnly=g('i-tradable')?.value==='1';   // REQ-203
-  const _o=+g('i-zyocc')?.value||0;                  // REQ-302
+  const _o=+g('i-zyocc')?.value||0;                  // REQ-302（百分比维持现有 0~90 钳制）
   state.occPct=Math.min(90,Math.max(0,_o));
 }
 /* 送端省变化：只影响送端报价 */
@@ -2330,13 +2472,22 @@ function renderCapFee(){
     </div>
     <div class="g3" style="margin-top:2px">
       <div class="mc"><div class="l">所选档单价</div><div class="v">${price!=null?fmt(price):'—'}<small>${priceUnit}</small></div></div>
-      <div class="mc"><div class="l">年容量电费</div><div class="v">${annual!=null?num(annual):'—'}<small>元/年</small></div></div>
-      <div class="mc"><div class="l">度电分摊额</div><div class="v">${per!=null?fmt(per,2):'—'}<small>元/MWh</small></div></div>
+      <div class="mc"><div class="l">年容量电费</div><div class="v" ${annual!=null?`title="完整值 ${num(annual)} 元/年"`:''}>${annual!=null?fmtCompact(annual):'—'}<small>元/年</small></div></div>
+      <div class="mc"><div class="l">度电分摊额</div><div class="v" ${per!=null?`title="完整值 ${fmt(per,2)} 元/MWh"`:''}>${per!=null?fmtCompact(per,2):'—'}<small>元/MWh</small></div></div>
     </div>
+    ${tier?`<details class="explain"><summary>本省全部电压档单价<em>1077号附件1</em></summary><div class="inner">
+      <table><tr><th>档别</th><th>容量电价<br>元/千伏安·月</th><th>需量电价<br>元/千瓦·月</th></tr>
+      ${(entry.容量电价||[]).map(t=>{
+        const dm=(entry.需量电价||[]).find(x=>x.档别===t.档别);
+        const cur=tier&&t.档别===tier.档别;
+        return `<tr${cur?' style="background:var(--blue-bg)"':''}><td>${esc(t.档别)}${cur?'　<b>当前</b>':''}</td><td>${t.价!=null?fmt(t.价):'—'}</td><td>${dm&&dm.价!=null?fmt(dm.价):'—'}</td></tr>`;
+      }).join('')}</table>
+      <p class="note">数据同费率库「容量/需量电价」分区；测算取当前所选档，其余档别供核对。</p>
+    </div></details>`:''}
     ${qty<=0?'<p class="note">年用电量为 0，度电分摊额不计算（显示 —）。</p>':''}
     <div class="lib-src" style="margin-top:8px">当前取值依据：${esc(entry.省)} · ${esc(tier?tier.档别:'—')} · ${modeLbl}　${esc(entry.来源)}</div>`;
   }
-  return `<details class="adv boxed" id="d-capfee"><summary>容量电费测算</summary><div class="inner">
+  return `<details class="adv boxed" id="d-capfee"><summary>容量电费测算<span style="font-weight:400;color:var(--ink3);font-size:11px;margin-left:6px">算一笔容量电费的独立小工具</span></summary><div class="inner">
     ${inner}
     <p class="note cap-note" style="margin-top:10px"><b>容量电费与电量来自省内或省外无关，不参与路径比选</b>（发改价格〔2020〕1441号 / 〔2023〕532号口径；年费用 = 单价 × ${isCap?'容量':'需量'} × 12，度电分摊 = 年费用 ÷ 年用电量）。</p>
   </div></details>`;
@@ -2354,6 +2505,38 @@ function renderRegionComparison(r){
 let libTab='ch';
 function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderLibList(); restoreDetails(b,s); } }
 function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderPvList(); restoreDetails(b,s); } }
+/* FR-5（PRD-体验问题修复）：容量/需量电价分区。数据源 DATA.CAP（1077号附件1 两部制月单价，
+   全部带来源字段），供独立查验任一省任一档单价；与容量电费测算器取值同源一致。 */
+function capSearch(v){ state.capQ=v; const b=document.getElementById('cap-list'); if(b) b.innerHTML=renderCapList(); }
+function capProvinces(){ return Object.keys(CAP).filter(k=>!k.startsWith('_')); }
+function renderCapList(){
+  const q=(state.capQ||'').trim().toLowerCase();
+  const flt=state.capFilter||'all';
+  const ids=capProvinces().filter(k=>{
+    const e=CAP[k], capT=e.容量电价||[], dmT=e.需量电价||[];
+    if(flt==='noCapQ'&&capT.length) return false;    // 缺容量价
+    if(flt==='noDmQ'&&dmT.length) return false;      // 缺需量价
+    if(!q) return true;
+    const hay=k+' '+(e.省||'')+' '+(e.来源||'')+' '+[].concat(capT,dmT).map(t=>t.档别||'').join(' ');
+    return hay.toLowerCase().includes(q);
+  });
+  if(!ids.length) return '<p class="note">没有匹配的省份，试试其它关键词。</p>';
+  return '<div class="libcount">匹配 '+ids.length+' 省 · 单位：容量 元/千伏安·月，需量 元/千瓦·月</div>'+ids.map(k=>{
+    const e=CAP[k], capT=e.容量电价||[], dmT=e.需量电价||[];
+    const tiers=[];
+    capT.forEach(t=>{ if(!tiers.includes(t.档别)) tiers.push(t.档别); });
+    dmT.forEach(t=>{ if(!tiers.includes(t.档别)) tiers.push(t.档别); });
+    return `<div style="margin-bottom:12px">
+      <div class="lib-nm"><span>${esc(e.省||k)}　<span class="tier gov">已核实</span></span><em>${capT.length} 档容量 / ${dmT.length} 档需量</em></div>
+      <table><tr><th style="width:38%">档别</th><th>容量电价</th><th>需量电价</th></tr>
+      ${tiers.map(d=>{
+        const c=capT.find(t=>t.档别===d), m=dmT.find(t=>t.档别===d);
+        return `<tr><td>${esc(d)}</td><td>${c&&c.价!=null?fmt(c.价):'—'}</td><td>${m&&m.价!=null?fmt(m.价):'—'}</td></tr>`;
+      }).join('')}</table>
+      <div class="lib-src">来源：${esc(e.来源||'—')}</div>
+    </div>`;
+  }).join('');
+}
 function renderPvList(){
   const q=(state.pvQ||'').trim().toLowerCase();
   const ids=Object.keys(PV).filter(k=>{
@@ -2458,6 +2641,7 @@ function renderLib(){
     <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
     <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
     <button class="${libTab==='sec'?'on':''}" onclick="libTab='sec';renderLib()">断面 (${SEC.length})</button>
+    <button class="${libTab==='cap'?'on':''}" onclick="libTab='cap';renderLib()">容量电价 (${capProvinces().length})</button>
   </div>`;
 
   if(libTab==='ch'){
@@ -2475,6 +2659,17 @@ function renderLib(){
       <div class="sec-title">省级参数<span class="hint">共 ${Object.keys(PV).length} 省 · 元/MWh</span></div>
       <input id="pv-q" type="search" placeholder="搜索省份 / 文号 / 来源…" value="${esc(state.pvQ||'')}" oninput="pvSearch(this.value)" style="margin-bottom:8px">
       <div id="pv-list">${renderPvList()}</div>
+    </div>`;
+  } else if(libTab==='cap'){
+    out+=`<div class="card tight">
+      <div class="sec-title">容量/需量电价<span class="hint">两部制 · 发改价格〔2020〕1077号附件1 口径</span></div>
+      <input id="cap-q" type="search" placeholder="搜索省份 / 档别 / 来源…" value="${esc(state.capQ||'')}" oninput="capSearch(this.value)" style="margin-bottom:8px">
+      <div class="seg small" style="flex-wrap:wrap">
+        ${[['all','全部'],['noCapQ','缺容量价'],['noDmQ','缺需量价']].map(([k,t])=>
+          `<button class="${(state.capFilter||'all')===k?'on':''}" onclick="state.capFilter='${k}';renderLib()">${t}</button>`).join('')}
+      </div>
+      <div id="cap-list">${renderCapList()}</div>
+      <p class="note">与测算页「容量电费测算」取值同源一致；西藏暂无数据（源文件未收录），个别省存在单侧缺项，可用上方筛选项定位。</p>
     </div>`;
   } else {
     out+=`<div class="card tight"><div class="sec-title">输电断面<span class="hint">公开报道/文献值</span></div><div class="libgrid">`;
@@ -2515,6 +2710,25 @@ let tdMap=null,tdReady=false,tdLayer=null;
 const dotSvg=f=>`data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='4.5' fill='${encodeURIComponent(f)}' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E`;
 const D_HOT=dotSvg('#185FA5'), D_ON=dotSvg('#0F6E56'), D_BASE=dotSvg('#8A8A85');
 
+/* ---------- 批次 B（grid-map P1）共用辅助 ---------- */
+/* 通道折线点列：[起点,...走廊中间点,终点]，proj 为投影函数；起止缺坐标返回 null。
+   无走廊 waypoints 的通道自然退化为两点直线（spec: grid-map 走廊）。 */
+function chanPts(c,proj){
+  const a=lngLatOf(c,'from'), b=lngLatOf(c,'to');
+  if(!a||!b) return null;
+  const wp=Array.isArray(c.waypoints)?c.waypoints:[];
+  return [a,...wp,b].map(p=>proj(p[0],p[1]));
+}
+const ptsAttr=ps=>ps.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+/* 断面成员通道 id：SEC.edges 存通道名，按名映射到 CH（与费率库断面分区同源）；
+   未映射到的成员自然不亮，浮层文案提示（spec: 断面上图，不虚构地理边界）。 */
+function secMemberIds(secId){
+  const s=SEC.find(x=>x.id===secId);
+  if(!s||!Array.isArray(s.edges)||!s.edges.length) return [];
+  const names=new Set(s.edges);
+  return CH.filter(c=>names.has(c.n)).map(c=>c.id);
+}
+
 function visibleChannels(){
   const r=state._res&&state._res.rows;
   const hot=new Set(), alt=new Set(), nodes=new Set(), routeNodes=new Set();
@@ -2532,10 +2746,17 @@ function initMap(){
   if(typeof TMap==='undefined') return false;
   try{
     map=new TMap.Map('map-view',{center:new TMap.LatLng(34,108),zoom:4});
+    // 批次 B：tier 线型按（层×tier）建样式，语义与拓扑/天地图一致（design D5）
+    const tierStyles={};
+    ['gov','grid','region','est'].forEach(t=>{
+      const st=tierStyle(t);
+      const dash=st.dash?{dashArray:st.dash.split(' ').map(Number)}:{};
+      tierStyles['alt_'+t]=new TMap.PolylineStyle({color:'#EF9F27',width:Math.max(1.4,3*st.w),borderWidth:1,borderColor:'#ffffff',lineCap:'round',...dash});
+      tierStyles['base_'+t]=new TMap.PolylineStyle({color:'#C9C8C3',width:Math.max(0.7,1*st.w),borderWidth:0,lineCap:'round',...dash});
+    });
     polyLayer=new TMap.MultiPolyline({map,styles:{
       hot:new TMap.PolylineStyle({color:'#185FA5',width:6,borderWidth:2,borderColor:'#ffffff',lineCap:'round'}),
-      alt:new TMap.PolylineStyle({color:'#EF9F27',width:3,borderWidth:1,borderColor:'#ffffff',lineCap:'round'}),
-      base:new TMap.PolylineStyle({color:'#C9C8C3',width:1,borderWidth:0,lineCap:'round'})},geometries:[]});
+      ...tierStyles},geometries:[]});
     mkLayer=new TMap.MultiMarker({map,styles:{
       hot:new TMap.MarkerStyle({width:16,height:16,anchor:{x:8,y:8},src:D_HOT}),
       on:new TMap.MarkerStyle({width:18,height:18,anchor:{x:9,y:9},src:D_ON}),
@@ -2550,13 +2771,18 @@ function initMap(){
 }
 
 function drawMapQQ(){
-  if(!initMap()) return false;
-  const v=visibleChannels();
+  if(!initMap()){ loadQQSdk(); return false; }
+  const v=visibleChannels(), netOff=state.mapNet==='off';
   const polys=[],mks=[],lbs=[],seen=new Set();
   v.list.forEach(c=>{
+    const isHot=v.hot.has(c.id), isAlt=v.alt.has(c.id);
+    if(netOff&&!isHot&&!isAlt) return;
     const a=lngLatOf(c,'from'), b=lngLatOf(c,'to'); if(!a||!b) return;
-    const sid=v.hot.has(c.id)?'hot':(v.alt.has(c.id)?'alt':'base');
-    polys.push({id:c.id,styleId:sid,paths:[new TMap.LatLng(a[1],a[0]),new TMap.LatLng(b[1],b[0])]});
+    const t=(c.tier&&TIER_STYLE[c.tier])?c.tier:'gov';
+    const sid=isHot?'hot':(isAlt?'alt_'+t:'base_'+t);
+    const wp=Array.isArray(c.waypoints)?c.waypoints:[];
+    const paths=[a,...wp,b].map(p=>new TMap.LatLng(p[1],p[0]));
+    polys.push({id:c.id,styleId:sid,paths});
   });
   // 站点：仅选中方案经过的站点打点并标注名称
   const r=state._res&&state._res.rows;
@@ -2583,12 +2809,22 @@ function drawMapQQ(){
     lbs.push({id:'lp'+k,styleId:onRoute?'hot':'base',position:new TMap.LatLng(ll[1],ll[0]),text:N(k)});
   });
   polyLayer.setGeometries(polys); mkLayer.setGeometries(mks); lbLayer.setGeometries(lbs);
+  // 视野适配（design D4）：仅用 setCenter/setZoom 基础 API；搜索聚焦优先（批次 B）
+  const bb=state.mapFocusLL||mapFocusBB(state._res&&state._res.rows?state._res.rows[Math.min(v.sel,state._res.rows.length-1)]:null);
+  if(bb){
+    const box=document.getElementById('map-view');
+    try{ map.setCenter(new TMap.LatLng((bb.y0+bb.y1)/2,(bb.x0+bb.x1)/2)); map.setZoom(fitZoom(bb,(box&&box.clientWidth)||360,(box&&box.clientHeight)||320)); }catch(e){}
+  }
   return true;
 }
 
 /* tdTried：同一密钥只自动尝试一次，失败后不再自动重发（每次渲染都重发会形成请求风暴，
    触发天地图 CloudWAF 风控临时拦截）；点「应用密钥」或换密钥才重新尝试。 */
 let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
+/* tkMsgGen：#tk-msg 消息代数戳。探针/诊断的结论是异步回写的，若用户在此期间产生新消息
+  （如空输入应用的「已保留密钥」常驻提示），迟到的旧结论会把新提示盖掉——每次 tkMsg/显式
+  写入使代数 +1，在途回写发现代数不符即放弃（元素身份检查仍保留，防跨重绘污染）。 */
+let tkMsgGen=0;
 /* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
    冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
 const TD_COOLDOWN_MS=10*60*1000;
@@ -2646,33 +2882,108 @@ function loadTianditu(cb){
   s.onerror=()=>cb(false);
   document.head.appendChild(s);
 }
+/* 腾讯地图 SDK 按需加载：仅 isProxyEnv() 且用户切到腾讯地图视图时才注入脚本。
+   旧实现把它无条件放在 <head> 解析阻塞加载——APK 内白下载用不上的 SDK，且占位符
+   serviceHost 使 SDK 内部 XHR 每次加载抛 Invalid URL（design D9）。 */
+let qqSdkState='';
+function loadQQSdk(){
+  if(typeof TMap!=='undefined'){ qqSdkState='ready'; return true; }
+  if(qqSdkState) return false;
+  qqSdkState='loading';
+  const s=document.createElement('script');
+  s.src='https://map.qq.com/api/gljs?v=1.exp';
+  s.onload=()=>{ qqSdkState='ready'; if(state.mapProvider==='qq') renderMap(); };
+  s.onerror=()=>{ qqSdkState='fail'; if(state.mapProvider==='qq') renderMap(); };
+  document.head.appendChild(s);
+  return false;
+}
+/* 地图视野适配（design D4）：按选中方案节点包围盒估算中心与缩放级，用各 SDK 已在用的
+   基础 API（centerAndZoom / setCenter+setZoom）实现，不引入未核实的 fitBounds 类 API；
+   估算含纬度余弦校正，缩放夹取安全区间并整体 try/catch——失败保持原视野，不阻断绘制。 */
+function mapFocusBB(row){
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  ((row&&row.segs)||[]).forEach(s=>{
+    [lngLatOf(s.e,'from'),lngLatOf(s.e,'to')].forEach(p=>{
+      if(p){ x0=Math.min(x0,p[0]); x1=Math.max(x1,p[0]); y0=Math.min(y0,p[1]); y1=Math.max(y1,p[1]); }
+    });
+  });
+  return (x1>x0||y1>y0)?{x0,x1,y0,y1}:null;
+}
+function fitZoom(bb,wPx,hPx){
+  const kx=Math.cos(((bb.y0+bb.y1)/2)*Math.PI/180);
+  const z=Math.min(
+    Math.log2((wPx*360)/(((bb.x1-bb.x0)*kx)||1e-4)/256),
+    Math.log2((hPx*360)/((bb.y1-bb.y0)||1e-4)/256)
+  )-1.2;
+  return Math.max(3.5,Math.min(12,z));
+}
 function drawMapTD(){
   if(!tdReady) return false;
   try{
     if(!tdMap){ tdMap=new T.Map('map-view'); tdMap.centerAndZoom(new T.LngLat(108,34),5); }
     tdMap.clearOverLays();
+    const netOff=state.mapNet==='off';
     const v=visibleChannels(), seen=new Set();
+    /* 断面高亮垫层（spec: grid-map 断面，与拓扑图同色同语义） */
+    if(state.mapSec){
+      const mem=new Set(secMemberIds(state.mapSec));
+      v.list.forEach(c=>{
+        if(!mem.has(c.id)||v.hot.has(c.id)) return;
+        const ps=chanPts(c,(lng,lat)=>[lng,lat]);
+        if(ps) tdMap.addOverLay(new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:'#993C1D',weight:7,opacity:0.3}));
+      });
+    }
+    // 底图连线：走廊 waypoints 折线化；tier 线型仅作用弱化层（dasharray 若 SDK 不支持则自然忽略，语义降级见 design D5）
     v.list.forEach(c=>{
-      const a=lngLatOf(c,'from'), b=lngLatOf(c,'to'); if(!a||!b) return;
       const isHot=v.hot.has(c.id), isAlt=v.alt.has(c.id);
-      tdMap.addOverLay(new T.Polyline([new T.LngLat(a[0],a[1]),new T.LngLat(b[0],b[1])],
-        {color:isHot?'#185FA5':(isAlt?'#EF9F27':'#C9C8C3'),weight:isHot?6:(isAlt?3:1),opacity:isHot||isAlt?0.9:0.5}));
+      if(netOff&&!isHot&&!isAlt) return;
+      const ps=chanPts(c,(lng,lat)=>[lng,lat]);
+      if(!ps) return;
+      const st=tierStyle(c.tier);
+      const dashArr=st.dash?st.dash.split(' ').map(Number):null;
+      const sty=isHot?{color:'#185FA5',weight:6,opacity:0.9}
+        :isAlt?{color:'#EF9F27',weight:Math.max(1.4,2*st.w),opacity:0.45,...(dashArr?{dasharray:dashArr}:{})}
+        :{color:'#C9C8C3',weight:Math.max(0.7,1*st.w),opacity:0.3,...(dashArr?{dasharray:dashArr}:{})};
+      const ln=new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),sty);
+      try{ ln.addEventListener('click',()=>toggleChan(c.id)); }catch(e){}  // 事件 API 真机核实，失败仅失去点击
+      tdMap.addOverLay(ln);
     });
     const r=state._res&&state._res.rows;
     if(r&&v.sel>=0){
-      r[v.sel].segs.forEach(s=>{
+      r[v.sel].segs.forEach((s,si)=>{
         [s.e.stFrom,s.e.stTo].forEach(st=>{
           if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
           const p=ST[st];
-          tdMap.addOverLay(new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})}));
+          const mk=new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})});
+          try{ mk.addEventListener('click',()=>stationPop(st)); }catch(e){}
+          tdMap.addOverLay(mk);
         });
+        // 段名标注：与拓扑图同源清单（routeLabelList），仅标选中方案
+        const a=lngLatOf(s.e,'from'), b=lngLatOf(s.e,'to');
+        if(a&&b){
+          try{ tdMap.addOverLay(new T.Label({text:s.e.n,position:new T.LngLat((a[0]+b[0])/2,(a[1]+b[1])/2),offset:new T.Point(0,-16)})); }catch(e){}
+        }
       });
     }
+    // 省份节点：区域着色开启时，非途经省份按区域电网着色（途经/端点保持选中语义优先，批次 B 增补）
+    const tdRPal=state.mapRegion?regionPalette(DATA.RGOF):null;
     Object.keys(PV).forEach(k=>{
       const ll=provLngLat(k); if(!ll||seen.has(k)) return; seen.add(k);
       const onRoute=v.routeNodes.has(k);
-      tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl:onRoute?D_HOT:D_BASE,iconSize:new T.Point(onRoute?14:9,onRoute?14:9)})}));
+      const regColor=(tdRPal&&REGION_OF[k]&&!onRoute)?tdRPal[REGION_OF[k]]:null;
+      const iconUrl=onRoute?D_HOT:(regColor?dotSvg(regColor):D_BASE);
+      const size=onRoute?14:(regColor?11:9);
+      tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl,iconSize:new T.Point(size,size)})}));
     });
+    // 视野聚焦：搜索聚焦 > 选中方案路线范围（用户随后仍可手动缩放拖动）
+    const bb=state.mapFocusLL||mapFocusBB(r&&r.length?r[Math.min(v.sel,r.length-1)]:null);
+    if(bb){
+      const box=document.getElementById('map-view');
+      const z=fitZoom(bb,(box&&box.clientWidth)||360,(box&&box.clientHeight)||320);
+      const c=new T.LngLat((bb.x0+bb.x1)/2,(bb.y0+bb.y1)/2);
+      try{ tdMap.centerAndZoom(c,z); }
+      catch(e){ try{ tdMap.centerAndZoom(c,Math.max(3,Math.min(11,Math.round(z)))); }catch(e2){} }
+    }
     return true;
   }catch(e){ return false; }
 }
@@ -2735,31 +3046,77 @@ function topoSVG(){
   const v=visibleChannels();
   const r=state._res&&state._res.rows;
   const selR=(r&&v.sel>=0)?r[v.sel]:null;
+  /* 区域归属上图（批次 B 增补）：环=区域电网归属，点=原有状态语义（选中/途经/全网），互不覆盖。
+     注意区域分区在 DATA.RGOF（data.js 未解构成全局），与 lib.js 取法一致。 */
+  const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
   const inRoutes=new Set();
   if(r) r.forEach(row=>row.edges.forEach(e=>inRoutes.add(e.id)));
+  /* 全网架层显示模式（spec: grid-map 分层）：'off'=隐藏非候选非选中通道，'dim'=弱化显示。
+     候选层固定降权——川→苏 150 条候选的边并集可达 55 条，是杂乱主力（design D1 实测）。 */
+  const netOff=state.mapNet==='off';
 
   let edges='',segs='',nodes='',labels='';
-  // 底图连线：全部通道
+  /* 断面高亮垫层（spec: grid-map 断面）：成员通道在底层垫紫色晕圈；基于成员通道高亮，不画虚构地理边界 */
+  if(state.mapSec){
+    const mem=new Set(secMemberIds(state.mapSec));
+    CH.forEach(c=>{
+      if(!mem.has(c.id)||v.hot.has(c.id)) return;
+      const ps=chanPts(c,P);
+      if(!ps) return;
+      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" stroke="#993C1D" stroke-width="5.5" opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>`;
+    });
+  }
+  // 底图连线：全部通道（可点击=必经过滤；透明宽线仅作点击热区）。
+  // 批次 B：有走廊 waypoints 的通道按折线渲染（无则两点直线）；tier 线型仅作用弱化层
   CH.forEach(c=>{
     if(v.hot.has(c.id)) return;
-    const a=ll(c,'from'), b=ll(c,'to');
-    const [x1,y1]=P(a[0],a[1]), [x2,y2]=P(b[0],b[1]);
     const isAlt=v.alt.has(c.id);
-    edges+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${isAlt?'#EF9F27':'#D3D1C7'}" stroke-width="${isAlt?1.6:0.7}" opacity="${isAlt?0.85:0.75}"/>`;
+    if(netOff&&!isAlt) return;
+    const ps=chanPts(c,P);
+    if(!ps) return;
+    const st=tierStyle(c.tier);
+    const w=((isAlt?1.2:0.7)*st.w).toFixed(2);
+    const dash=st.dash?` stroke-dasharray="${st.dash}"`:'';
+    const vis=`fill="none" stroke="${isAlt?'#EF9F27':'#D3D1C7'}" stroke-width="${w}" opacity="${isAlt?0.3:0.18}"${dash} stroke-linecap="round" stroke-linejoin="round"`;
+    if(ps.length===2){
+      const d=`x1="${ps[0][0].toFixed(1)}" y1="${ps[0][1].toFixed(1)}" x2="${ps[1][0].toFixed(1)}" y2="${ps[1][1].toFixed(1)}"`;
+      edges+=`<line ${d} ${vis}/><line ${d} stroke="rgba(0,0,0,0)" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
+    }else{
+      const pts=ptsAttr(ps);
+      edges+=`<polyline points="${pts}" ${vis}/><polyline points="${pts}" fill="none" stroke="rgba(0,0,0,0)" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
+    }
   });
-  // 选中路线：加粗并编号
+  // 选中路线：加粗并编号，段名标注上下交错；同时记录包围盒供视野聚焦（design D4）
+  let fx0=1e9,fy0=1e9,fx1=-1e9,fy1=-1e9;
   if(selR){
     selR.segs.forEach((sg,i)=>{
-      const a=ll(sg.e,'from'), b=ll(sg.e,'to');
-      const [x1,y1]=P(a[0],a[1]), [x2,y2]=P(b[0],b[1]);
-      segs+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>`;
-      segs+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#185FA5" stroke-width="3.2" stroke-linecap="round"/>`;
-      const mx=(x1+x2)/2, my=(y1+y2)/2;
+      const ps=chanPts(sg.e,P);
+      if(!ps) return;
+      ps.forEach(p=>{ fx0=Math.min(fx0,p[0]); fx1=Math.max(fx1,p[0]); fy0=Math.min(fy0,p[1]); fy1=Math.max(fy1,p[1]); });
+      const pts=ptsAttr(ps);
+      segs+=`<polyline points="${pts}" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
+      segs+=`<polyline points="${pts}" fill="none" stroke="#185FA5" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="pointer-events:stroke"/>`;
+      const m1=ps[Math.floor((ps.length-1)/2)], m2=ps[Math.ceil((ps.length-1)/2)];
+      const mx=(m1[0]+m2[0])/2, my=(m1[1]+m2[1])/2;
       segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" fill="#185FA5"/>`
-          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`;
+          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`
+          + `<text x="${mx.toFixed(1)}" y="${(my+(i%2?17:-14)).toFixed(1)}" font-size="10" font-weight="600" fill="#0C447C" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3">${esc(sg.e.n)}</text>`;
     });
   }
   // 节点
+  /* 视野聚焦优先级（批次 B）：搜索指定的包围盒（state.mapFocusLL，度）> 选中方案路线包围盒 > 全国视野。
+     任何重算（solveState）会清掉搜索聚焦，让位回路线视野。 */
+  let focusBox=null;   // px 坐标 {x0,y0,x1,y1}
+  if(state.mapFocusLL){
+    const f=state.mapFocusLL,[ax,ay]=P(f.x0,f.y1),[bx,by]=P(f.x1,f.y0),pad=70;
+    focusBox={x0:Math.min(ax,bx)-pad,y0:Math.min(ay,by)-pad,x1:Math.max(ax,bx)+pad,y1:Math.max(ay,by)+pad};
+  }else if(selR&&fx1>fx0){
+    const pad=55;
+    focusBox={x0:fx0-pad,y0:fy0-pad,x1:fx1+pad,y1:fy1+pad};
+  }
+  const focused=!!focusBox;
+  let vbx0=-1e9,vbx1=1e9,vby0=-1e9,vby1=1e9;
+  if(focused){ vbx0=focusBox.x0; vbx1=focusBox.x1; vby0=focusBox.y0; vby1=focusBox.y1; }
   ids.forEach(k=>{
     const [x,y]=P(PV[k].lng,PV[k].lat);
     const onRoute=v.routeNodes.has(k);
@@ -2767,6 +3124,9 @@ function topoSVG(){
     const rad=isEnd?6:(onRoute?4.6:2.6);
     const fill=isEnd?'#0F6E56':(onRoute?'#185FA5':'#B4B2A9');
     nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" fill="${fill}" stroke="#ffffff" stroke-width="1.3"/>`;
+    if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad+2.8).toFixed(1)}" fill="none" stroke="${rPal[REGION_OF[k]]}" stroke-width="1.8" opacity="0.95"/>`;
+    // 聚焦视野下，离线路径且出画的省名不再绘制（避免跨界半截字，spec: grid-map 聚焦）
+    if(focused&&!onRoute&&(x<vbx0||x>vbx1||y<vby0||y>vby1)) return;
     labels+=`<text x="${x.toFixed(1)}" y="${(y-rad-3).toFixed(1)}" font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" fill="${onRoute?'#0C447C':'#9A9A95'}" text-anchor="middle">${esc(N(k))}</text>`;
   });
   // 选中路线的换流站
@@ -2777,17 +3137,159 @@ function topoSVG(){
       [['from',sg.e.stFrom],['to',sg.e.stTo]].forEach(([side,st])=>{
         if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
         const [x,y]=P(ST[st].lng,ST[st].lat);
-        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#ffffff" stroke="#0F6E56" stroke-width="2"/>`
-           + `<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" font-size="9" font-weight="600" fill="#0F6E56" text-anchor="middle">${esc(ST[st].n)}</text>`;
+        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#ffffff" stroke="#0F6E56" stroke-width="2" data-st="${st}" style="pointer-events:all"/>`
+           + `<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" font-size="10" font-weight="600" fill="#0F6E56" text-anchor="middle" data-st="${st}" style="pointer-events:all">${esc(ST[st].n)}</text>`;
       });
     });
   }
 
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">
+  /* 视野聚焦：聚焦盒（搜索 / 选中方案）优先，无则保持全国视野 */
+  let vb=focusBox
+    ?`${focusBox.x0.toFixed(1)} ${focusBox.y0.toFixed(1)} ${(focusBox.x1-focusBox.x0).toFixed(1)} ${(focusBox.y1-focusBox.y0).toFixed(1)}`
+    :`0 0 ${W} ${H}`;
+
+  return `<svg viewBox="${vb}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">
 <title>跨省电网拓扑图</title><desc>按站点经纬度投影的节点连线图，仅示拓扑不绘制行政区划边界。</desc>
-<rect x="0" y="0" width="${W}" height="${H}" fill="#F7F8FA" rx="10"/>
+<rect x="-200" y="-200" width="${W+400}" height="${H+400}" fill="#F7F8FA"/>
 ${edges}${segs}${nodes}${sts}${labels}
 </svg>`;
+}
+
+/* ---------- 网架视图交互（spec: grid-map 点击联动 / 站点信息 / 快照导出） ---------- */
+/* 点击通道=必经过滤：与测算页通道组件筛选（boot.js i-chan）同一状态源与语义，再次点击解除 */
+function toggleChan(id){
+  state.mustHave=(state.mustHave.length&&state.mustHave[0]===id)?[]:[id];
+  state.sel=0; doSolve();
+  if(!document.getElementById('v-map').hidden) renderMap();   // 地图页联动重绘（spec: grid-map 三处联动）
+  chanPop(id);   // 批次 B（design D13）：点击通道同步弹出容量浮层，必经过滤语义不变
+}
+/* 容量/占用率信息浮层（spec: grid-map 容量浮层）：点击任一通道即出，数据与费率库同源；
+   字段缺失显式「待补」，不得以 0 或空白冒充；占用率取当前选中方案该段的 util（未在方案中则说明）。
+   浮层内含必经过滤切换按钮——与点击过滤同一状态源。 */
+function chanPop(id){
+  const el=document.getElementById('map-pop'); if(!el) return;
+  const c=CH.find(x=>x.id===id); if(!c) return;
+  const r=state._res&&state._res.rows?state._res.rows[Math.min(state.sel,state._res.rows.length-1)]:null;
+  const seg=r&&r.segs.find(s=>s.e.id===id);
+  const util=(seg&&seg.util!=null)?fmt(seg.util*100,0)+'%':null;
+  const on=state.mustHave.length&&state.mustHave[0]===id;
+  const basis={cap:'实际输送能力（非 ATC）',rated:'仅额定容量',estimate:'模型估算（非 ATC）'}[c.capBasis]||'';
+  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:9px;padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.75">
+    <button class="btn ghost" style="position:absolute;top:8px;right:8px;width:auto;padding:2px 8px;font-size:11px" onclick="document.getElementById('map-pop').innerHTML=''">关闭</button>
+    <b>${esc(c.n)}</b>　<span style="color:var(--ink3)">${esc(N(c.from))} → ${esc(N(c.to))}</span>　${tierTag(c.tier)}<br>
+    <span style="color:var(--ink2)">${c.regional?'送出省参考价':'输电价'} <b>${c.t==null?'待补':fmt(c.t,1)+' 元/MWh'}</b>　物理线损 ${c.loss==null?'待补':fmt(c.loss,2)+'%'}</span><br>
+    <span style="color:var(--ink2)">容量 <b>${c.cap==null?'待补':esc(String(c.cap))+' MW'}</b>${c.capActual!=null?'　实际 '+c.capActual+' MW':''}${c.capRated!=null?'　额定 '+c.capRated+' MW':''}</span><br>
+    <span style="color:var(--ink2)">当前方案占用 <b>${util!=null?util:'未在当前方案/待补'}</b></span>
+    <span style="color:var(--ink3)">${basis?'（'+basis+'）':''}${c.capSrc?'　'+esc(c.capSrc):''}</span><br>
+    <button class="btn ghost" style="width:auto;padding:3px 10px;font-size:11px;margin-top:4px" onclick="toggleChan('${esc(c.id)}')">${on?'解除必经过滤':'设为必经通道'}</button>
+    ${on?'<span style="color:var(--teal);font-size:11px;margin-left:6px">必经过滤中，测算页已同步</span>':''}
+  </div>`;
+}
+/* 拓扑 SVG 事件委托：命中通道热区→必经过滤；命中站点→站点信息浮层（数据与费率库同源） */
+function mapSvgClick(e){
+  const t=e.target;
+  const st=t.getAttribute&&t.getAttribute('data-st');
+  if(st){ stationPop(st); return; }
+  const chan=t.closest?t.closest('[data-chan]'):null;
+  if(chan) toggleChan(chan.getAttribute('data-chan'));
+}
+function stationPop(st){
+  const el=document.getElementById('map-pop'); if(!el||!ST[st]) return;
+  const p=ST[st];
+  const reg=p.p&&REGION_OF[p.p]?REGION_OF[p.p]:null;
+  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:9px;padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.6">
+    <button class="btn ghost" style="position:absolute;top:8px;right:8px;width:auto;padding:2px 8px;font-size:11px" onclick="document.getElementById('map-pop').innerHTML=''">关闭</button>
+    <b>${esc(p.n)}</b>　<span style="color:var(--ink3)">${esc(PV[p.p]?PV[p.p].n:(p.p||''))}</span><br>
+    <span style="color:var(--ink2)">${esc(p.a||'站址未采集')}</span>${reg?`<br><span style="color:var(--ink3)">区域归属：${esc(reg)}区域电网</span>`:''}</div>`;
+}
+/* ---------- 批次 B：站点/通道搜索（spec: 搜索聚焦，不改选中方案与必经过滤状态） ----------
+   匹配逻辑在 format.js mapSearchHits（纯函数，可单测）；此处只做结果列表与聚焦动作。 */
+function mapQSearch(v){
+  state.mapQ=v;
+  const out=document.getElementById('map-search-out'); if(!out) return;
+  const hits=mapSearchHits(v,ST,CH);
+  const total=hits.stations.length+hits.channels.length;
+  if(!String(v||'').trim()){ out.innerHTML=''; return; }
+  if(!total){ out.innerHTML='<div class="note" style="margin:0 0 6px">无匹配的站点/通道，换个关键词试试。</div>'; return; }
+  const chip=(label,fn)=>`<button class="btn ghost" style="width:auto;padding:3px 10px;font-size:11px" onclick="${fn}">${esc(label)}</button>`;
+  let html='<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px">'
+    +hits.stations.slice(0,6).map(st=>chip(ST[st].n,`mapGotoStation('${esc(st)}')`)).join('')
+    +hits.channels.slice(0,6).map(id=>{ const c=CH.find(x=>x.id===id); return chip(c?c.n:id,`mapGotoChan('${esc(id)}')`); }).join('')
+    +'</div>';
+  if(total>12) html+='<div class="note" style="margin:0 0 6px">共 '+total+' 个命中，仅列前 12 个，请细化关键词。</div>';
+  out.innerHTML=html;
+}
+/* 聚焦 = 写入度坐标包围盒（state.mapFocusLL）→ 重绘（拓扑算 viewBox / 天地图·腾讯 centerAndZoom）→ 信息浮层。
+   聚焦由搜索触发；任何重算（solveState）会清掉它，让位回路线视野。 */
+function mapGotoStation(st){
+  if(!ST[st]) return;
+  state.mapFocusLL={x0:ST[st].lng,x1:ST[st].lng,y0:ST[st].lat,y1:ST[st].lat};
+  if(!document.getElementById('v-map').hidden) renderMap();
+  mapQSearch(state.mapQ);
+  stationPop(st);
+}
+function mapGotoChan(id){
+  const c=CH.find(x=>x.id===id); if(!c) return;
+  const a=lngLatOf(c,'from'), b=lngLatOf(c,'to');
+  if(a&&b) state.mapFocusLL={x0:Math.min(a[0],b[0]),x1:Math.max(a[0],b[0]),y0:Math.min(a[1],b[1]),y1:Math.max(a[1],b[1])};
+  if(!document.getElementById('v-map').hidden) renderMap();
+  mapQSearch(state.mapQ);
+  chanPop(id);
+}
+/* 拓扑图快照导出（design D5）：SVG 序列化→2× canvas 光栅化→toBlob 下载；
+   priceVersion 与生成时间画在 canvas 层（不进 SVG 源）。栅格底图（天地图/腾讯）无 CORS 头，
+   canvas 会被污染，故导出入口仅在拓扑图视图提供。 */
+function exportTopo(){
+  const svgEl=document.querySelector('#map-view svg'); if(!svgEl) return;
+  const url=URL.createObjectURL(new Blob([svgEl.outerHTML],{type:'image/svg+xml'}));
+  const img=new Image();
+  img.onload=()=>{
+    try{
+      const cv=document.createElement('canvas'); cv.width=660*2; cv.height=430*2;
+      const ctx=cv.getContext('2d');
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+      ctx.drawImage(img,0,0,cv.width,cv.height);
+      ctx.fillStyle='rgba(0,0,0,.55)'; ctx.font='16px sans-serif';
+      ctx.fillText(`省间路径优选测算 · priceVersion ${String(PRICE_VERSION).slice(0,8)} · ${new Date().toLocaleString('zh-CN')}`,16,cv.height-14);
+      cv.toBlob(b=>{
+        if(!b) return;
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(b);
+        a.download=`iproute-grid-${String(PRICE_VERSION).slice(0,8)}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+      },'image/png');
+    }finally{ URL.revokeObjectURL(url); }
+  };
+  img.src=url;
+}
+
+/* ---------- 批次 A·状态深链：复制带状态的链接（拓扑/天地图视图均可用） ----------
+   URL 构造：现地址去掉旧 hash + #from=&to=&sel=（file:// 下 origin 为 "null"，
+   故基于 location.href 而非 origin 拼接）。落点与 boot.js applyDeepLink 对应。 */
+function mapLinkURL(){
+  const r=state._res&&state._res.rows?Math.min(state.sel,state._res.rows.length-1):0;
+  return location.href.split('#')[0]+'#from='+state.from+'&to='+state.to+'&sel='+r;
+}
+function copyMapLink(btn){
+  const url=mapLinkURL();
+  const done=ok=>{
+    if(!btn) return;
+    btn.textContent=ok?'已复制':'复制失败';
+    setTimeout(()=>{ btn.textContent='复制链接'; },1500);
+  };
+  const fallbackCopy=t=>{
+    try{
+      const i=document.createElement('textarea'); i.value=t;
+      i.style.cssText='position:fixed;opacity:0';
+      document.body.appendChild(i); i.select();
+      const ok=document.execCommand('copy'); i.remove(); return ok;
+    }catch(e){ return false; }
+  };
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(()=>done(true),()=>done(fallbackCopy(url)));
+    else done(fallbackCopy(url));
+  }catch(e){ done(fallbackCopy(url)); }
 }
 
 /* ---------- 网架视图 ---------- */
@@ -2800,9 +3302,20 @@ function renderMap(){
   const mode=MAP_MODES.some(m=>m[0]===state.mapProvider)?state.mapProvider:'svg';
   const r=state._res&&state._res.rows;
   const selR=(r&&r.length)?r[Math.min(state.sel,r.length-1)]:null;
+  // 批次 B：断面高亮提示条（数据与费率库断面分区同源）
+  const secObj=state.mapSec?SEC.find(s=>s.id===state.mapSec):null;
+  const secStrip=secObj?`<div class="warn" style="margin:0 0 8px">断面高亮：<b>${esc(secObj.n)}</b>　限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}${secObj.note?'　'+esc(secObj.note):''}${secMemberIds(state.mapSec).length?'':'　<span style="color:var(--red)">成员通道未映射到本图</span>'}</div>`:'';
+  // 批次 B 增补：区域着色图例（动态，依据 REGION_OF 区域电网分区）
+  const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
+  const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--ink3);margin:0 0 8px;align-items:center">
+      <span style="color:var(--ink2)">区域着色</span>
+      ${Object.entries(rPal).map(([n,c])=>`<span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};margin-right:4px;vertical-align:middle"></i>${esc(n)}</span>`).join('')}
+      <span style="margin-left:auto">环=区域归属 · 依据：区域电网分区</span>
+    </div>`:'';
 
   let out=`<div class="card tight">
-    <div class="sec-title">跨省网架<span class="hint">${CH.length} 条通道 · ${Object.keys(ST).length} 个站点</span></div>
+    <div class="sec-title">跨省网架<span class="hint">${CH.length} 条通道 · ${Object.keys(ST).length} 个站点</span>
+      <button class="btn ghost" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
     <div class="seg small">${MAP_MODES.map(([k,t])=>`<button class="${mode===k?'on':''}" onclick="switchMap('${k}')">${t}</button>`).join('')}</div>`;
 
   if(!proxyOK && mode!=='svg'){
@@ -2813,8 +3326,9 @@ function renderMap(){
       <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
         <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
       </div></label>
-      <div class="row2" style="margin-bottom:10px">
+      <div class="row3" style="margin-bottom:10px">
         <button class="btn ghost" onclick="applyTk()">应用密钥</button>
+        <button class="btn ghost" onclick="clearTk()">清除密钥</button>
         <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
       <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
@@ -2824,12 +3338,32 @@ function renderMap(){
     out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
   }
 
-  out+=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0">
+  out+=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
       <span><i style="display:inline-block;width:16px;height:3px;background:#185FA5;vertical-align:middle;margin-right:5px"></i>选中方案</span>
       <span><i style="display:inline-block;width:16px;height:3px;background:#EF9F27;vertical-align:middle;margin-right:5px"></i>其它候选</span>
       <span><i style="display:inline-block;width:16px;height:3px;background:#D3D1C7;vertical-align:middle;margin-right:5px"></i>全网架</span>
+      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapnet" ${state.mapNet!=='off'?'checked':''}>显示全网架</label></span>
     </div>
-    <div id="map-view"></div><div id="fallback"></div>`;
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--ink3);margin:0 0 8px;align-items:center">
+      <span style="color:var(--ink2)">价格线型（弱化层）</span>
+      <span><i class="lg-line" style="border-top:2.5px solid #8A8A85"></i>核定</span>
+      <span><i class="lg-line" style="border-top:1.5px solid #8A8A85"></i>国网披露</span>
+      <span><i class="lg-line" style="border-top:2.5px dashed #8A8A85"></i>区域口径</span>
+      <span><i class="lg-line" style="border-top:2.5px dotted #8A8A85"></i>待核价</span>
+      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
+    </div>
+    ${regionLegend}
+    <div style="display:flex;gap:8px;margin:0 0 8px;align-items:center">
+      <input id="map-q" type="search" placeholder="搜索站点 / 通道…" value="${esc(state.mapQ||'')}" oninput="mapQSearch(this.value)" style="flex:1;min-width:0;padding:7px 10px;font-size:12px">
+      <select id="i-mapsec" onchange="state.mapSec=this.value||null;renderMap()" style="flex:none;max-width:48%;padding:7px 24px 7px 8px;font-size:12px">
+        <option value="">按断面高亮…</option>
+        ${SEC.map(s=>`<option value="${esc(s.id)}" ${state.mapSec===s.id?'selected':''}>${esc(s.n)}</option>`).join('')}
+      </select>
+    </div>
+    <div id="map-search-out"></div>
+    ${secStrip}
+    ${mode==='svg'?`<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button class="btn ghost" style="padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button></div>`:''}
+    <div id="map-view" onclick="mapSvgClick(event)"></div><div id="fallback"></div><div id="map-pop"></div>`;
 
   if(selR){
     out+=`<div style="margin-top:11px;padding-top:11px;border-top:.5px solid var(--line2)">
@@ -2884,50 +3418,87 @@ function switchMap(p){
 function applyTk(){
   const el=document.getElementById('i-tk');
   const k=(el?el.value:'').trim();
+  if(!k){
+    /* FR-2：空输入不再半清空状态。旧实现会把 state.tiandituKey 清掉，而 tdApiReady 的
+       SDK 短路让地图继续可用——红字一闪即被绿字覆盖、重启后才走空密钥分支，行为前后不一。
+       现语义：输入为空 → 不改动已存密钥，给常驻灰字说明；停用走显式「清除密钥」。 */
+    const m=document.getElementById('tk-msg');
+    if(m){
+      tkMsgGen++;   // 使在途启动探针的异步回写失效，「已保留」为常驻提示（PRD FR-2）
+      m.innerHTML=state.tiandituKey
+        ?'<span style="color:var(--ink2)">输入为空，已保留本机已存密钥（尾号 '+esc(state.tiandituKey.slice(-4))+'）。要换新密钥请粘贴后再点「应用密钥」；要停用天地图请点「清除密钥」。</span>'
+        :'<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>';
+    }
+    return;
+  }
   const changed=(k!==state.tiandituKey);
   state.tiandituKey=k; tdReady=false; saveMap();
   const cooling=(!changed && k && Date.now()<tdCooldownUntil);
   if(changed){ tdTried=''; tdCooldownUntil=0; }
   if(!cooling) tdTried='';
   renderMap();
-  // 点击后立刻给出可见反馈（REQ-703 同理：不得静默无响应），随后的加载结果再覆盖；
-  // 冷却期内不发请求，80ms 后由 tkFailShow 给出剩余等待时间
+  // 点击后立刻给出可见反馈（REQ-703 同理：不得静默无响应）；最终定性由瓦片级探针给出（FR-2）
   if(!cooling) tkMsg(k?'loading':'empty');
+}
+function clearTk(){
+  /* FR-2：显式清除密钥——清空存储并立即降级为内置拓扑图（mapProvider 随 LS_MAP 持久化，重启不回弹）。
+     同步清掉风控冷却与尝试记录，下次填入新密钥即可立即重试。 */
+  state.tiandituKey=''; tdReady=false; tdTried=''; tdAttempted=false; tdCooldownUntil=0;
+  saveMap();
+  state.mapProvider='svg'; saveMap(); renderMap();
 }
 /* 密钥应用的各阶段反馈：loading/ok/empty/loadfail/drawfail。
    script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
 function tkMsg(kind){
   const el=document.getElementById('tk-msg'); if(!el) return;
-  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; tdTileProbe(el); return; }
+  const gen=++tkMsgGen;   // 新消息使一切在途异步回写失效
+  if(kind==='ok'){ tdTileProbe(el,gen); return; }
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
   if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
   if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
   if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
-  tkFailDiagnose(el);
+  tkFailDiagnose(el,gen);
 }
-/* 瓦片自检：叠加物（线路/圆点）正常而底图全灭时肉眼难辨原因。按 SDK 此刻将用的协议
-   探测一张真实 vec_w 瓦片——no-cors 拿不到状态码（天地图无 CORS 头），仅区分
-   「传输可达」与「连接被禁/不通」，把失败定性直接显示在界面上，供真机截图定位。 */
-function tdTileProbe(el){
+/* 瓦片级真校验（FR-2，PRD-体验问题修复）：fetch(no-cors) 对任何 HTTP 状态都 resolve，
+   只能证明「传输可达」，证明不了密钥有效——乱码密钥显示「自检正常」的假阳性根源（清单 F2）。
+   改用 Image 加载一张固定 vec_w 瓦片（与 SDK 实际瓦片同域同格式）：无论服务端以 403 还是
+   拦截页（HTML）拒绝，均不可解码为图片，onerror 必然触发——与拒绝方式无关，绕开
+   「浏览器拿不到跨域状态码」的平台限制（PRD §9 V4 双通道实测）。
+   失败时保留地图容器与叠加物，不强制降级（PRD 决策 D-2）；文案按
+   密钥无效/风控拦截 与 网络不可达 二分（复用 tkFailShow 的 no-cors fetch 思路）。 */
+function tdTileProbe(el,gen){
   try{
     if(typeof T==='undefined'||!T.Protocol) return;
     const tk=state.tiandituKey||window.TMAP_AUTHKEY||'';
     const url=T.Protocol.value+'t0.tianditu.'+(T.Domain||'gov.cn')
       +'/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default'
       +'&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=5&TILEROW=1&TILECOL=1&tk='+encodeURIComponent(tk);
-    const done=txt=>{ if(document.getElementById('tk-msg')!==el) return;
-      el.innerHTML=el.innerHTML.replace(/ ?｜瓦片自检：[^<]*/,'')+' <span style="color:var(--ink3)">｜瓦片自检：'+txt+'</span>'; };
-    fetch(url,{mode:'no-cors'}).then(
-      ()=>done(T.Protocol.value==='https://'?'https 通道传输正常':'异常：瓦片仍走非 https'),
-      ()=>done(T.Protocol.value!=='https://'?'明文 http 被系统禁止（应走 https）':'网络不可达'));
+    const live=()=>document.getElementById('tk-msg')===el&&gen===tkMsgGen;   // 重绘/新消息竞态防护
+    const failMsg=txt=>'<span style="color:#B3261E;font-weight:600">✗ '+txt+'</span>已保留地图与叠加物，可核对密钥后重试，或点上方「拓扑图」使用内置底图。';
+    const img=new Image();
+    img.onload=()=>{
+      if(!live()) return;
+      if(img.naturalWidth>=256){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥有效，底图可用。</span>'; return; }
+      el.innerHTML=failMsg('瓦片返回内容异常（未能解码为有效图片）。');
+    };
+    img.onerror=()=>{
+      if(!live()) return;
+      let probe;
+      try{ probe=fetch(url,{mode:'no-cors'}); }catch(e){ probe=Promise.reject(e); }
+      probe.then(
+        ()=>{ if(live()) el.innerHTML=failMsg('瓦片请求被拒（密钥无效或被风控拦截）。'); },
+        ()=>{ if(live()) el.innerHTML=failMsg('网络不可达，瓦片加载失败。'); });
+    };
+    el.innerHTML='<span style="color:var(--ink2)">SDK 已加载，正在验证瓦片…</span>';
+    img.src=url;
   }catch(e){}
 }
 /* 加载失败二分诊断：script 标签拿不到状态码（天地图无 CORS 头），改用 no-cors fetch 探测——
    fetch 成功＝服务端有响应（密钥/白名单/风控拒绝，ORB 拦掉了非 JS 内容）；
    fetch 失败＝传输层不通（代理/防火墙/DNS）。 */
-function tkFailDiagnose(el){
+function tkFailDiagnose(el,gen){
   if(typeof location!=='undefined'&&location.protocol==='file:'){
-    el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 API 加载失败。</span>file:// 直开发不出 Referer，请改为 http 访问。已降级为网架清单。';
+    el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 API 加载失败。</span>当前为离线包（file://）环境，请依次检查：①设备网络能否访问 api.tianditu.gov.cn（关闭飞行模式/代理）；②密钥是否有效（可在天地图开放平台「我的应用」核对）；③仍失败时点上方「拓扑图」使用内置底图。已降级为网架清单。';
     return;
   }
   if(!tdAttempted){ tkFailShow(el, tdFailKind, false); return; }  // 本次未发新请求：沿用上次诊断，不额外探测
@@ -2935,7 +3506,7 @@ function tkFailDiagnose(el){
   let probe;
   try{ probe=fetch('https://api.tianditu.gov.cn/api?v=4.0',{mode:'no-cors'}); }
   catch(e){ probe=Promise.reject(e); }
-  const done=k=>{ if(document.getElementById('tk-msg')===el) tkFailShow(el, k, true); };
+  const done=k=>{ if(document.getElementById('tk-msg')===el&&gen===tkMsgGen) tkFailShow(el, k, true); };
   probe.then(()=>{ tdFailKind='server'; tdCooldownUntil=Date.now()+TD_COOLDOWN_MS; done('server'); },()=>{ tdFailKind='net'; done('net'); });
 }
 function tkFailShow(el, kind, fresh){
@@ -3094,9 +3665,11 @@ function aiParse(text){
 }
 
 function renderAI(res){
-  // 推荐结果只对生成它的那次测算有效；参数变了就不再显示旧结果（错误与加载态照常显示）
+  // FR-4（PRD-体验问题修复）：推荐结果只对生成它的那次测算有效。参数变化后旧结果不再静默丢弃，
+  // 改为原位灰色失效提示 + 「重新推荐」按钮（点击按当前参数重跑）；错误与加载态行为不变。
   const raw=state._ai||{};
-  const ai=(raw.result && raw.res!==res) ? {} : raw;
+  const stale=!!(raw.result && raw.res!==res);
+  const ai=stale?{}:raw;
   const feasible=res.rows.filter(r=>r.feasible).length;
   const preset=AI_PRESETS[aiState.provider]||AI_PRESETS.custom;
   let out=`<div class="card tight ai">
@@ -3118,6 +3691,7 @@ function renderAI(res){
       <label class="f"><span>API Key</span><input id="i-ai-key" type="password" value="${esc(aiState.key)}" placeholder="sk-…" autocomplete="off" oninput="aiField('key',this.value)"></label>
       <p class="note" style="margin-top:2px">密钥只保存在本机浏览器，不会写入本站点或构建产物。浏览器直接调用服务商接口（OpenAI 兼容的 chat/completions），服务商须允许跨域；DeepSeek 已验证可用。</p>
     </div>`;
+  if(stale) out+=`<div style="display:flex;align-items:center;gap:10px;margin:10px 0 0;background:var(--gray-bg);border-radius:9px;padding:9px 11px;font-size:11.5px;color:var(--ink2);line-height:1.55"><span style="flex:1">参数已变化，原推荐已失效。</span><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;flex:none" onclick="aiRun()">重新推荐</button></div>`;
   if(ai.error) out+=`<div class="warn bad" style="margin:10px 0 0">${esc(ai.error)}</div>`;
   if(ai.loading) out+=`<div class="ai-loading">已把 ${Math.min(feasible,AI_MAX_ROUTES)} 条参考路线与你的要求发给 ${esc(aiState.model)}，通常需要 10～40 秒…</div>`;
   if(ai.result){
@@ -3150,6 +3724,7 @@ function go(t){
 }
 document.addEventListener('change',e=>{
   const id=e.target.id;
+  if(id==='i-mapnet'){ state.mapNet=e.target.checked?'dim':'off'; saveMap(); renderMap(); return; }  // spec: grid-map 全网架开关
   if(id==='i-from'||id==='i-to'){
     const isFrom=(id==='i-from');
     if(isFrom) state.from=e.target.value; else state.to=e.target.value;
@@ -3185,8 +3760,15 @@ document.addEventListener('change',e=>{
   if(['i-capprov','i-captier','i-capval','i-capqty'].indexOf(id)>=0){
     if(id==='i-capprov'){ state.capProv=e.target.value; state.capTier=null; }
     if(id==='i-captier') state.capTier=e.target.value;
-    if(id==='i-capval'){ const v=parseFloat(e.target.value); state.capValue=v>0?v:0; }
-    if(id==='i-capqty'){ const v=parseFloat(e.target.value); state.capQty=v>0?v:0; }
+    if(id==='i-capval'||id==='i-capqty'){
+      // FR-1：容量/需量 ≤ 1e6 kVA(kW)、年用电量 ≤ 1e7 MWh，超上限钳制 + 红框红字；
+      // 0/负数回落 0 沿用旧口径
+      const lim=id==='i-capval'?NUM_LIMITS.capacity:NUM_LIMITS.annualQty;
+      let v=sanNum(e.target.value,lim);
+      if(!(v>0)) v=0;
+      clampRegister(e.target,e.target.value,lim);
+      if(id==='i-capval') state.capValue=v; else state.capQty=v;
+    }
     saveLast(); renderCalc();
   }
 });
@@ -3195,11 +3777,81 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeParams(); });
 if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>closeParams(true));
 loadStored();
 aiLoad();          // 智能推荐的服务商 / 密钥 / 上次输入（独立存储，不随 state 持久化）
+applyDeepLink();   // 批次 A·状态深链：hash 携带的 from/to/sel 优先于 LS_LAST（只覆盖这三个输入态）
 if(!Object.keys(PV).includes(state.from)) state.from='SC';
 if(!Object.keys(PV).includes(state.to)) state.to='JS';
 applyBothProv();   // 启动时一律按核定值预填
 state._res=solveState();
+if(state._res&&state._res.rows&&state.sel>=state._res.rows.length) state.sel=0;   // 深链越界 sel 收敛到合法范围
 renderCalc();
+
+/* ---------- 批次 A·状态深链（change: grid-map-p1-and-ux-fixes）----------
+   #from=SC&to=JS&sel=2 —— 用 hash 而非 query：file://（APK）与托管环境均可用，不发起网络请求。
+   只恢复 from/to/sel 三个输入态（spec：不得覆盖输入偏好以外的持久化数据）；
+   参数缺失或非法时按默认状态打开，不报错。恢复后清掉 hash，刷新/后退不重复解释。 */
+function applyDeepLink(){
+  try{
+    if(typeof location==='undefined'||!location.hash||location.hash.length<2) return;
+    const p={};
+    location.hash.slice(1).split('&').forEach(kv=>{
+      const i=kv.indexOf('=');
+      if(i>0) p[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1));
+    });
+    const pv=Object.keys(PV);
+    if(p.from&&pv.includes(p.from)) state.from=p.from;
+    if(p.to&&pv.includes(p.to)&&p.to!==state.from) state.to=p.to;
+    if(p.sel&&/^\d+$/.test(p.sel)) state.sel=+p.sel;
+    try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  }catch(e){}
+}
+
+/* ---------- FR-3（PRD-体验问题修复）：新手导览与帮助入口 ----------
+   「安装后本机第一次运行」= LS_GUIDE 不存在（结束进程重开不重弹，清应用数据才重置）。
+   任意步骤可一键跳过，走完与跳过同等写键；卡片无遮罩、不阻塞测算主流程（验收 AC3）。 */
+const GUIDE_STEPS=[
+  {t:'三个页签，各管一件事',b:'<b>测算</b>：选起止省跑路径比选，逐层拆解费用；<br><b>网架图</b>：在地图上看路线走向与通道；<br><b>费率库</b>：查全部价格参数与原文出处。'},
+  {t:'最短测算路径',b:'选好<b>出发地 / 目的地</b>即自动出结果。顶部可按<b>通道</b>筛选，点路线卡片切换方案，费用口径在「参数」面板里调。'},
+  {t:'算一笔容量电费',b:'测算页底部的<b>「容量电费测算」</b>折叠卡是独立小工具：输入容量（kVA）或需量（kW）与年用电量，即得年费用与度电分摊。'},
+  {t:'底图与密钥',b:'网架图默认<b>内置拓扑图</b>，离线可用；想用天地图底图，在「网架图 → 天地图」粘贴你自己的密钥（tk），仅存本机、代码不内置任何密钥。'},
+];
+let _guideStep=0;
+function guideStart(){
+  _guideStep=0;
+  let ov=document.getElementById('guide-box');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='guide-box';
+    // 全视口容器 + pointer-events:none：卡片可点、页面其余区域照常可操作（AC3 不阻塞），
+    // 容器自身有几何尺寸，自动化可见性判定也不会误判为隐藏
+    ov.style.cssText='position:fixed;inset:0;z-index:3200;pointer-events:none';
+    document.body.appendChild(ov);
+  }
+  guideRender();
+}
+function guideRender(){
+  const ov=document.getElementById('guide-box'); if(!ov) return;
+  const st=GUIDE_STEPS[_guideStep], last=_guideStep===GUIDE_STEPS.length-1;
+  ov.innerHTML=`<div role="dialog" aria-label="新手导览" style="pointer-events:auto;position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;background:var(--card);border:.5px solid var(--line);border-radius:14px;box-shadow:0 10px 34px rgba(0,0,0,.18);padding:14px 15px 12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <b style="font-size:13.5px">${esc(st.t)}</b>
+      <span style="margin-left:auto;font-size:10.5px;color:var(--ink3);white-space:nowrap">${_guideStep+1} / ${GUIDE_STEPS.length}</span>
+    </div>
+    <div style="font-size:12.5px;color:var(--ink2);line-height:1.75">${st.b}</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn ghost" style="width:auto;padding:8px 14px;font-size:12px" onclick="guideDone()">跳过导览</button>
+      <button class="btn" style="width:auto;flex:1;padding:8px;font-size:13px" onclick="guideNext()">${last?'完成':'下一步'}</button>
+    </div>
+  </div>`;
+}
+function guideNext(){
+  if(_guideStep>=GUIDE_STEPS.length-1){ guideDone(); return; }
+  _guideStep++; guideRender();
+}
+function guideDone(){
+  try{ localStorage.setItem(LS_GUIDE,'1'); }catch(e){}
+  const ov=document.getElementById('guide-box'); if(ov) ov.remove();
+}
+/* 首启判定与触发：延后一拍，让首页先完成首绘再弹 */
+try{ if(!localStorage.getItem(LS_GUIDE)) setTimeout(guideStart,400); }catch(e){}
 </script>
 </body>
 </html>

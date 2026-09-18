@@ -26,7 +26,9 @@ let state={
   // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
   mustHave:[],
-  mapProvider:'svg', tiandituKey:''
+  mapProvider:'svg', tiandituKey:'', mapNet:'dim',   // mapNet：全网架层显示模式 'dim'=弱化显示 / 'off'=隐藏（spec: grid-map 分层）
+  // 批次 B（grid-map P1）会话内视图状态，不入档（saveLast 剥离）：mapSec=断面高亮选择、mapQ=搜索词、mapFocusLL=搜索聚焦包围盒（度）、mapRegion=按区域着色
+  mapSec:null, mapQ:'', mapFocusLL:null, mapRegion:false
 };
 let stored=null;
 /* 应用内确认框：原生 confirm() 在安卓 WebView（壳未设 WebChromeClient）与 iOS WKWebView
@@ -100,6 +102,15 @@ function loadStored(){
       delete s._pdv;
       Object.assign(state,s);
       state._stalePrice=!sameBuild;
+      // FR-1 边界：FR-1 之前的旧存档没有上限钳制，恢复时统一钳一次，
+      // 保证"杀进程重开后输入为合法值"对历史存档同样成立（PRD AC3）
+      state.pGen=sanNum(state.pGen,NUM_LIMITS.quote);
+      state.pNet=sanNum(state.pNet,NUM_LIMITS.quote);
+      state.fund=sanNum(state.fund,NUM_LIMITS.quote);
+      state.qty=sanNum(state.qty,NUM_LIMITS.qty); if(!(state.qty>0)) state.qty=NUM_LIMITS.qty.fallback;
+      state.hours=sanNum(state.hours,NUM_LIMITS.hours); if(!(state.hours>0)) state.hours=NUM_LIMITS.hours.fallback;
+      state.capValue=sanNum(state.capValue,NUM_LIMITS.capacity); if(!(state.capValue>0)) state.capValue=0;
+      state.capQty=sanNum(state.capQty,NUM_LIMITS.annualQty); if(!(state.capQty>0)) state.capQty=0;
     }
     const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
   }catch(e){}
@@ -114,7 +125,8 @@ function saveLast(){
     const s=Object.assign({},state,{_bt:BUILD_TIME,_pdv:PARAM_DEFAULTS_VER});
     delete s.tradableOnly; delete s.occPct; delete s.tradeDate;
     delete s._res; delete s._ai; delete s._libStale; delete s._stalePrice;
+    delete s.mapSec; delete s.mapQ; delete s.mapFocusLL; delete s.mapRegion;   // 会话内视图状态不入档
     localStorage.setItem(LS_LAST,JSON.stringify(s));
   }catch(e){ _storageBroken=true; }
 }
-function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){ _storageBroken=true; } }
+function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey,mapNet:state.mapNet}));}catch(e){ _storageBroken=true; } }

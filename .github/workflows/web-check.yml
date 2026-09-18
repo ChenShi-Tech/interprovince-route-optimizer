@@ -21,7 +21,7 @@ jobs:
       - name: 算法模块测试
         run: node tools/test-modules.mjs
 
-      - name: 回归基线校验（须 693/693）
+      - name: 回归基线校验（以实跑输出为准）
         run: node tools/baseline-check.mjs
 
       - name: 双端数据一致性

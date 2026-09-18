@@ -3,6 +3,38 @@
 let libTab='ch';
 function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderLibList(); restoreDetails(b,s); } }
 function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderPvList(); restoreDetails(b,s); } }
+/* FR-5（PRD-体验问题修复）：容量/需量电价分区。数据源 DATA.CAP（1077号附件1 两部制月单价，
+   全部带来源字段），供独立查验任一省任一档单价；与容量电费测算器取值同源一致。 */
+function capSearch(v){ state.capQ=v; const b=document.getElementById('cap-list'); if(b) b.innerHTML=renderCapList(); }
+function capProvinces(){ return Object.keys(CAP).filter(k=>!k.startsWith('_')); }
+function renderCapList(){
+  const q=(state.capQ||'').trim().toLowerCase();
+  const flt=state.capFilter||'all';
+  const ids=capProvinces().filter(k=>{
+    const e=CAP[k], capT=e.容量电价||[], dmT=e.需量电价||[];
+    if(flt==='noCapQ'&&capT.length) return false;    // 缺容量价
+    if(flt==='noDmQ'&&dmT.length) return false;      // 缺需量价
+    if(!q) return true;
+    const hay=k+' '+(e.省||'')+' '+(e.来源||'')+' '+[].concat(capT,dmT).map(t=>t.档别||'').join(' ');
+    return hay.toLowerCase().includes(q);
+  });
+  if(!ids.length) return '<p class="note">没有匹配的省份，试试其它关键词。</p>';
+  return '<div class="libcount">匹配 '+ids.length+' 省 · 单位：容量 元/千伏安·月，需量 元/千瓦·月</div>'+ids.map(k=>{
+    const e=CAP[k], capT=e.容量电价||[], dmT=e.需量电价||[];
+    const tiers=[];
+    capT.forEach(t=>{ if(!tiers.includes(t.档别)) tiers.push(t.档别); });
+    dmT.forEach(t=>{ if(!tiers.includes(t.档别)) tiers.push(t.档别); });
+    return `<div style="margin-bottom:12px">
+      <div class="lib-nm"><span>${esc(e.省||k)}　<span class="tier gov">已核实</span></span><em>${capT.length} 档容量 / ${dmT.length} 档需量</em></div>
+      <table><tr><th style="width:38%">档别</th><th>容量电价</th><th>需量电价</th></tr>
+      ${tiers.map(d=>{
+        const c=capT.find(t=>t.档别===d), m=dmT.find(t=>t.档别===d);
+        return `<tr><td>${esc(d)}</td><td>${c&&c.价!=null?fmt(c.价):'—'}</td><td>${m&&m.价!=null?fmt(m.价):'—'}</td></tr>`;
+      }).join('')}</table>
+      <div class="lib-src">来源：${esc(e.来源||'—')}</div>
+    </div>`;
+  }).join('');
+}
 function renderPvList(){
   const q=(state.pvQ||'').trim().toLowerCase();
   const ids=Object.keys(PV).filter(k=>{
@@ -107,6 +139,7 @@ function renderLib(){
     <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
     <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
     <button class="${libTab==='sec'?'on':''}" onclick="libTab='sec';renderLib()">断面 (${SEC.length})</button>
+    <button class="${libTab==='cap'?'on':''}" onclick="libTab='cap';renderLib()">容量电价 (${capProvinces().length})</button>
   </div>`;
 
   if(libTab==='ch'){
@@ -124,6 +157,17 @@ function renderLib(){
       <div class="sec-title">省级参数<span class="hint">共 ${Object.keys(PV).length} 省 · 元/MWh</span></div>
       <input id="pv-q" type="search" placeholder="搜索省份 / 文号 / 来源…" value="${esc(state.pvQ||'')}" oninput="pvSearch(this.value)" style="margin-bottom:8px">
       <div id="pv-list">${renderPvList()}</div>
+    </div>`;
+  } else if(libTab==='cap'){
+    out+=`<div class="card tight">
+      <div class="sec-title">容量/需量电价<span class="hint">两部制 · 发改价格〔2020〕1077号附件1 口径</span></div>
+      <input id="cap-q" type="search" placeholder="搜索省份 / 档别 / 来源…" value="${esc(state.capQ||'')}" oninput="capSearch(this.value)" style="margin-bottom:8px">
+      <div class="seg small" style="flex-wrap:wrap">
+        ${[['all','全部'],['noCapQ','缺容量价'],['noDmQ','缺需量价']].map(([k,t])=>
+          `<button class="${(state.capFilter||'all')===k?'on':''}" onclick="state.capFilter='${k}';renderLib()">${t}</button>`).join('')}
+      </div>
+      <div id="cap-list">${renderCapList()}</div>
+      <p class="note">与测算页「容量电费测算」取值同源一致；西藏暂无数据（源文件未收录），个别省存在单侧缺项，可用上方筛选项定位。</p>
     </div>`;
   } else {
     out+=`<div class="card tight"><div class="sec-title">输电断面<span class="hint">公开报道/文献值</span></div><div class="libgrid">`;

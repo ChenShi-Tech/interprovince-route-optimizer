@@ -127,7 +127,7 @@ tools/                            构建、发版、测试与审计脚本
 ## 验证
 
 ```bash
-node tools/baseline-check.mjs    # 1764/1764 通过才算完成
+node tools/baseline-check.mjs    # 回归基线校验，以命令实跑输出为准（数据补录会使项数变化，不写死计数）
 node tools/baseline2.mjs         # 重新生成基线 + 渲染冒烟测试 + 底图合规检查
 ```
 
