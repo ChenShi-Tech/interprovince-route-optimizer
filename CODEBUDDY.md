@@ -23,20 +23,22 @@ This file provides guidance to CodeBuddy Code when working with code in this rep
 # 构建：src/ + data/ → index.html（自包含）+ shared/app-data.json(.min)
 node tools/build.mjs
 
-# 算法回归基线，必须 1574/1574 通过
+# 算法回归基线，必须 989/989 通过
 node tools/baseline-check.mjs
 
 # 重新生成基线 + 渲染冒烟测试 + 底图合规检查（改了费率/通道数据后必须先跑这个）
 node tools/baseline2.mjs
 
-# 一键发版：构建 → 5 组测试 → 提交 → 推送（任一测试不过即中止）
+# 一键发版：构建 → 7 组测试 → 提交 → 推送（任一测试不过即中止）
 node tools/release.mjs "提交信息"
 node tools/release.mjs "提交信息" --no-push     # 只到提交为止
 
-# 5 组测试可单独跑
+# 发版必跑的 7 组测试，可单独跑
 node tools/test-modules.mjs        # 模块结构 + 算法层纯度守卫
 node tools/test-data-share.mjs     # Web 与安卓端数据一致性
-node tools/baseline-check.mjs      # 算法回归基线 1574 条
+node tools/baseline-check.mjs      # 算法回归基线 989 条
+node tools/test-model-audit.mjs    # 全模型独立公式与适用期
+node tools/test-regional-billing.mjs # 全国区域计费回归
 node tools/test-prefill.mjs        # 受端参数预填行为
 node tools/test-interaction.mjs    # 交互与计价口径回归
 
@@ -170,7 +172,7 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 1. **不得编造费率数值。** 找不到就写 `null` 并在文档里记录已检索路径。这条高于一切——一个编造的费率比一个缺失的费率危害大得多。容量同理：ATC 我国不公开，宁可标「未获取」也不编系数。
 2. **价格数据只有一处来源**：`data/fixed-prices.json`。改价格只改这个文件，然后 `node tools/build.mjs`。
 3. **费率必须分档标注来源**，不得把报备价与发改委核定价混为一谈。2024 年后新投运的金永、中衡、坤渝、庆东、宝合与吉泉、昭沂目前只有国网报备价（昭沂的还有被追溯清算的可能）。
-4. **改动算法后必须跑基线**，`1574/1574` 通过才算完成。
+4. **改动算法后必须跑基线**，`989/989` 通过才算完成。
 5. **新功能开发必须开新 worktree + 新分支**，不在 `main` 工作区直接改。`git worktree add .worktrees/<名字> -b feat/<名字>`（`.worktrees/` 已在 `.gitignore`），做完合回 `main` 再发版。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs:22` 把分支写死为 `main`，会把未合并的改动直接推到远端。详见 `docs/开发约定与操作手册.md` 纪律 5。
 
 ## 底图与合规
@@ -186,7 +188,7 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 
 ## 推送机制（为什么不用 git push）
 
-本机所有流量走本地代理（`127.0.0.1:60205`），该代理放行 `api.github.com`，但对 `github.com` 返回 502。**`git push` / `git pull` / `git ls-remote` 均不可用**，`gh` CLI 正常。因此推送走 GitHub Git Data API，脚本在 `tools/push-github.mjs`。
+早期本机代理对 `github.com` 返回 502，`git push/pull/ls-remote` 都不可用，只能走 API。**2026-07-16 起代理已放行，git 原生命令可直接使用**（2026-09-18 实测 `fetch`/`pull --rebase`/`ls-remote` 正常）。`tools/push-github.mjs` 仍保留并用于 `release.mjs`，走 GitHub Git Data API。
 
 - 它用 `base_tree` **在远端现有树上叠加本地文件**，而不是用本地文件重建整棵树——后者会在多会话并行时删掉别人推送的内容（2026-09-14 真实发生过，误删 18 个文件）
 - **改文件名 = 新增 + 遗留旧文件**。`base_tree` 会保留远端旧名文件形成重复；确认新旧 blob sha 相同后用 `--allow-delete` 清理
@@ -203,7 +205,7 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 
 ## 当前状态与已知缺口
 
-已验证：回归基线 1574/1574；**31 个省**输配电价 + **91 条通道**全部有来源文号；一手原件归档在 `docs/原始文件/`（S01～S34，可离线核对）。2026-09-17 完成全网通道覆盖核对与补录，见 `docs/gaps.md` 末节。
+已验证：回归基线 989/989；**31 个省**输配电价 + **91 条通道**全部有来源文号；一手原件归档在 `docs/原始文件/`（S01～S34，可离线核对）。2026-09-17 完成全网通道覆盖核对与补录，见 `docs/gaps.md` 末节。
 
 **已知缺口（不要假装它们不存在）**：
 
@@ -245,6 +247,7 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 
 | 文档 | 内容 |
 |---|---|
+| `CLAUDE.md` | ★ 本文件的精简孪生版（Claude Code 入口），事实性内容两边须同步 |
 | `docs/开发约定与操作手册.md` | ★ 接手必读：纪律、踩坑清单、推送机制、缺口 |
 | `docs/10-跨省交易费用计算教程.md`（含 PDF） | ★ 业务侧必读：中长期七层费用与统一公式、现货折算与出清，含可复算算例 |
 | `docs/03-数据接口说明.md` | ★ Web/端侧共用的数据契约、算法公式、字段 TypeScript 定义 |
@@ -255,6 +258,6 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 | `docs/改进计划.md` | 未实现想法与依据 |
 | `docs/01-安卓开发框架.md` / `android/README.md` | 安卓路线、工具链、真机验收要点 |
 | `ios/README.md` / `ios/ROADMAP.md` | iOS 路线选择（WKWebView 壳先行 / SwiftUI 主力）与阶段计划 |
-| `docs/regression-baseline-v2.json` | 473 个省对 / 1764 条路线的数值基线（iOS/RN 也必须对它跑） |
+| `docs/regression-baseline-v2.json` | 426 个省对的数值基线（iOS/RN 也必须对它跑） |
 
 区域价不含线损。区域损耗提供缺项/历史/手填情景，历史率当前适用性尚未核实。
