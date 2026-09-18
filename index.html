@@ -3,12 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<!-- theme-color 是浏览器 / 系统状态栏色，只能写字面值（不认 CSS 变量）：这里是清晰浅色的初值。
+     紧跟在样式表后面的内联脚本在首帧前就按当前主题的 --system-bar 改写；启动后 ui/theme.js 的 syncSystemBars() 再同步一次 -->
 <meta name="theme-color" content="#ffffff">
 <title>省间中长期交付成本与报价测算</title>
 <script>
 /* 全局错误兜底（spec: runtime-error-feedback）：head 最先安装，先于腾讯地图脚本，
    捕获启动期第三方脚本错误。提示按消息去重并计数（上限 4 条）；不吞错误——
-   onerror 返回 false、rejection 不 preventDefault，控制台照常留痕。 */
+   onerror 返回 false、rejection 不 preventDefault，控制台照常留痕。
+   配色写成 var(--令牌,字面兜底)：本脚本可能早于样式表生效就被触发（启动期第三方脚本报错），
+   兜底值与 src/tokens.css 同值，样式就绪后自动跟随主题。 */
 (function(){
   var items={}, order=[];
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -17,12 +21,12 @@
     var box=document.getElementById('gerr-box');
     if(!order.length){ if(box) box.remove(); return; }
     if(!box){ box=document.createElement('div'); box.id='gerr-box';
-      box.style.cssText='position:fixed;left:10px;right:10px;bottom:64px;z-index:3900;display:flex;flex-direction:column;gap:6px';
+      box.style.cssText='position:fixed;left:10px;right:10px;bottom:64px;z-index:var(--z-toast,3900);display:flex;flex-direction:column;gap:6px';
       document.body.appendChild(box); }
     box.innerHTML=order.map(function(k){
-      return '<div style="background:#FCEBEB;color:#A32D2D;border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.55;box-shadow:0 4px 14px rgba(0,0,0,.14);display:flex;gap:8px;align-items:flex-start">'
+      return '<div style="background:var(--red-bg,#FCEBEB);color:var(--red,#A32D2D);border-radius:var(--radius-btn,10px);padding:8px 10px;font-size:11.5px;line-height:1.55;box-shadow:var(--shadow-toast,0 4px 14px rgba(0,0,0,.14));display:flex;gap:8px;align-items:flex-start">'
         +'<div style="flex:1;word-break:break-all">⚠ 运行时错误'+(items[k]>1?' ×'+items[k]:'')+'：<code>'+esc(k)+'</code></div>'
-        +'<button data-gerr-close style="border:0;background:rgba(163,45,45,.12);color:#A32D2D;border-radius:6px;padding:3px 8px;font-size:11px;flex:none;cursor:pointer">关闭</button></div>';
+        +'<button data-gerr-close style="border:0;background:var(--toast-close-bg,rgba(163,45,45,.12));color:var(--red,#A32D2D);border-radius:var(--radius-inline,6px);padding:3px 8px;font-size:11px;flex:none;cursor:pointer">关闭</button></div>';
     }).join('');
   }
   function report(m){
@@ -36,6 +40,21 @@
   document.addEventListener('click',function(ev){
     if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
   });
+})();
+</script>
+<script>
+/* 外观主题首帧设定（防首屏闪白）：先于样式表与应用脚本，按本机外观偏好算出 data-theme 设到 <html>。
+   存储键 'iproute.v2.ui' 与 src/app/config.js 的 LS_UI 同名——这里在应用脚本之前执行、引用不到 config.js，
+   只能写字面串，改名须两处同步；取值规则与 ui/theme.js 的 resolveTheme() 一致（科技固定深色；
+   清晰按明暗，跟随系统时看 prefers-color-scheme）。存储不可用或内容损坏时静默回退默认（清晰 · 跟随系统）。 */
+(function(){
+  var style='clear', mode='system', dark=false;
+  try{
+    var o=JSON.parse(localStorage.getItem('iproute.v2.ui')||'null');
+    if(o&&typeof o==='object'){ if(o.style==='tech') style='tech'; if(o.mode==='light'||o.mode==='dark') mode=o.mode; }
+  }catch(e){}
+  try{ dark=mode==='dark'||(mode==='system'&&!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)); }catch(e){}
+  document.documentElement.setAttribute('data-theme',style==='tech'?'tech':(dark?'clear-dark':'clear'));
 })();
 </script>
 <script type="text/javascript">
@@ -66,28 +85,332 @@ window._TMapSecurityConfig = {
      只有 src 被真正赋值时才发起请求；defer 作为兜底——万一被改回静态 src 也不会阻塞解析。 -->
 <script id="tmap-sdk" defer data-src="https://map.qq.com/api/gljs?v=1.exp"></script>
 <style>
+/* 设计令牌（:root 变量）由构建脚本从 src/tokens.css 注入到下一行；本样式表只引用 var(--x)，不写颜色 / 圆角字面值 */
 :root{
-  --ink:#1F2328; --ink2:#5F5E5A; --ink3:#8A8A85;
-  --line:rgba(0,0,0,.10); --line2:rgba(0,0,0,.06);
-  --bg:#F4F5F7; --card:#FFFFFF;
-  --blue:#185FA5; --blue-bg:#E6F1FB; --blue-ink:#0C447C;
-  --teal:#0F6E56; --teal-bg:#E1F5EE;
-  --amber:#854F0B; --amber-bg:#FAEEDA;
-  --coral:#993C1D; --coral-bg:#FAECE7;
-  --gray:#5F5E5A; --gray-bg:#F1EFE8;
-  --red:#A32D2D; --red-bg:#FCEBEB;
+  --ink:#1F2328;
+  --ink2:#5F5E5A;
+  --ink3:#6D6D68;
+  --line:rgba(0,0,0,.10);
+  --line2:rgba(0,0,0,.06);
+  --bg:#F4F5F7;
+  --card:#FFFFFF;
+  --blue:#185FA5;
+  --blue-bg:#E6F1FB;
+  --blue-ink:#0C447C;
+  --teal:#0F6E56;
+  --teal-bg:#E1F5EE;
+  --amber:#854F0B;
+  --amber-bg:#FAEEDA;
+  --coral:#993C1D;
+  --coral-bg:#FAECE7;
+  --gray:#5F5E5A;
+  --gray-bg:#F1EFE8;
+  --red:#A32D2D;
+  --red-bg:#FCEBEB;
+  --on-fill:#FFFFFF;
+  --field-bg:#FFFFFF;
+  --field-border:rgba(0,0,0,.42);
+  --ghost-border:rgba(24,95,165,.35);
+  --hero-field-border:rgba(24,95,165,.45);
+  --header-glass:rgba(255,255,255,.94);
+  --nav-glass:rgba(255,255,255,.96);
+  --scrim:rgba(20,24,32,.42);
+  --tooltip-bg:rgba(31,35,40,.94);
+  --tooltip-ink:#FFFFFF;
+  --sheet-grab:rgba(0,0,0,.15);
+  --explain-bg:#FCFCFB;
+  --issue-accent:#EF9F27;
+  --timeline-line:#85B7EB;
+  --region-line:#70B8AC;
+  --region-border:#CEE5DF;
+  --region-bg:#F5FAF8;
+  --region-dash:#8FC3B5;
+  --region-arrow:#5E9E90;
+  --region-card-border:#DEEBE6;
+  --error-text:#B3261E;
+  --toast-close-bg:rgba(163,45,45,.12);
+  --seg-divider:rgba(0,0,0,.07);
+  --scrim-dialog:rgba(20,24,32,.45);
+  --snapshot-caption:rgba(0,0,0,.55);
+  --system-bar:#FFFFFF;
+  --chart-gen:var(--blue);
+  --chart-origin-loss:#378ADD;
+  --chart-send:#85B7EB;
+  --chart-trans:#EF9F27;
+  --chart-reg:#5DCAA5;
+  --chart-loss:#F0997B;
+  --chart-in-loss:#AFA9EC;
+  --chart-net:#B4B2A9;
+  --chart-fund:#D3D1C7;
+  --chart-cap:#8E8AD6;
+  --chart-sys-op:#7FA7A0;
+  --map-route:var(--blue);
+  --map-alt:#EF9F27;
+  --map-base:#C9C8C3;
+  --map-edge:#D3D1C7;
+  --map-node:#B4B2A9;
+  --map-end:var(--teal);
+  --map-label:#9A9A95;
+  --map-label-on:var(--blue-ink);
+  --map-ground:#F7F8FA;
+  --map-fallback:#EDEFEF;
+  --map-casing:#FFFFFF;
+  --map-dot-base:var(--ink3);
+  --map-section:var(--coral);
+  --map-region-1:var(--blue);
+  --map-region-2:var(--teal);
+  --map-region-3:#B0651A;
+  --map-region-4:var(--chart-cap);
+  --map-region-5:var(--coral);
+  --map-region-6:var(--chart-reg);
+  --map-region-7:var(--chart-sys-op);
+  --map-region-8:var(--amber);
+  --font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font-num:var(--font-sans);
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%236D6D68' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  --num-glow:none;
+  --page-pattern:none;
+  --card-highlight:none;
+  --hero-field-glow:none;
+  --focus-ring:0 0 0 3px rgba(24,95,165,.10);
+  --focus-ring-hero:0 0 0 4px rgba(24,95,165,.14);
+  --focus-ring-bar:0 0 0 2px #fff,0 0 0 3.5px rgba(31,35,40,.55);
+  --focus-ring-bad:0 0 0 3px rgba(163,45,45,.10);
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.18);
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.18);
+  --shadow-toast:0 4px 14px rgba(0,0,0,.14);
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.22);
+  --shadow-guide:0 10px 34px rgba(0,0,0,.18);
+  --space-4:4px;
+  --space-6:6px;
+  --space-8:8px;
+  --space-10:10px;
+  --space-12:12px;
+  --space-14:14px;
+  --space-16:16px;
+  --space-20:20px;
+  --space-24:24px;
+  --radius-sheet:16px;
   --r:12px;
+  --radius-btn:10px;
+  --radius-field:9px;
+  --radius-compact:8px;
+  --radius-mini:7px;
+  --radius-inline:6px;
+  --radius-tag:4px;
+  --radius-swatch:2px;
+  --radius-pill:999px;
+  --radius-dialog:14px;
+  --radius-bar:5px;
+  --radius-meter:3px;
+  --radius-line:1px;
+  --hairline:.5px;
+  --emphasis:1.5px;
+  --indicator:2px;
+  --issue-bar:3px;
+  --z-map:0;
+  --z-header:20;
+  --z-nav:3000;
+  --z-sheet:3500;
+  --z-toast:3900;
+  --app-width-phone:480px;
+  --sheet-width:400px;
+  --app-width-desktop:1320px;
+  --app-width-wide:1480px;
+  --col-side:348px;
+  --col-side-wide:360px;
+  --col-ai:340px;
+  --bp-fold:600px;
+  --bp-desktop:900px;
+  --bp-wide:1280px;
+}
+[data-theme="clear-dark"]{
+  color-scheme:dark;
+  --ink:#E8EAED;
+  --ink2:#B6BBC2;
+  --ink3:#959BA4;
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.07);
+  --bg:#121417;
+  --card:#1C1F24;
+  --blue:#5AA2F0;
+  --blue-bg:#17293E;
+  --blue-ink:#A3CDFF;
+  --teal:#4FCBA2;
+  --teal-bg:#132F28;
+  --amber:#E9B566;
+  --amber-bg:#35290F;
+  --coral:#F2977A;
+  --coral-bg:#3A2119;
+  --gray:#B6BBC2;
+  --gray-bg:#262A31;
+  --red:#F28B82;
+  --red-bg:#3B1D1D;
+  --on-fill:#0A1626;
+  --field-bg:#16191D;
+  --field-border:#666C75;
+  --ghost-border:rgba(90,162,240,.45);
+  --hero-field-border:rgba(90,162,240,.55);
+  --header-glass:rgba(28,31,36,.94);
+  --nav-glass:rgba(28,31,36,.96);
+  --scrim:rgba(0,0,0,.55);
+  --tooltip-bg:#E8EAED;
+  --tooltip-ink:#121417;
+  --sheet-grab:rgba(255,255,255,.22);
+  --explain-bg:#202329;
+  --issue-accent:#E9B566;
+  --timeline-line:#3F74AE;
+  --region-line:#3C8E7E;
+  --region-border:#27463F;
+  --region-bg:#172522;
+  --region-dash:#3F8474;
+  --region-arrow:#63B3A1;
+  --region-card-border:#2A3B37;
+  --error-text:#F28B82;
+  --toast-close-bg:rgba(242,139,130,.16);
+  --seg-divider:rgba(255,255,255,.09);
+  --scrim-dialog:rgba(0,0,0,.6);
+  --snapshot-caption:rgba(255,255,255,.6);
+  --system-bar:#1C1F24;
+  --chart-origin-loss:#9BC6F7;
+  --chart-send:#3F74B0;
+  --chart-trans:#E9A23B;
+  --chart-reg:#4FCBA2;
+  --chart-loss:#EE8F6F;
+  --chart-in-loss:#A9A3EA;
+  --chart-net:#8E949C;
+  --chart-fund:#6B7178;
+  --chart-cap:#8E8AD6;
+  --chart-sys-op:#6FA59C;
+  --map-alt:#E9A23B;
+  --map-base:#5E646D;
+  --map-edge:#A0A7B1;
+  --map-node:#5E646D;
+  --map-label:#80868F;
+  --map-ground:#181B20;
+  --map-fallback:#1A1D22;
+  --map-casing:#181B20;
+  --map-region-3:#D08A45;
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%23959BA4' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  --focus-ring:0 0 0 3px rgba(90,162,240,.22);
+  --focus-ring-hero:0 0 0 4px rgba(90,162,240,.25);
+  --focus-ring-bar:0 0 0 2px #1C1F24,0 0 0 3.5px rgba(232,234,237,.6);
+  --focus-ring-bad:0 0 0 3px rgba(242,139,130,.2);
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.5);
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.5);
+  --shadow-toast:0 4px 14px rgba(0,0,0,.45);
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.55);
+  --shadow-guide:0 10px 34px rgba(0,0,0,.5);
+}
+[data-theme="tech"]{
+  color-scheme:dark;
+  --ink:#E6EDF7;
+  --ink2:#A9B8CD;
+  --ink3:#8698B2;
+  --line:rgba(96,165,250,.20);
+  --line2:rgba(96,165,250,.11);
+  --bg:#070E1A;
+  --card:#0D1728;
+  --blue:#2BC4F2;
+  --blue-bg:#0B2A3E;
+  --blue-ink:#8BE6FF;
+  --teal:#3DDC97;
+  --teal-bg:#0B2E26;
+  --amber:#F7B955;
+  --amber-bg:#33260D;
+  --coral:#FF8A65;
+  --coral-bg:#3A1C12;
+  --gray:#A9B8CD;
+  --gray-bg:#111F36;
+  --red:#FF7B7B;
+  --red-bg:#3A1419;
+  --on-fill:#04121F;
+  --field-bg:#08111F;
+  --field-border:#4A6891;
+  --ghost-border:rgba(43,196,242,.45);
+  --hero-field-border:rgba(43,196,242,.6);
+  --header-glass:rgba(7,14,26,.86);
+  --nav-glass:rgba(7,14,26,.94);
+  --scrim:rgba(2,6,14,.62);
+  --tooltip-bg:#E6EDF7;
+  --tooltip-ink:#070E1A;
+  --sheet-grab:rgba(139,230,255,.28);
+  --explain-bg:#0A1424;
+  --issue-accent:#F7B955;
+  --timeline-line:#2596C4;
+  --region-line:#2BA67A;
+  --region-border:#184A3C;
+  --region-bg:#0A211E;
+  --region-dash:#2E8F6C;
+  --region-arrow:#3DDC97;
+  --region-card-border:#153A31;
+  --error-text:#FF7B7B;
+  --toast-close-bg:rgba(255,123,123,.16);
+  --seg-divider:rgba(96,165,250,.16);
+  --scrim-dialog:rgba(2,6,14,.68);
+  --snapshot-caption:rgba(230,237,247,.6);
+  --system-bar:#070E1A;
+  --chart-origin-loss:#5B8CFF;
+  --chart-send:#9DB7FF;
+  --chart-trans:#F7B955;
+  --chart-reg:#3DDC97;
+  --chart-loss:#FF8A65;
+  --chart-in-loss:#B69CFF;
+  --chart-net:#7D8FAA;
+  --chart-fund:#52637D;
+  --chart-cap:#A48BFF;
+  --chart-sys-op:#5FC4B6;
+  --map-alt:#F7B955;
+  --map-base:#4A6891;
+  --map-edge:#7FA6D9;
+  --map-node:#3E5A80;
+  --map-label:#61728E;
+  --map-ground:#091324;
+  --map-fallback:#0B1628;
+  --map-casing:#091324;
+  --map-region-3:#FF9F43;
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238698B2' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  --num-glow:0 0 16px rgba(43,196,242,.45);
+  --page-pattern:repeating-linear-gradient(0deg,rgba(43,196,242,.055) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(43,196,242,.055) 0 1px,transparent 1px 24px);
+  --card-highlight:inset 0 1px 0 rgba(139,230,255,.07);
+  --hero-field-glow:0 0 0 1px rgba(43,196,242,.12),0 0 22px rgba(43,196,242,.14);
+  --focus-ring:0 0 0 3px rgba(43,196,242,.22);
+  --focus-ring-hero:0 0 0 1px rgba(43,196,242,.35),0 0 0 4px rgba(43,196,242,.18),0 0 26px rgba(43,196,242,.22);
+  --focus-ring-bar:0 0 0 2px #0D1728,0 0 0 3.5px rgba(139,230,255,.75);
+  --focus-ring-bad:0 0 0 3px rgba(255,123,123,.22);
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.6);
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.6);
+  --shadow-toast:0 4px 14px rgba(0,0,0,.5);
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.6);
+  --shadow-guide:0 10px 34px rgba(0,0,0,.55);
+  --font-num:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --hairline:1px;
+  --r:8px;
+  --radius-btn:6px;
+  --radius-field:6px;
+  --radius-compact:6px;
+  --radius-pill:3px;
+  --radius-tag:3px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
-body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
-#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--bg)}
-header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(12px);border-bottom:.5px solid var(--line);padding:12px 16px 10px}
+body{background:var(--bg);background-image:var(--page-pattern);color:var(--ink);font-family:var(--font-sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+/* #app 不再自铺底色：与 body 同为 --bg，去掉后像素不变；body 上的 --page-pattern（科技风格网格底纹）才透得出来 */
+#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+header{position:sticky;top:0;z-index:20;background:var(--header-glass);backdrop-filter:saturate(180%) blur(12px);border-bottom:var(--hairline) solid var(--line);padding:12px 16px 10px}
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
-h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
-.badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
+h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowrap}
+/* 页头右侧：状态徽标 + 外观 + 帮助。手机宽度放不下全部时，徽标先收缩成省略号，标题与两个按钮不换行、不缩 */
+.hd-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
+.badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* 要引起注意的状态（费率已本地修改，ui/lib.js 的 setVerBadge）：徽标挂 .mod，换蓝底、不收缩，放不下时由标题让位（截成省略号）。
+   不认 :has() 的老内核退回默认排布：徽标照旧截断，title 仍给全文 */
+.badge.mod{background:var(--blue-bg);color:var(--blue-ink)}
+.hd-top:has(.badge.mod) h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hd-top:has(.badge.mod) .hd-acts,.hd-top:has(.badge.mod) .badge{flex:none}
 /* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
-.help-link{border:.5px solid rgba(24,95,165,.35);background:#fff;color:var(--blue);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap}
+.help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 /* overflow-x 用 clip 而不是 hidden（M14）：hidden 会把计算值 overflow-y 变成 auto，main 随之
@@ -101,31 +424,32 @@ main{flex:1;padding:14px 16px 8px;overflow-x:clip}
    统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
 main section>:last-child,main section :last-child{margin-bottom:0}
 /* z-index 3000：地图图层（含 canvas/WebView 层叠上下文）不得盖住固定导航（底栏遮挡修复） */
-nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:var(--nav-glass);backdrop-filter:saturate(180%) blur(12px);border-top:var(--hairline) solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
-nav .ic{width:20px;height:20px;display:block}
+nav .ic{width:20px;height:20px;display:block;stroke:var(--ink3)}
 nav button.on .ic path,nav button.on .ic circle,nav button.on .ic rect{stroke:var(--blue)}
 /* REQ-307：页脚定位声明，三 Tab 共用。底部内边距 = 固定导航条高度(≈64px) + 4px 呼吸隙，
    含 safe-area 适配（与 nav 的 max(6px,env(safe-area-inset-bottom)) 对应） */
 .disclaim{padding:6px 16px calc(68px + env(safe-area-inset-bottom));text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6}
-.card{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card{background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px;box-shadow:var(--card-highlight)}
 .card.tight{padding:12px}
 .sec-title{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .sec-title .hint{font-size:11px;font-weight:400;color:var(--ink3)}
 label.f{display:block;margin-bottom:11px}
 label.f:last-child{margin-bottom:0}
 label.f span{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px}
-input,select,textarea{width:100%;font-family:inherit;font-size:14px;color:var(--ink);background:#fff;border:.5px solid rgba(0,0,0,.16);border-radius:9px;padding:9px 10px;appearance:none;outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(24,95,165,.10)}
+input,select,textarea{width:100%;font-family:inherit;font-size:14px;color:var(--ink);background:var(--field-bg);border:var(--hairline) solid var(--field-border);border-radius:var(--radius-field);padding:9px 10px;appearance:none;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:var(--focus-ring)}
 textarea{resize:vertical;min-height:64px;line-height:1.5;font-size:13px}
-select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
-input[type=number]{font-variant-numeric:tabular-nums}
+/* 下拉箭头是 data: URI 里的 SVG（箭头色写死在 URI 中、不认 CSS 变量），整条 url(...) 放在令牌 --select-chevron 里，各主题各写一条 */
+select{background-image:var(--select-chevron);background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+input[type=number]{font-variant-numeric:tabular-nums;font-family:var(--font-num)}
 input:disabled{cursor:not-allowed}
 /* FR-1（PRD-体验问题修复）三层防御之显示层与 CSS 兜底：
    超限输入红框 + 输入框下方红字提示（sanNum 钳制，修正后消失）；
    hero 大字与容量三卡对任意异常值不再破版（V3 原型实测三条规则即可消除溢出） */
-input.clamp-bad{border-color:var(--red);box-shadow:0 0 0 3px rgba(163,45,45,.10)}
+input.clamp-bad{border-color:var(--red);box-shadow:var(--focus-ring-bad)}
 .clamp-hint{color:var(--red);font-size:11px;line-height:1.5;margin-top:4px}
 .hero-v{overflow-wrap:anywhere}
 .g3>*{min-width:0}
@@ -137,7 +461,7 @@ input.clamp-bad{border-color:var(--red);box-shadow:0 0 0 3px rgba(163,45,45,.10)
 .tk-wrap input{padding-right:38px}
 .tk-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;
   border:0;background:none;cursor:pointer;padding:6px;color:var(--ink3);
-  display:flex;align-items:center;justify-content:center;border-radius:7px}
+  display:flex;align-items:center;justify-content:center;border-radius:var(--radius-mini)}
 .tk-eye:hover{background:var(--gray-bg);color:var(--ink2)}
 .tk-eye svg{width:18px;height:18px;display:block;pointer-events:none}
 /* 该字段在当前口径下不参与计算：置灰但保留在 DOM 中（readInputs 仍按 id 读取） */
@@ -149,10 +473,10 @@ label.f.off input{background:var(--gray-bg);color:var(--ink3)}
 .row2>label.f{display:flex;flex-direction:column;justify-content:flex-end;margin-bottom:0}
 .row2:has(>label.f){margin-bottom:11px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.btn{width:100%;font-family:inherit;font-size:15px;font-weight:600;color:#fff;background:var(--blue);border:0;border-radius:10px;padding:13px;cursor:pointer;letter-spacing:.2px}
+.btn{width:100%;font-family:inherit;font-size:15px;font-weight:600;color:var(--on-fill);background:var(--blue);border:0;border-radius:var(--radius-btn);padding:13px;cursor:pointer;letter-spacing:.2px}
 .btn:active{opacity:.85}
-.btn.ghost{background:#fff;color:var(--blue);border:.5px solid rgba(24,95,165,.35);font-weight:500;font-size:13px;padding:9px}
-details.adv{border-top:.5px solid var(--line2);margin-top:12px;padding-top:11px}
+.btn.ghost{background:var(--card);color:var(--blue);border:var(--hairline) solid var(--ghost-border);font-weight:500;font-size:13px;padding:9px}
+details.adv{border-top:var(--hairline) solid var(--line2);margin-top:12px;padding-top:11px}
 /* 只作用于本层 summary（子选择器）：后代选择器会让嵌套的 details.explain 随外层展开显示成「−」 */
 details.adv>summary{font-size:12px;color:var(--blue);cursor:pointer;list-style:none;font-weight:500}
 details.adv>summary::-webkit-details-marker{display:none}
@@ -162,38 +486,38 @@ details.adv .inner{padding-top:11px}
 .note{font-size:11.5px;color:var(--ink3);line-height:1.6;margin:8px 0 0}
 /* 长段说明文字的折叠容器：默认收起只留一行可点的标题，免得正文被注释淹没。
    与 details.adv（表单项的高级区）区分开：这个是纯阅读内容，所以用更轻的灰底细边。 */
-details.explain{margin:8px 0 9px;border:.5px solid var(--line2);border-radius:9px;background:#FCFCFB}
+details.explain{margin:8px 0 9px;border:var(--hairline) solid var(--line2);border-radius:var(--radius-field);background:var(--explain-bg)}
 details.explain>summary{font-size:11.5px;color:var(--blue);cursor:pointer;list-style:none;font-weight:500;padding:8px 11px;display:flex;align-items:center;gap:6px;line-height:1.5}
 details.explain>summary::-webkit-details-marker{display:none}
 details.explain>summary::before{content:"＋";font-weight:600;font-size:11px;flex:0 0 auto}
 details.explain[open]>summary::before{content:"－"}
-details.explain[open]>summary{border-bottom:.5px solid var(--line2)}
+details.explain[open]>summary{border-bottom:var(--hairline) solid var(--line2)}
 details.explain>summary em{font-style:normal;color:var(--ink3);font-weight:400;font-size:11px;margin-left:auto;white-space:nowrap}
 details.explain .inner{padding:9px 11px 10px}
 details.explain .note{margin:0}
 details.explain .note+.note{margin-top:7px}
 details.explain .note:last-child{margin-bottom:0}
-.warn{background:var(--amber-bg);color:var(--amber);font-size:11.5px;padding:9px 11px;border-radius:9px;line-height:1.55;margin-bottom:12px}
+.warn{background:var(--amber-bg);color:var(--amber);font-size:11.5px;padding:9px 11px;border-radius:var(--radius-field);line-height:1.55;margin-bottom:12px}
 .warn.ok{background:var(--teal-bg);color:var(--teal)}
 .warn.bad{background:var(--red-bg);color:var(--red)}
 .route-head{font-size:15px;font-weight:600;color:var(--blue-ink);word-break:break-all;line-height:1.4}
 .route-head .arw{color:var(--ink3);font-weight:400;margin:0 3px}
-.big{font-size:26px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.15}
+.big{font-size:26px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.15}
 .big .u{font-size:12px;font-weight:500;color:var(--ink3);margin-left:3px;letter-spacing:0}
-.rank{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
+.rank{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--radius-pill);background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
 .rank.g{background:var(--gray-bg);color:var(--gray)}
-.bar{display:flex;height:26px;border-radius:6px;overflow:hidden;margin:12px 0 9px;border:.5px solid var(--line2)}
+.bar{display:flex;height:26px;border-radius:var(--radius-inline);overflow:hidden;margin:12px 0 9px;border:var(--hairline) solid var(--line2)}
 .bar div{height:100%}
 .lg{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:var(--ink2)}
-.lg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
-.kv{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:.5px solid var(--line2);gap:10px}
+.lg i{display:inline-block;width:9px;height:9px;border-radius:var(--radius-swatch);margin-right:4px;vertical-align:middle}
+.kv{display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:var(--hairline) solid var(--line2);gap:10px}
 .kv:last-child{border-bottom:0}
-.kv b{font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.kv b{font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--font-num);text-align:right}
 .kv .m{color:var(--ink2);flex-shrink:0}
-.kv.tot{border-top:.5px solid var(--line);border-bottom:0;margin-top:4px;padding-top:8px;font-size:13.5px}
+.kv.tot{border-top:var(--hairline) solid var(--line);border-bottom:0;margin-top:4px;padding-top:8px;font-size:13.5px}
 .kv.tot b{color:var(--blue-ink);font-size:15px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
-.chip{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--gray-bg);color:var(--gray);font-weight:500}
+.chip{font-size:11px;padding:3px 9px;border-radius:var(--radius-pill);background:var(--gray-bg);color:var(--gray);font-weight:500}
 .chip.ok{background:var(--teal-bg);color:var(--teal)}
 .chip.bad{background:var(--red-bg);color:var(--red)}
 .chip.info{background:var(--blue-bg);color:var(--blue-ink)}
@@ -201,42 +525,42 @@ details.explain .note:last-child{margin-bottom:0}
 /* 通道下拉（单选）：选定具体通道时高亮，提示当前已按通道筛选 */
 .chan select.on{border-color:var(--blue);background-color:var(--blue-bg);color:var(--blue-ink)}
 table{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
-th,td{padding:6px 4px;text-align:right;border-bottom:.5px solid var(--line2);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+th,td{padding:6px 4px;text-align:right;border-bottom:var(--hairline) solid var(--line2);font-variant-numeric:tabular-nums;font-family:var(--font-num);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
 th{color:var(--ink3);font-weight:500;font-size:11px}
 td b{font-weight:600}
-.tier{display:inline-block;font-size:9.5px;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;margin-left:4px;white-space:nowrap}
+.tier{display:inline-block;font-size:10.5px;padding:1px 5px;border-radius:var(--radius-tag);font-weight:600;vertical-align:middle;margin-left:4px;white-space:nowrap}
 .tier.gov{background:var(--teal-bg);color:var(--teal)}
 .tier.grid{background:var(--blue-bg);color:var(--blue-ink)}
 .tier.region{background:var(--amber-bg);color:var(--amber)}
 .tier.est{background:var(--gray-bg);color:var(--ink3)}
-.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.7;word-break:break-all}
-.formula{background:var(--gray-bg);border-radius:9px;padding:10px 11px;margin-top:4px}
+.mono{font-family:var(--font-mono);font-size:11px;line-height:1.7;word-break:break-all}
+.formula{background:var(--gray-bg);border-radius:var(--radius-field);padding:10px 11px;margin-top:4px}
 .formula .mono{color:var(--ink)}
 .formula .txt{font-size:11px;color:var(--ink2);margin-top:5px;line-height:1.6}
-.lib-row{border-bottom:.5px solid var(--line2);padding:9px 0}
+.lib-row{border-bottom:var(--hairline) solid var(--line2);padding:9px 0}
 .lib-row:last-child{border-bottom:0}
 .lib-nm{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
-.lib-nm em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:999px;white-space:nowrap}
+.lib-nm em{font-style:normal;font-size:10.5px;font-weight:500;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:var(--radius-pill);white-space:nowrap}
 .lib-io{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:7px}
 .lib-io>div{display:flex;flex-direction:column;justify-content:flex-end}
 .lib-io label{font-size:10.5px;color:var(--ink3);display:block;margin-bottom:3px}
-.lib-io input{padding:6px 8px;font-size:12.5px;border-radius:7px}
+.lib-io input{padding:6px 8px;font-size:12.5px;border-radius:var(--radius-mini)}
 .lib-src{font-size:10.5px;color:var(--ink3);margin-top:6px;line-height:1.5}
 /* 费率库卡片（通道 / 省级参数）：lib.js 在所有宽度下都渲染 details.libcard，属移动端基础样式；
    .libgrid 手机单列，≥900px 两列（见桌面端适配） */
-.libcard{border:.5px solid var(--line);border-radius:10px;background:#fff;margin-bottom:7px;overflow:hidden}
+.libcard{border:var(--hairline) solid var(--line);border-radius:var(--radius-btn);background:var(--card);margin-bottom:7px;overflow:hidden}
 .libcard summary{list-style:none;cursor:pointer;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center}
 .libcard summary::-webkit-details-marker{display:none}
-.libcard[open] summary{border-bottom:.5px solid var(--line2);background:var(--gray-bg)}
+.libcard[open] summary{border-bottom:var(--hairline) solid var(--line2);background:var(--gray-bg)}
 .lc-n{font-size:13px;font-weight:600;grid-column:1;grid-row:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lc-tag{font-size:9.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:1px 5px;border-radius:4px;margin-left:5px}
-.lc-p{grid-column:2;grid-row:1/3;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;align-self:center}
-.lc-p small{font-size:9.5px;font-weight:500;color:var(--ink3);margin-left:1px}
+.lc-tag{font-size:10.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:1px 5px;border-radius:var(--radius-tag);margin-left:5px}
+.lc-p{grid-column:2;grid-row:1/3;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num);text-align:right;align-self:center}
+.lc-p small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:1px}
 .lc-m{grid-column:1;grid-row:2;font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lc-b{grid-column:1;grid-row:3}
 .lc-body{padding:11px 12px}
-.lc-kv{font-size:11px;color:var(--ink2);line-height:1.7;margin-top:9px;padding-top:8px;border-top:.5px solid var(--line2)}
+.lc-kv{font-size:11px;color:var(--ink2);line-height:1.7;margin-top:9px;padding-top:8px;border-top:var(--hairline) solid var(--line2)}
 .lc-kv span{display:inline-block;min-width:74px;color:var(--ink3)}
 .libcount{font-size:11px;color:var(--ink3);margin-bottom:7px}
 .libgrid{display:grid;grid-template-columns:minmax(0,1fr);align-items:start}
@@ -247,16 +571,16 @@ td b{font-weight:600}
   .lc-n{display:flex;flex-wrap:wrap;align-items:center;gap:3px 5px;white-space:normal;line-height:1.45}
   .lc-tag{margin-left:0;max-width:100%;line-height:1.35}
   .lc-m{white-space:normal;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
-  .lc-pre{display:block;font-size:10px;font-weight:500;color:var(--ink3)}
+  .lc-pre{display:block;font-size:10.5px;font-weight:500;color:var(--ink3)}
   .lc-kv>div{padding-left:74px;text-indent:-74px}
   .lc-kv span{text-indent:0}
   .lib-src{overflow-wrap:anywhere}   /* 来源里的长网址不会自然断行，卡片 overflow:hidden 下会被裁掉 */
 }
-.prow{display:grid;grid-template-columns:58px 1fr 1fr 1fr 44px;gap:6px;align-items:center;padding:5px 0;border-bottom:.5px solid var(--line2)}
+.prow{display:grid;grid-template-columns:58px 1fr 1fr 1fr 44px;gap:6px;align-items:center;padding:5px 0;border-bottom:var(--hairline) solid var(--line2)}
 .prow:first-of-type{font-size:10.5px;color:var(--ink3)}
 .prow .pn{font-size:12px;font-weight:500}
-.prow input{padding:5px 6px;font-size:12px;border-radius:6px}
-#map-view,#fallback{width:100%;height:calc(100vh - 290px);min-height:320px;border-radius:var(--r);overflow:hidden;background:#EDEFEF;border:.5px solid var(--line)}
+.prow input{padding:5px 6px;font-size:12px;border-radius:var(--radius-inline)}
+#map-view,#fallback{width:100%;height:calc(100vh - 290px);min-height:320px;border-radius:var(--r);overflow:hidden;background:var(--map-fallback);border:var(--hairline) solid var(--line)}
 /* 地图 API（天地图/腾讯）内部图层 z-index 高达 200~1000+：容器若不建立层叠上下文，
    这些图层会在根层叠环境里压过 z-index:30 的固定底栏（容器延伸到视口底时必现）。
    contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
@@ -268,119 +592,121 @@ td b{font-weight:600}
 .empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
 .empty-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px}
 .empty-acts .btn{width:auto;padding:9px 16px}
-.mc{background:var(--gray-bg);border-radius:9px;padding:8px 10px}
+.mc{background:var(--gray-bg);border-radius:var(--radius-field);padding:8px 10px}
 .mc .l{font-size:10.5px;color:var(--ink3);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mc .v{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
-.mc .v small{font-size:10px;font-weight:500;color:var(--ink3);margin-left:2px}
-.sub{font-size:11.5px;font-weight:600;color:var(--ink2);margin:15px 0 8px;padding-bottom:5px;border-bottom:.5px solid var(--line2);display:flex;justify-content:space-between;gap:8px}
+.mc .v{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.mc .v small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:2px}
+.sub{font-size:11.5px;font-weight:600;color:var(--ink2);margin:15px 0 8px;padding-bottom:5px;border-bottom:var(--hairline) solid var(--line2);display:flex;justify-content:space-between;gap:8px}
 .sub:first-child{margin-top:0}
 .sub em{font-style:normal;font-weight:400;color:var(--ink3);font-size:10.5px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.segblk{border:.5px solid var(--line2);border-radius:9px;padding:10px;margin-bottom:8px;background:#fff}
+.segblk{border:var(--hairline) solid var(--line2);border-radius:var(--radius-field);padding:10px;margin-bottom:8px;background:var(--card)}
 .segblk .hd{font-size:12.5px;font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px}
 .segblk .hd em{font-style:normal;font-size:10.5px;color:var(--ink3);font-weight:500}
 .segblk .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:8px 0 0}
 .segblk .grid div{font-size:10.5px;color:var(--ink3);line-height:1.4}
-.segblk .grid b{display:block;font-size:12.5px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-.src{font-size:10.5px;color:var(--ink3);line-height:1.6;margin-top:8px;padding-top:7px;border-top:.5px solid var(--line2)}
-.src q{display:block;font-style:normal;color:var(--ink2);background:var(--gray-bg);border-radius:6px;padding:6px 8px;margin-top:5px;line-height:1.6;word-break:break-all}
-.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--blue-bg);color:var(--blue-ink);font-weight:600;margin-right:4px;white-space:nowrap}
+.segblk .grid b{display:block;font-size:12.5px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.src{font-size:10.5px;color:var(--ink3);line-height:1.6;margin-top:8px;padding-top:7px;border-top:var(--hairline) solid var(--line2)}
+.src q{display:block;font-style:normal;color:var(--ink2);background:var(--gray-bg);border-radius:var(--radius-inline);padding:6px 8px;margin-top:5px;line-height:1.6;word-break:break-all}
+.pill{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:var(--radius-pill);background:var(--blue-bg);color:var(--blue-ink);font-weight:600;margin-right:4px;white-space:nowrap}
 .pill.g{background:var(--gray-bg);color:var(--ink3)}
 .pill.a{background:var(--amber-bg);color:var(--amber)}
-.meter{height:5px;border-radius:3px;background:var(--gray-bg);overflow:hidden;margin-top:4px}
+.meter{height:5px;border-radius:var(--radius-meter);background:var(--gray-bg);overflow:hidden;margin-top:4px}
 .meter i{display:block;height:100%;background:var(--blue)}
 .meter i.hi{background:var(--amber)}
 .meter i.over{background:var(--red)}
 
-.picker{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end;background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px}
+.picker{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end;background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px;box-shadow:var(--card-highlight)}
 .pk-col{min-width:0}
 .pk-lb{font-size:10.5px;color:var(--ink3);margin-bottom:5px;font-weight:500}
 .pk-col select{font-size:15px;font-weight:600;padding:9px 26px 9px 10px}
 .pk-arw{font-size:16px;color:var(--ink3);padding-bottom:11px}
 /* 与 .picker 同一套尺寸：同样的内边距、标签字号与控件高度，桌面端并排时两张卡片等高对齐 */
-.bar-params{display:grid;grid-template-columns:1.15fr .8fr .7fr .7fr;gap:8px;align-items:end;background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px}
+.bar-params{display:grid;grid-template-columns:1.15fr .8fr .7fr .7fr;gap:8px;align-items:end;background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px}
 .bar-params label{display:block;min-width:0}
 .bar-params span{display:block;font-size:10.5px;color:var(--ink3);margin-bottom:5px;font-weight:500}
 .bar-params input,.bar-params select{padding:9px 10px;font-size:15px;font-weight:600}
 .bar-params select{padding-right:26px}
 /* 顶部主卡：线路与电量 → 送端报价（主输入，放大）与测算结果 → 价格组成。
    .picker / .bar-params 嵌入主卡时去掉各自的卡片外观 */
-.hero{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px}
-.hero .picker,.hero .bar-params{background:none;border:0;border-radius:0;padding:0;margin:0}
+.hero{background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px;box-shadow:var(--card-highlight)}
+.hero .picker,.hero .bar-params{background:none;border:0;border-radius:0;padding:0;margin:0;box-shadow:none}
 .hero .bar-params{grid-template-columns:1fr 1fr;margin-top:10px}
 .hero .chan{margin-top:10px;min-width:0}
-.hero-main{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:.5px solid var(--line2)}
+.hero-main{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:var(--hairline) solid var(--line2)}
 .hero-price{display:block;min-width:0}
 .hero-price span,.hero-lb{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);font-weight:500;margin-bottom:6px}
-.hero-price input{font-size:34px;font-weight:700;letter-spacing:-.5px;padding:12px 14px;border-radius:12px;border:1.5px solid rgba(24,95,165,.45);line-height:1.2}
-.hero-price input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(24,95,165,.14)}
-.hero-res{background:var(--blue-bg);border-radius:12px;padding:10px 14px 11px;min-width:0}
+.hero-price input{font-family:var(--font-num);font-size:34px;font-weight:700;letter-spacing:-.5px;padding:12px 14px;border-radius:var(--r);border:var(--emphasis) solid var(--hero-field-border);line-height:1.2;box-shadow:var(--hero-field-glow)}
+.hero-price input:focus{border-color:var(--blue);box-shadow:var(--focus-ring-hero)}
+.hero-res{background:var(--blue-bg);border-radius:var(--r);padding:10px 14px 11px;min-width:0}
 .hero-res.empty-res{background:var(--gray-bg)}
-.hero-tag{font-size:10.5px;font-weight:600;color:var(--blue-ink);background:#fff;padding:1px 7px;border-radius:999px}
-.hero-v{font-size:34px;font-weight:700;letter-spacing:-.6px;color:var(--blue-ink);font-variant-numeric:tabular-nums;line-height:1.2}
+.hero-tag{font-size:10.5px;font-weight:600;color:var(--blue-ink);background:var(--card);padding:1px 7px;border-radius:var(--radius-pill)}
+.hero-v{font-size:34px;font-weight:700;letter-spacing:-.6px;color:var(--blue-ink);font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.2;text-shadow:var(--num-glow)}
 .hero-v small{font-size:12px;font-weight:500;color:var(--ink2);margin-left:4px;letter-spacing:0}
 .hero-sub{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.5;word-break:break-all}
 .cmp{margin-top:12px}
 .cmp-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:600;color:var(--ink2)}
 .cmp-hd em{font-style:normal;font-weight:400;font-size:10.5px;color:var(--ink3)}
-.cmp-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0 10px;background:var(--gray-bg)}
+.cmp-bar{display:flex;height:10px;border-radius:var(--radius-bar);overflow:hidden;margin:8px 0 10px;background:var(--gray-bg)}
 .cmp-bar i{display:block;height:100%}
 .cmp-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-.cmp-item{background:var(--gray-bg);border-radius:9px;padding:7px 10px;min-width:0}
+.cmp-item{background:var(--gray-bg);border-radius:var(--radius-field);padding:7px 10px;min-width:0}
 .cmp-item .l{font-size:11px;color:var(--ink2);display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cmp-item .l i{flex:0 0 auto;width:8px;height:8px;border-radius:2px}
-.cmp-item .v{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.3}
-.cmp-item .p{font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.cmp-item .l i{flex:0 0 auto;width:8px;height:8px;border-radius:var(--radius-swatch)}
+.cmp-item .v{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.3}
+.cmp-item .p{font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums;font-family:var(--font-num)}
 .cmp-item.tot{background:var(--blue-bg)}
 .cmp-item.tot .l,.cmp-item.tot .v{color:var(--blue-ink);font-weight:700}
 /* 费用口径与参数：紧凑网格，每项只占一格，不再整行铺满 */
 .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 10px;margin-bottom:10px}
 .pgrid label.f{display:flex;flex-direction:column;justify-content:flex-end;margin:0;min-width:0}
 .pgrid label.f span{display:flex;align-items:baseline;gap:6px;font-size:11.5px;margin-bottom:4px;white-space:nowrap}
-.pgrid input,.pgrid select{font-size:13px;padding:7px 9px;border-radius:8px}
+.pgrid input,.pgrid select{font-size:13px;padding:7px 9px;border-radius:var(--radius-compact)}
 .pgrid select{padding-right:26px;background-position:right 8px center}
 .p-reset{color:var(--blue);font-weight:500;cursor:pointer;font-size:11px}
 /* 主卡口径摘要：面板收起后仍能看到当前口径；与默认值不同的项标色，按钮角标为改动项数 */
-.cfg-bar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:7px 8px 7px 11px;background:var(--gray-bg);border-radius:10px}
+.cfg-bar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:7px 8px 7px 11px;background:var(--gray-bg);border-radius:var(--radius-btn)}
 .cfg-sum{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:5px;font-size:11.5px;color:var(--ink2);line-height:1.5}
-.cfg-sum span{background:#fff;border-radius:6px;padding:1px 7px;max-width:100%;overflow-wrap:anywhere}
+.cfg-sum span{background:var(--card);border-radius:var(--radius-inline);padding:1px 7px;max-width:100%;overflow-wrap:anywhere}
 .cfg-sum span.chg{background:var(--amber-bg);color:var(--amber);font-weight:600}
-.btn.cfg-btn{flex:none;width:auto;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;font-size:13px;font-weight:600;background:#fff}
+.btn.cfg-btn{flex:none;width:auto;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;font-size:13px;font-weight:600;background:var(--card)}
 .cfg-btn svg{width:15px;height:15px;display:block}
-.cfg-btn b{min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:var(--amber);color:#fff;font-size:10.5px;line-height:17px;text-align:center}
+.cfg-btn b{min-width:17px;height:17px;padding:0 5px;border-radius:var(--radius-field);background:var(--amber);color:var(--on-fill);font-size:10.5px;line-height:17px;text-align:center}
 /* 参数弹出面板 */
 .sheet{position:fixed;inset:0;z-index:3500;visibility:hidden;pointer-events:none;transition:visibility 0s linear .25s}
 .sheet.open{visibility:visible;pointer-events:auto;transition:visibility 0s}
-.sheet-mask{position:absolute;inset:0;background:rgba(20,24,32,.42);opacity:0;transition:opacity .25s}
+.sheet-mask{position:absolute;inset:0;background:var(--scrim);opacity:0;transition:opacity .25s}
 .sheet.open .sheet-mask{opacity:1}
-.sheet-panel{position:absolute;left:0;right:0;bottom:0;max-height:82vh;display:flex;flex-direction:column;background:var(--card);border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);transform:translateY(100%);transition:transform .25s ease}
+.sheet-panel{position:absolute;left:0;right:0;bottom:0;max-height:82vh;display:flex;flex-direction:column;background:var(--card);border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;box-shadow:var(--shadow-sheet);transform:translateY(100%);transition:transform .25s ease}
 .sheet.open .sheet-panel{transform:none}
-.sheet-grab{flex:none;width:36px;height:4px;border-radius:2px;background:rgba(0,0,0,.15);margin:8px auto 0}
-.sheet-hd{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:8px 16px 10px;border-bottom:.5px solid var(--line2)}
+.sheet-grab{flex:none;width:36px;height:4px;border-radius:var(--radius-swatch);background:var(--sheet-grab);margin:8px auto 0}
+.sheet-hd{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:8px 16px 10px;border-bottom:var(--hairline) solid var(--line2)}
 .sheet-title{font-size:15px;font-weight:700}
-.sheet-price{font-size:19px;font-weight:700;color:var(--blue-ink);font-variant-numeric:tabular-nums;margin-top:1px}
+.sheet-price{font-size:19px;font-weight:700;color:var(--blue-ink);font-variant-numeric:tabular-nums;font-family:var(--font-num);margin-top:1px}
 .sheet-price small{font-size:11px;font-weight:500;color:var(--ink3);margin-left:4px}
 .sheet-x{flex:none;border:0;background:var(--gray-bg);color:var(--ink2);width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer}
 .sheet-body{flex:1;min-height:0;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .sheet-body .pgrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:0}
-.sheet-ft{flex:none;display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:.5px solid var(--line2)}
+.sheet-ft{flex:none;display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:var(--hairline) solid var(--line2)}
 .sheet-ft .btn{padding:11px;font-size:14px}
 body.sheet-open{overflow:hidden}
+/* 外观面板（#theme-sheet）复用上面的弹层结构；没有底部按钮栏，正文自己让出底部安全区 */
+#theme-sheet .sheet-body{padding-bottom:max(16px,env(safe-area-inset-bottom))}
 @media (min-width:600px){
-  .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:16px 0 0 16px;transform:translateX(100%);box-shadow:-8px 0 30px rgba(0,0,0,.18)}
+  .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:var(--radius-sheet) 0 0 var(--radius-sheet);transform:translateX(100%);box-shadow:var(--shadow-sheet-side)}
   .sheet-grab{display:none}
   .sheet-hd{padding-top:16px}
 }
 .tsub{font-size:10.5px;color:var(--ink3);white-space:normal}
 /* 参数面板分组小标题；到户缺项醒目提示 */
-.psub{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;color:var(--ink2);margin:14px 0 8px;padding-bottom:5px;border-bottom:.5px solid var(--line2)}
+.psub{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;color:var(--ink2);margin:14px 0 8px;padding-bottom:5px;border-bottom:var(--hairline) solid var(--line2)}
 .psub:first-child{margin-top:0}
 .psub em{font-style:normal;font-weight:400;font-size:10.5px;color:var(--ink3);text-align:right}
 .p-calc{font-style:normal;font-weight:600;color:var(--blue-ink);font-size:11px}
-.p-note{font-size:11.5px;color:var(--amber);background:var(--amber-bg);border-radius:8px;padding:6px 10px;margin:0 0 8px;line-height:1.5}
-.cfg-warn{margin-top:8px;font-size:12px;color:var(--amber);background:var(--amber-bg);border-radius:9px;padding:7px 11px;line-height:1.5}
+.p-note{font-size:11.5px;color:var(--amber);background:var(--amber-bg);border-radius:var(--radius-compact);padding:6px 10px;margin:0 0 8px;line-height:1.5}
+.cfg-warn{margin-top:8px;font-size:12px;color:var(--amber);background:var(--amber-bg);border-radius:var(--radius-field);padding:7px 11px;line-height:1.5}
 .cfg-warn a{color:var(--blue);font-weight:600;cursor:pointer;white-space:nowrap}
 .policy-foot{margin:4px 0 0}
 .policy-foot details.explain{background:var(--card);margin:0}
@@ -389,42 +715,64 @@ body.sheet-open{overflow:hidden}
 .ai-bar .btn{padding:10px;font-size:13.5px}
 .ai-bar .btn.ghost{padding:10px 12px;white-space:nowrap}
 .ai-bar .btn:disabled{opacity:.55;cursor:wait}
-.ai-cfg{margin-top:10px;padding-top:10px;border-top:.5px solid var(--line2)}
-.ai-loading{margin-top:10px;font-size:11.5px;color:var(--ink2);background:var(--blue-bg);border-radius:9px;padding:9px 11px;line-height:1.55}
+.ai-cfg{margin-top:10px;padding-top:10px;border-top:var(--hairline) solid var(--line2)}
+.ai-loading{margin-top:10px;font-size:11.5px;color:var(--ink2);background:var(--blue-bg);border-radius:var(--radius-field);padding:9px 11px;line-height:1.55}
 .ai-res{margin-top:10px}
 .ai-sum{font-size:12px;color:var(--ink2);line-height:1.65;margin:0 0 8px}
-.ai-rec{display:block;width:100%;text-align:left;font-family:inherit;background:#fff;border:.5px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;color:var(--ink)}
+.ai-rec{display:block;width:100%;text-align:left;font-family:inherit;background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--radius-btn);padding:10px 12px;margin-bottom:6px;cursor:pointer;color:var(--ink)}
 .ai-rec.on{border-color:var(--blue);background:var(--blue-bg)}
 .ai-rec-hd{display:flex;align-items:center;gap:8px}
 .ai-rec-hd .rc-no{font-size:11px;font-weight:700;color:var(--blue-ink)}
-.ai-rec-price{margin-left:auto;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
-.ai-rec-price small{font-size:10px;font-weight:500;color:var(--ink3);margin-left:2px}
+.ai-rec-price{margin-left:auto;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.ai-rec-price small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:2px}
 .ai-rec-route{font-size:12px;font-weight:600;margin-top:5px}
 .ai-rec-line{font-size:11px;color:var(--ink3);margin-top:2px}
-.ai-rec-why{font-size:11.5px;color:var(--ink2);line-height:1.55;margin-top:6px;padding-top:6px;border-top:.5px dashed var(--line2)}
-details.adv.boxed{border:.5px solid var(--line);border-radius:var(--r);background:var(--card);padding:11px 14px;margin-bottom:10px}
+.ai-rec-why{font-size:11.5px;color:var(--ink2);line-height:1.55;margin-top:6px;padding-top:6px;border-top:var(--hairline) dashed var(--line2)}
+details.adv.boxed{border:var(--hairline) solid var(--line);border-radius:var(--r);background:var(--card);padding:11px 14px;margin-bottom:10px;box-shadow:var(--card-highlight)}
 details.adv.boxed .inner{padding-top:12px}
 details.adv.boxed>summary{font-size:12.5px}
 .rlist{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch}
 .rlist::-webkit-scrollbar{height:4px}
-.rlist::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
-.rc{flex:0 0 auto;width:104px;text-align:left;font-family:inherit;cursor:pointer;background:#fff;border:.5px solid var(--line);border-radius:10px;padding:9px 10px;transition:border-color .15s,background .15s}
-.rc.on{border:1.5px solid var(--blue);background:var(--blue-bg)}
+.rlist::-webkit-scrollbar-thumb{background:var(--line);border-radius:var(--radius-swatch)}
+.rc{flex:0 0 auto;width:104px;text-align:left;font-family:inherit;cursor:pointer;background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--radius-btn);padding:9px 10px;transition:border-color .15s,background .15s}
+.rc.on{border:var(--emphasis) solid var(--blue);background:var(--blue-bg)}
 .rc.bad{opacity:.7;border-style:dashed}
 .rc-top{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:5px}
 .rc-no{font-size:10.5px;font-weight:700;color:var(--blue);flex:0 0 auto}
 .rc.on .rc-no{color:var(--blue-ink)}
-.rc-tag{font-size:9.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rc-price{font-size:17px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums;line-height:1.1}
-.rc-price small{font-size:9.5px;font-weight:500;color:var(--ink3);margin-left:1px;letter-spacing:0}
-.rc-meta{font-size:10px;color:var(--ink3);margin-top:3px}
+.rc-tag{font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-price{font-size:17px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.1}
+.rc-price small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:1px;letter-spacing:0}
+.rc-meta{font-size:10.5px;color:var(--ink3);margin-top:3px}
 .rlist-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:10.5px;color:var(--ink3);margin-top:4px}
 .tg{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
 .tg input{width:auto;margin:0;padding:0}
+/* 复选框 / 单选框恢复原生外观：全局 input{appearance:none} 会把它们画成空白圆角框，勾上后看不出状态。
+   同时撤掉全局 input 的铺满宽度与内边距（原生控件会被拉伸），勾选色取品牌蓝、随主题变化 */
+input[type=checkbox],input[type=radio]{appearance:auto;accent-color:var(--blue);width:auto;padding:0;margin:0;flex:none;cursor:pointer}
+/* 可点区域 ≥44px、外观尺寸不变：给小控件挂一个透明伪元素，向外扩到至少 44×44（已够大的方向不扩）。
+   inset 用 min(0px, 50% − 22px)：百分比相对控件自身，控件已 ≥44px 时取 0，不会缩小原命中区。
+   扩区不得盖住相邻的可点控件：换行排布的 .seg.wrap（行距 5px）完全不扩；其余紧凑排布的见下一段的限幅规则。
+   控件自建层叠上下文（z-index:0）、伪元素垫在 -1 层：扩出的透明区压在邻近静态内容之上可点，
+   但压不住控件自己的子元素（复选框、图标、角标），点它们时命中的仍是子元素本身 */
+.sheet-x,.help-link,.tg,.btn.ghost,.seg:not(.wrap) button,details.adv>summary,details.explain>summary,.plan-issues>summary{position:relative;z-index:0}
+.tk-eye{z-index:0}
+.sheet-x::after,.tk-eye::after,.help-link::after,.tg::after,.btn.ghost::after,.seg:not(.wrap) button::after,
+details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::after{content:"";position:absolute;
+  top:min(0px,calc(50% - 22px));bottom:min(0px,calc(50% - 22px));left:min(0px,calc(50% - 22px));right:min(0px,calc(50% - 22px));z-index:-1}
+/* 紧凑排布的扩区：相邻两个可点控件朝对方扩出的距离加起来，不超过两者间距减 2px（留给舍入），否则会盖住邻居、抢走它边缘的点击。
+   · 纵向不扩、只横向扩：.hit-x（网架图换行排布的搜索结果，行距 6px；「复制链接」，下隔 10px 是底图切换；
+     「导出快照」，下隔 6px 是拓扑图）与所有复选框标签 .tg（网架图两行开关只隔 4px；「含越限」上邻路线卡、下邻展开按钮）；
+   · 限幅：小号分段按钮 .seg.small（网架图底图切换）上下各最多 4px；密钥显隐按钮叠在输入框右端，向左最多 4px，
+     不越过输入框给它预留的 38px 右内边距、不抢打字区的点击。
+   tests/e2e.mjs 的 UI-HIT 在控件外沿与扩区内逐点取样守住这几条；规范见 docs/12 第 7 节。 */
+.btn.hit-x::after,.tg::after{top:0;bottom:0}
+.seg.small:not(.wrap) button::after{top:max(-4px,min(0px,calc(50% - 22px)));bottom:max(-4px,min(0px,calc(50% - 22px)))}
+.tk-eye::after{left:max(-4px,min(0px,calc(50% - 22px)))}
 /* 方案卡片：路线（左）+ 价格（右，突出）→ 价格组成条（悬停 / 聚焦显示分项）→ 关键指标 → 标签与区域网损对照 */
 .plan-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
 .plan-no{font-size:12.5px;font-weight:700;color:var(--ink2)}
-.plan-st{font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.plan-st{font-size:11px;font-weight:500;padding:2px 8px;border-radius:var(--radius-pill);white-space:nowrap}
 .plan-st.ok{background:var(--teal-bg);color:var(--teal)}
 .plan-st.bad{background:var(--red-bg);color:var(--red)}
 .plan-main{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
@@ -436,45 +784,45 @@ details.adv.boxed>summary{font-size:12.5px}
 .hd-landing{font-size:12.5px;color:var(--ink2)}
 .hd-landing b{color:var(--ink);font-weight:600}
 .lines{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
-.ln{font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
+.ln{font-size:11px;font-weight:600;padding:2px 9px;border-radius:var(--radius-pill);background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
 .ln.ac{background:var(--teal-bg);color:var(--teal)}
-.plus{font-size:10px;color:var(--ink3)}
+.plus{font-size:10.5px;color:var(--ink3)}
 .plan-price{flex:none;text-align:right}
-.plan-price b{display:block;font-size:30px;font-weight:750;letter-spacing:-.6px;color:var(--blue-ink);font-variant-numeric:tabular-nums;line-height:1.1}
+.plan-price b{display:block;font-size:30px;font-weight:750;letter-spacing:-.6px;color:var(--blue-ink);font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.1;text-shadow:var(--num-glow)}
 .plan-price small{display:block;font-size:11px;color:var(--ink3);margin-top:3px;white-space:nowrap}
 .pbar{display:flex;gap:2px;height:12px;margin:14px 0 2px}
 .pbar i{position:relative;display:block;height:100%;min-width:3px;cursor:help;outline:none;font-style:normal;transition:box-shadow .12s}
-.pbar i:first-child{border-radius:6px 0 0 6px}
-.pbar i:last-child{border-radius:0 6px 6px 0}
-.pbar i:only-child{border-radius:6px}
-.pbar i:hover,.pbar i:focus{box-shadow:0 0 0 2px #fff,0 0 0 3.5px rgba(31,35,40,.55);z-index:2}
-.pbar i::after{content:attr(data-tip);display:none;position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);background:rgba(31,35,40,.94);color:#fff;font-size:11.5px;font-weight:500;line-height:1.4;padding:5px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;z-index:5}
+.pbar i:first-child{border-radius:var(--radius-inline) 0 0 var(--radius-inline)}
+.pbar i:last-child{border-radius:0 var(--radius-inline) var(--radius-inline) 0}
+.pbar i:only-child{border-radius:var(--radius-inline)}
+.pbar i:hover,.pbar i:focus{box-shadow:var(--focus-ring-bar);z-index:2}
+.pbar i::after{content:attr(data-tip);display:none;position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);background:var(--tooltip-bg);color:var(--tooltip-ink);font-size:11.5px;font-weight:500;line-height:1.4;padding:5px 9px;border-radius:var(--radius-mini);white-space:nowrap;pointer-events:none;z-index:5}
 .pbar i:hover::after,.pbar i:focus::after{display:block}
 .pbar i:first-child::after{left:0;transform:none}
 .pbar i:last-child::after{left:auto;right:0;transform:none}
 .plan-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
-.plan-kpi>div,.kpi>div{background:var(--gray-bg);border-radius:9px;padding:7px 10px;min-width:0}
+.plan-kpi>div,.kpi>div{background:var(--gray-bg);border-radius:var(--radius-field);padding:7px 10px;min-width:0}
 .plan-kpi span,.kpi span{display:block;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.plan-kpi b,.kpi b{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+.plan-kpi b,.kpi b{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num);color:var(--ink)}
 .plan-kpi small,.kpi small{font-size:10.5px;color:var(--ink3);margin-left:3px}
 .plan-tags{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
-.rl-cmp{display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px;font-size:11px;color:var(--ink3);background:var(--gray-bg);border-radius:999px;padding:2px 3px 2px 10px}
-.rl-cmp span{padding:1px 8px;border-radius:999px;color:var(--ink2);white-space:nowrap}
-.rl-cmp span.on{background:#fff;color:var(--blue-ink);font-weight:600;box-shadow:0 0 0 .5px var(--line)}
-.rl-cmp b{font-weight:600;font-variant-numeric:tabular-nums}
-.plan-issues{margin-top:10px;border-left:3px solid #EF9F27;background:var(--amber-bg);border-radius:0 8px 8px 0;padding:6px 10px}
+.rl-cmp{display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px;font-size:11px;color:var(--ink3);background:var(--gray-bg);border-radius:var(--radius-pill);padding:2px 3px 2px 10px}
+.rl-cmp span{padding:1px 8px;border-radius:var(--radius-pill);color:var(--ink2);white-space:nowrap}
+.rl-cmp span.on{background:var(--card);color:var(--blue-ink);font-weight:600;box-shadow:0 0 0 var(--hairline) var(--line)}
+.rl-cmp b{font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.plan-issues{margin-top:10px;border-left:3px solid var(--issue-accent);background:var(--amber-bg);border-radius:0 var(--radius-compact) var(--radius-compact) 0;padding:6px 10px}
 .plan-issues>summary{font-size:12px;color:var(--amber);font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
 .plan-issues>summary::-webkit-details-marker{display:none}
 .plan-issues>summary::before{content:"＋";font-size:11px}
 .plan-issues[open]>summary::before{content:"－"}
-.plan-issues>summary b{background:#fff;border-radius:999px;padding:0 7px;font-size:10.5px}
+.plan-issues>summary b{background:var(--card);border-radius:var(--radius-pill);padding:0 7px;font-size:10.5px}
 .plan-issues .note{color:var(--amber);margin:6px 0 0}
 .plan-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
 .plan-actions .btn.ghost{padding:8px 6px;font-size:13px}
 /* 交易连接：节点 → 专项工程段卡片（关键参数放大，物理估算降级为一行小字）→ 区域网架卡片 */
 .tl{position:relative;padding-left:2px}
 .tl-node{display:flex;gap:10px;align-items:flex-start}
-.tl-dot{flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:#fff;border:2.5px solid var(--blue);margin-top:6px;position:relative;z-index:2}
+.tl-dot{flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--card);border:2.5px solid var(--blue);margin-top:6px;position:relative;z-index:2}
 .tl-node.end .tl-dot{border-color:var(--teal);background:var(--teal)}
 .tl-info{min-width:0;padding-bottom:8px}
 .tl-name{font-size:15px;font-weight:700;line-height:1.35}
@@ -482,39 +830,39 @@ details.adv.boxed>summary{font-size:12.5px}
 .tl-ad{color:var(--ink3);font-size:11px;margin-left:4px}
 .tl-seg{display:flex;gap:10px}
 .tl-seg-line{flex:0 0 auto;width:11px;display:flex;justify-content:center}
-.tl-seg-line::before{content:"";width:2px;background:#85B7EB;border-radius:1px;flex:1}
-.tl-seg-card{flex:1;min-width:0;background:var(--gray-bg);border-radius:12px;padding:12px 13px;margin-bottom:12px}
+.tl-seg-line::before{content:"";width:2px;background:var(--timeline-line);border-radius:var(--radius-line);flex:1}
+.tl-seg-card{flex:1;min-width:0;background:var(--gray-bg);border-radius:var(--r);padding:12px 13px;margin-bottom:12px}
 .tl-seg-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .tl-seg-n{font-size:16px;font-weight:700;margin-right:auto}
 .kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.kpi>div{background:#fff}
+.kpi>div{background:var(--card)}
 .tl-seg-card .meter{margin-top:10px}
 .tl-cap{font-size:11.5px;color:var(--ink2);margin-top:5px}
 .tl-cap b{color:var(--ink);font-weight:600}
 .tl-sub{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.6}
 .tl-sub i{font-style:normal;margin:0 6px}
 .tl-sub em{font-style:normal}
-.tl-src{font-size:10.5px;color:var(--ink3);margin-top:8px;padding-top:8px;border-top:.5px solid rgba(0,0,0,.07);line-height:1.5}
+.tl-src{font-size:10.5px;color:var(--ink3);margin-top:8px;padding-top:8px;border-top:var(--hairline) solid var(--seg-divider);line-height:1.5}
 .route-timeline .sec-title{flex-wrap:wrap;gap:5px}
-.region-seg>.tl-seg-line::before{background:#70b8ac}
-.region-network{flex:1;min-width:0;border:1px solid #cee5df;background:#f5faf8;border-radius:12px;padding:14px;margin-bottom:12px;overflow-wrap:anywhere}
+.region-seg>.tl-seg-line::before{background:var(--region-line)}
+.region-network{flex:1;min-width:0;border:1px solid var(--region-border);background:var(--region-bg);border-radius:var(--r);padding:14px;margin-bottom:12px;overflow-wrap:anywhere}
 .region-network-hd,.region-charge-hd{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
 .region-network-hd h3{font-size:16px;font-weight:700;color:var(--teal);margin:0}
 .region-connection{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 12px}
 .region-connection>span{text-align:center;min-width:0}
 .region-connection>span b{display:block;font-size:15px;font-weight:700;color:var(--ink)}
 .region-connection small{display:block;font-size:11px;color:var(--ink3);margin-top:2px}
-.region-connection strong{font-size:14px;font-weight:700;color:var(--teal);border:1.5px dashed #8fc3b5;border-radius:10px;background:#fff;padding:10px 16px;text-align:center;white-space:nowrap}
-.region-connection i{font-style:normal;color:#5e9e90;font-size:16px}
-.region-charge{padding:12px 14px;background:#fff;border:1px solid #deebe6;border-radius:10px;scroll-margin-top:90px}
+.region-connection strong{font-size:14px;font-weight:700;color:var(--teal);border:var(--emphasis) dashed var(--region-dash);border-radius:var(--radius-btn);background:var(--card);padding:10px 16px;text-align:center;white-space:nowrap}
+.region-connection i{font-style:normal;color:var(--region-arrow);font-size:16px}
+.region-charge{padding:12px 14px;background:var(--card);border:1px solid var(--region-card-border);border-radius:var(--radius-btn);scroll-margin-top:90px}
 .region-charge-hd{margin-bottom:10px}
 .region-charge-hd b{font-size:14px}
 .region-charge-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
-.region-charge-grid>div{background:#f5faf8;border-radius:9px;padding:8px 10px;min-width:0}
+.region-charge-grid>div{background:var(--region-bg);border-radius:var(--radius-field);padding:8px 10px;min-width:0}
 .region-charge-grid>div>span{display:block;font-size:11px;color:var(--ink3);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.region-charge-grid b{font-size:20px;font-weight:700;line-height:1.3;font-variant-numeric:tabular-nums;color:var(--ink)}
+.region-charge-grid b{font-size:20px;font-weight:700;line-height:1.3;font-variant-numeric:tabular-nums;font-family:var(--font-num);color:var(--ink)}
 .region-charge-grid small{font-size:11px;color:var(--ink3);margin-left:3px}
-.region-charge-grid em{display:inline-block;font-style:normal;font-size:10px;font-weight:600;color:var(--amber);background:var(--amber-bg);border-radius:999px;padding:0 6px;margin-left:5px;vertical-align:middle}
+.region-charge-grid em{display:inline-block;font-style:normal;font-size:10.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);border-radius:var(--radius-pill);padding:0 6px;margin-left:5px;vertical-align:middle}
 .region-charge details.explain{margin:10px 0 0}
 .region-charge-note{font-size:11px;line-height:1.65;color:var(--ink2);margin:8px 0 0}
 .region-charge-note a{color:var(--blue-ink)}
@@ -537,17 +885,18 @@ details.adv.boxed>summary{font-size:12.5px}
   .region-connection>span b{font-size:14px}
 }
 .seg{display:flex;gap:6px;margin-bottom:12px}
-.seg button{flex:1;font-family:inherit;font-size:12px;padding:8px;border:.5px solid var(--line);background:#fff;color:var(--ink2);border-radius:9px;cursor:pointer}
+.seg button{flex:1;font-family:inherit;font-size:12px;padding:8px;border:var(--hairline) solid var(--line);background:var(--card);color:var(--ink2);border-radius:var(--radius-field);cursor:pointer}
 .seg button.on{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-ink);font-weight:600}
+.seg button:disabled{opacity:.45;cursor:not-allowed}
 .seg.small{gap:5px;margin-bottom:9px}
-.seg.small button{font-size:11px;padding:5px 6px;border-radius:7px}
+.seg.small button{font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)}
 /* 可换行的筛选按钮组（费率库）：<900px 时 flex:1 会把按钮压成一字一行，禁止按钮内折行，
    让按钮按文字宽度整颗换到下一行、再均分余宽 */
 .seg.wrap{flex-wrap:wrap}
 @media (max-width:899px){ .seg.wrap button{white-space:nowrap} }
 .rc{width:118px;padding:9px 10px 10px}
-.rc-hop{font-size:9.5px;font-weight:600;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:999px;flex:0 0 auto}
-.rc.on .rc-hop{background:#fff}
+.rc-hop{font-size:10.5px;font-weight:600;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:var(--radius-pill);flex:0 0 auto}
+.rc.on .rc-hop{background:var(--card)}
 .rc-line{font-size:12px;font-weight:600;color:var(--ink);margin:4px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rc.on .rc-line{color:var(--blue-ink)}
 
@@ -580,7 +929,7 @@ details.adv.boxed>summary{font-size:12.5px}
   /* 手机端的 margin:0 auto 会让导航作为纵向 flex 子项收缩成一个居中的小盒子，
      桌面端要铺满整行，成为页头下方的标签栏 */
   nav{order:1;position:static;bottom:auto;left:auto;right:auto;max-width:none;margin:0;width:100%;
-    border-top:0;border-bottom:.5px solid var(--line);background:#fff;backdrop-filter:none;
+    border-top:0;border-bottom:var(--hairline) solid var(--line);background:var(--card);backdrop-filter:none;
     justify-content:flex-start;gap:2px;padding:0 24px}
   nav button{flex:0 0 auto;flex-direction:row;gap:7px;padding:12px 15px;font-size:13px;
     border-bottom:2px solid transparent;border-radius:0}
@@ -614,7 +963,7 @@ details.adv.boxed>summary{font-size:12.5px}
   .layout{display:grid;grid-template-columns:348px minmax(0,1fr);gap:16px;align-items:start}
   .col-side{grid-column:1;grid-row:1/3;order:0;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
   .col-side::-webkit-scrollbar,.col-ai::-webkit-scrollbar{width:5px}
-  .col-side::-webkit-scrollbar-thumb,.col-ai::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+  .col-side::-webkit-scrollbar-thumb,.col-ai::-webkit-scrollbar-thumb{background:var(--line);border-radius:var(--radius-meter)}
   .col-ai{grid-column:2;grid-row:1;order:0;min-width:0}
   .col-main{grid-column:2;grid-row:2;order:0;min-width:0}
   /* 智能推荐隐藏（AI_ENABLED=false）：只剩列表与详情两列，同处第一行 */
@@ -652,14 +1001,27 @@ details.adv.boxed>summary{font-size:12.5px}
   .libgrid{gap:0 32px}
 }
 </style>
+<script>
+/* 首帧同步 <meta name="theme-color">：此处 data-theme 已由 <head> 前面的内联脚本设好、样式表也已解析，
+   直接读当前主题的 --system-bar 令牌（本段不写任何颜色字面值），是合法的 #RRGGBB 才写入。
+   不等应用脚本（在 <body> 末尾、体积大）：否则非默认主题要先以 #ffffff 露一下浏览器 / 系统状态栏。 */
+(function(){
+  try{
+    var v=getComputedStyle(document.documentElement).getPropertyValue('--system-bar').trim().toUpperCase();
+    var m=document.querySelector('meta[name="theme-color"]');
+    if(m&&/^#[0-9A-F]{6}$/.test(v)) m.setAttribute('content',v);
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 <div id="app">
   <header>
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
-      <div style="display:flex;align-items:center;gap:8px;flex:none">
-        <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
+      <div class="hd-acts">
+        <span class="badge" id="verBadge" title="公开价格 · 含历史与估算参数">公开价格 · 含历史与估算参数</span>
+        <button class="help-link" id="btn-theme" type="button" onclick="openAppearance()" aria-label="外观：风格与明暗">外观</button>
         <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
       </div>
     </div>
@@ -673,11 +1035,11 @@ details.adv.boxed>summary{font-size:12.5px}
   <footer class="disclaim">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
-      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
     <button id="t-map" onclick="go('map')">
-      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5l4.5-2 5 2 4.5-2v11l-4.5 2-5-2-4.5 2z"/><path d="M7.5 3.5v11M12.5 5.5v11"/></svg>网架图</button>
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5l4.5-2 5 2 4.5-2v11l-4.5 2-5-2-4.5 2z"/><path d="M7.5 3.5v11M12.5 5.5v11"/></svg>网架图</button>
     <button id="t-lib" onclick="go('lib')">
-      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>费率库</button>
+      <svg class="ic" viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>费率库</button>
   </nav>
   <!-- 参数弹出面板：壳常驻在测算页 #v-calc 之外（测算页整块重画时不会被关掉），正文与价格由 renderParamSheet 刷新（ui/calc.js）。
        手机从底部滑出，≥600px 从右侧滑出 -->
@@ -696,6 +1058,19 @@ details.adv.boxed>summary{font-size:12.5px}
       </div>
     </div>
   </div>
+  <!-- 外观面板：与参数弹层同一套 .sheet 结构（手机底部滑出，≥600px 右侧滑出）；正文由 ui/theme.js 的 renderAppearance 生成，
+       改动立即生效并存本机（LS_UI） -->
+  <div id="theme-sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-mask" onclick="closeAppearance()"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="theme-title">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <div class="sheet-hd">
+        <div class="sheet-title" id="theme-title">外观</div>
+        <button class="sheet-x" id="theme-close" type="button" onclick="closeAppearance()" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-body" id="theme-body"></div>
+    </div>
+  </div>
 </div>
 <script>
 'use strict';
@@ -704,11 +1079,12 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 11:00';
+const BUILD_TIME='2026-09-18 13:38';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
 const LS_GUIDE='iproute.v2.guide';   // FR-3：新手导览完成标记（存在即不再自动弹出；仅清应用数据重置）
+const LS_UI='iproute.v2.ui';   // 外观偏好 {style:'clear'|'tech', mode:'system'|'light'|'dark'}；src/template.html <head> 内联脚本里写的是同名字面串，改名须两处同步
 
 /* ===== src/app/format.js ===== */
 /* 显示格式化与徽标。纯函数，不依赖任何数据。 */
@@ -770,8 +1146,10 @@ const mapSearchHits=(q,ST,CH)=>{
   return {stations,channels};
 };
 /* 区域归属上图（批次 B 增补）：区域→颜色调色板。按区域名排序后固定分配，
-   同一名单下颜色稳定（图例与节点一致）；跳过 _note 等元数据键。 */
-const REGION_COLORS=['#185FA5','#0F6E56','#B0651A','#8E8AD6','#993C1D','#5DCAA5','#7FA7A0','#854F0B'];
+   同一名单下颜色稳定（图例与节点一致）；跳过 _note 等元数据键。
+   颜色是设计令牌引用（src/tokens.css 的 --map-region-1…8），可直接写进 style；
+   地图 SDK / data: URI 需要真实颜色时由界面层 tokenColor() 解析（本文件保持纯函数、不碰 DOM）。 */
+const REGION_COLORS=['var(--map-region-1)','var(--map-region-2)','var(--map-region-3)','var(--map-region-4)','var(--map-region-5)','var(--map-region-6)','var(--map-region-7)','var(--map-region-8)'];
 const regionPalette=rgof=>{
   const names=[...new Set(Object.keys(rgof||{}).filter(k=>!k.startsWith('_')).map(k=>rgof[k]))].sort();
   const out={};
@@ -905,8 +1283,8 @@ function uiConfirm(title,msg,okText,cancelText){
   _cfmOpen=true;
   return new Promise(res=>{
     const ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(20,24,32,.45);display:flex;align-items:center;justify-content:center;padding:28px';
-    ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.22)">
+    ov.style.cssText='position:fixed;inset:0;z-index:4000;background:var(--scrim-dialog);display:flex;align-items:center;justify-content:center;padding:28px';
+    ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:var(--card);border-radius:var(--radius-dialog);max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:var(--shadow-dialog)">
       <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">${esc(title)}</div>
       <div style="font-size:12.5px;color:var(--ink2);line-height:1.7;white-space:pre-line">${esc(msg)}</div>
       <div style="display:flex;gap:10px;margin-top:16px">
@@ -1712,6 +2090,160 @@ function pricingIssues(r,input,data,date){
   return [...new Set(issues)];
 }
 
+/* ===== src/app/ui/theme.js ===== */
+/* 主题工具：读取设计令牌（src/tokens.css）当前生效的实际值；外观主题的应用、切换与外观面板（文件后半）。
+   界面样式与模板字符串一律直接写 var(--x)，主题切换时浏览器自动重算，不需要本文件。
+   只有「不认 CSS 变量、必须拿到真实颜色字符串」的地方才用这里：
+     腾讯地图 / 天地图的样式对象、data: URI 里的 SVG、canvas 绘制、脱离页面的 SVG 快照。
+   这些调用都发生在绘制时（不在脚本求值时预先算好），切换主题后重绘即可跟随。
+   只属于界面层：算法层 src/app/algo/* 不得引用（tools/test-modules.mjs 纯度守卫）。 */
+
+/** tokenColor('--map-route') → '#185FA5'（按 <html> 上当前生效的主题取值）。
+    也接受 'var(--x)' 形式。取不到（无 DOM 的测试环境、令牌未定义）时返回 fallback（缺省为空串）。 */
+function tokenColor(name,fallback){
+  const raw=String(name==null?'':name).trim();
+  const m=/^var\(\s*(--[\w-]+)\s*\)$/.exec(raw);
+  const key=m?m[1]:raw;
+  try{
+    if(key.startsWith('--')&&typeof getComputedStyle==='function'&&typeof document!=='undefined'&&document.documentElement){
+      const v=getComputedStyle(document.documentElement).getPropertyValue(key).trim();
+      if(v) return v;
+    }
+  }catch(e){ /* 取值失败按缺省处理 */ }
+  return fallback!=null?fallback:'';
+}
+
+/** 让一段 SVG 脱离页面后仍能解析 var()：把它引用到的令牌以当前实际值写到根元素的 style 上
+    （自定义属性会被子元素继承）。用于拓扑图快照导出——序列化成独立图片后页面样式表不再生效。
+    直接修改传入的元素，调用方应传克隆体。 */
+function inlineTokenVars(svgEl){
+  const names=new Set();
+  const collect=el=>{
+    const st=el.getAttribute&&el.getAttribute('style');
+    if(st) for(const m of st.matchAll(/var\(\s*(--[\w-]+)/g)) names.add(m[1]);
+    for(const c of el.children||[]) collect(c);
+  };
+  collect(svgEl);
+  names.forEach(n=>{ const v=tokenColor(n); if(v) svgEl.style.setProperty(n,v); });
+  return svgEl;
+}
+
+/* ================= 外观主题：风格 × 明暗 → <html data-theme> ================= */
+/* 三套主题：clear（清晰浅色，默认）/ clear-dark（清晰深色）/ tech（科技·调度大屏，固定深色）。
+   偏好存本机 LS_UI：{style:'clear'|'tech', mode:'system'|'light'|'dark'}。
+   首帧的 data-theme 由 src/template.html <head> 内联脚本按同一规则先行设定（防闪白），这里负责启动后的同步与切换。 */
+const UI_STYLES=[['clear','清晰'],['tech','科技']];
+const UI_MODES=[['system','跟随系统'],['light','浅色'],['dark','深色']];
+let uiPrefs=null;
+
+/** 读取外观偏好；存储不可用或内容非法时回退默认（清晰 · 跟随系统） */
+function loadUiPrefs(){
+  const p={style:'clear',mode:'system'};
+  try{
+    const o=JSON.parse(localStorage.getItem(LS_UI)||'null');
+    if(o&&typeof o==='object'){
+      if(UI_STYLES.some(s=>s[0]===o.style)) p.style=o.style;
+      if(UI_MODES.some(m=>m[0]===o.mode)) p.mode=o.mode;
+    }
+  }catch(e){ /* 存储不可用：静默用默认 */ }
+  return p;
+}
+function systemPrefersDark(){
+  try{ return !!(typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches); }catch(e){ return false; }
+}
+/** 偏好 → 主题 id（与 <head> 内联脚本同一规则：科技固定深色；清晰按明暗，跟随系统时看 prefers-color-scheme） */
+function resolveTheme(p){
+  if(p.style==='tech') return 'tech';
+  return (p.mode==='dark'||(p.mode==='system'&&systemPrefersDark()))?'clear-dark':'clear';
+}
+
+/** 应用主题：设 data-theme → 同步浏览器 / 安卓壳的系统栏颜色 → 网架图页在场时重绘（地图 SDK 样式、
+    data: URI 圆点、快照都在绘制时读令牌）→ 外观面板打开时刷新选中态。传入 prefs 时先保存到本机。 */
+function applyTheme(prefs){
+  if(prefs){ uiPrefs=prefs; try{ localStorage.setItem(LS_UI,JSON.stringify(prefs)); }catch(e){} }
+  if(!uiPrefs) uiPrefs=loadUiPrefs();
+  const th=resolveTheme(uiPrefs);
+  const de=typeof document!=='undefined'&&document.documentElement;
+  if(!de||!de.setAttribute) return th;   // 无 DOM 的测试环境
+  const changed=de.getAttribute('data-theme')!==th;
+  de.setAttribute('data-theme',th);
+  syncSystemBars();
+  if(changed){
+    const mv=document.getElementById('v-map');
+    if(mv&&!mv.hidden&&typeof renderMap==='function') renderMap();
+  }
+  renderAppearance();
+  return th;
+}
+/** 系统明暗变化：只在「跟随系统」时跟随 */
+function watchSystemTheme(){
+  try{
+    if(typeof window==='undefined'||!window.matchMedia) return;
+    const mq=window.matchMedia('(prefers-color-scheme: dark)');
+    const h=()=>{ if(uiPrefs&&uiPrefs.mode==='system') applyTheme(); };
+    if(mq.addEventListener) mq.addEventListener('change',h); else if(mq.addListener) mq.addListener(h);
+  }catch(e){ /* 老内核不支持：保持启动时的主题 */ }
+}
+
+/** 系统栏颜色 = 当前主题的 --system-bar（页头色的不透明版，#RRGGBB）。
+    <meta name="theme-color">：浏览器地址栏 / PWA 状态栏；window.IPRouteShell：安卓壳的桥（Web / iOS 没有，忽略）。 */
+function syncSystemBars(){
+  const hex=String(tokenColor('--system-bar')).trim().toUpperCase();
+  if(!/^#[0-9A-F]{6}$/.test(hex)) return;
+  try{
+    const meta=typeof document.querySelector==='function'&&document.querySelector('meta[name="theme-color"]');
+    if(meta) meta.setAttribute('content',hex);
+  }catch(e){}
+  // 深底配浅色图标：按相对亮度判断（与 WCAG 同一公式）
+  const ch=[1,3,5].map(i=>{ const v=parseInt(hex.slice(i,i+2),16)/255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); });
+  const lightIcons=(0.2126*ch[0]+0.7152*ch[1]+0.0722*ch[2])<0.4;
+  try{
+    const sh=typeof window!=='undefined'&&window.IPRouteShell;
+    if(sh&&typeof sh.setSystemBars==='function') sh.setSystemBars(hex,lightIcons);
+  }catch(e){ /* 壳侧异常不影响页面 */ }
+}
+
+/* ---------- 外观面板（复用参数弹层 .sheet 结构；手机从底部滑出，≥600px 从右侧滑出） ---------- */
+let _appearanceOpen=false;
+function renderAppearance(){
+  const body=typeof document!=='undefined'&&document.getElementById&&document.getElementById('theme-body');
+  if(!body||!uiPrefs) return;
+  const tech=uiPrefs.style==='tech';
+  const seg=(key,list,cur,dis)=>`<div class="seg" role="radiogroup" aria-label="${key==='style'?'风格':'明暗'}">${list.map(([v,t])=>
+    `<button type="button" role="radio" aria-checked="${cur===v}" class="${cur===v?'on':''}"${dis?' disabled':''} data-ui-${key}="${v}" onclick="setUiPref('${key}','${v}')">${t}</button>`).join('')}</div>`;
+  body.innerHTML=`<div class="psub">风格</div>${seg('style',UI_STYLES,uiPrefs.style,false)}
+    <div class="psub">明暗</div>${seg('mode',UI_MODES,uiPrefs.mode,tech)}
+    ${tech?'<p class="note" style="margin:0">科技风格固定为深色</p>':''}`;
+}
+function setUiPref(key,val){
+  const p=Object.assign({},uiPrefs||loadUiPrefs());
+  p[key]=val;
+  applyTheme(p);
+}
+function openAppearance(){
+  const el=document.getElementById('theme-sheet');
+  if(!el||_appearanceOpen) return;
+  if(!uiPrefs) uiPrefs=loadUiPrefs();
+  _appearanceOpen=true;
+  renderAppearance();
+  el.classList.add('open'); el.setAttribute('aria-hidden','false');
+  document.body.classList.add('sheet-open');
+  // 与参数弹层同样压一条历史：安卓返回键 / 浏览器后退先关面板
+  try{ history.pushState({themeSheet:1},''); }catch(e){}
+  const x=document.getElementById('theme-close');
+  if(x&&x.focus){ try{ x.focus({preventScroll:true}); }catch(e){} }
+}
+function closeAppearance(fromHistory){
+  if(!_appearanceOpen) return;
+  _appearanceOpen=false;
+  const el=document.getElementById('theme-sheet');
+  if(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
+  document.body.classList.remove('sheet-open');
+  if(!fromHistory){ try{ if(history.state&&history.state.themeSheet) history.back(); }catch(e){} }
+  const b=document.getElementById('btn-theme');
+  if(b&&b.focus){ try{ b.focus({preventScroll:true}); }catch(e){} }
+}
+
 /* ===== src/app/ui/calc.js ===== */
 /* 测算页：参数输入、可选路线列表、方案详情。
    依赖：config / format / data / state / algo/*。 */
@@ -2052,9 +2584,10 @@ function renderHeroResult(res){
     <div class="hero-sub">${stops.map(s=>esc(s.name)).join(' → ')}${landings.length?'　落点 '+landings.map(s=>esc(s.landing)).join('、'):''}</div>
   </div>`;
 }
-/* 价格组成：各项之和即最终价格（comp 与 landed 同口径，见 algo/cost.js）。为 0 的项不列，送端报价始终列出。 */
-const COMP_ITEMS=[['gen','送端报价','#185FA5'],['originLoss','送端省内网损','#378ADD'],['send','送出省输电费','#85B7EB'],['trans','跨省通道费','#EF9F27'],
-  ['reg','区域电网费','#5DCAA5'],['loss','网损折价','#F0997B'],['inLoss','受端上网线损','#AFA9EC'],['net','受端输配电价','#B4B2A9'],['fund','基金及附加','#D3D1C7'],['cap','容（需）量电费','#8E8AD6'],['sysOp','系统运行费','#7FA7A0']];
+/* 价格组成：各项之和即最终价格（comp 与 landed 同口径，见 algo/cost.js）。为 0 的项不列，送端报价始终列出。
+   颜色是设计令牌引用（src/tokens.css 的 --chart-*），只用于 style 属性，随主题变化。 */
+const COMP_ITEMS=[['gen','送端报价','var(--chart-gen)'],['originLoss','送端省内网损','var(--chart-origin-loss)'],['send','送出省输电费','var(--chart-send)'],['trans','跨省通道费','var(--chart-trans)'],
+  ['reg','区域电网费','var(--chart-reg)'],['loss','网损折价','var(--chart-loss)'],['inLoss','受端上网线损','var(--chart-in-loss)'],['net','受端输配电价','var(--chart-net)'],['fund','基金及附加','var(--chart-fund)'],['cap','容（需）量电费','var(--chart-cap)'],['sysOp','系统运行费','var(--chart-sys-op)']];
 function priceItems(r){
   return COMP_ITEMS.filter(([k])=>k==='gen'||Math.abs(r.comp[k])>1e-9).map(([k,label,color])=>({k,label,color,v:r.comp[k]}));
 }
@@ -2117,7 +2650,7 @@ function renderRouteList(res){
   }
   out+=`<div class="rlist-foot" style="margin-top:7px">
       <span>成本阈值</span>
-      <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:6px">
+      <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:var(--radius-inline)">
         ${[[0.03,'3%'],[0.05,'5%'],[0.10,'10%'],[0.20,'20%'],[9,'不限']].map(([v,t])=>
           `<option value="${v}" ${(state.degrade??0.10)==v?'selected':''}>${t}</option>`).join('')}
       </select>
@@ -2250,7 +2783,7 @@ function renderRouteSegment(r,i){
         :`<div class="tl-cap">核定容量待补，无法校验占用</div>`}
       <div class="tl-sub">长度 ${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}<i>·</i>段入口功率 ${fmt(s.inMW,0)} MW<i>·</i>段损耗 ${fmt(s.lossMwh,2)} MWh<em>（物理估算）</em></div>
       ${e.regional?`<details class="explain"><summary>计费说明</summary><div class="inner"><p class="note">${e.tariffStatus==='unknown'?'独立输电价待核，当前未计此项；':'区域共用网络接口，不逐个收通道费；'}${i===0?'送出省费用只在交易起点计一次。':'不收过境省外送费。'}${e.type==='AC' && s.billLossPct===0?'计费损耗 0，物理损耗仅作容量估算。':'背靠背损耗为估算，须核对备案标准。'}</p></div></details>`:''}
-      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　生效 '+esc(e.eff):''}</div>
+      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　<span style="white-space:nowrap">生效 '+esc(e.eff)+'</span>':''}</div>
     </div>
   </div>`;
 }
@@ -2964,15 +3497,23 @@ function recalcAfterLib(){
   if(state.sel>=n) state.sel=0;              // 路线数变少时夹取选中项
   saveLast();
 }
-function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); recalcAfterLib();
-  const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }
+/* 页头状态徽标 #verBadge：文字与 title 一起改写——窄屏上徽标会截成省略号，title 始终给全文。
+   「费率已本地修改」要引起注意：挂 .mod（蓝底、不收缩，放不下时由页头标题让位，见 template.html .badge.mod）。
+   默认文案取模板里的原文，只写在一处。 */
+function setVerBadge(modified){
+  const b=document.getElementById('verBadge'); if(!b) return;
+  if(b.dataset.base==null) b.dataset.base=b.textContent;
+  const t=modified?'费率已本地修改':b.dataset.base;
+  b.textContent=t; b.title=t; b.classList.toggle('mod',!!modified);
+}
+function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); recalcAfterLib(); setVerBadge(true); }
 function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); recalcAfterLib(); }
 function exportLib(){ const b=new Blob([JSON.stringify({ch:CH,pv:PV,sec:SEC},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='费率库-v2.json'; a.click(); }
 function resetLib(){
   uiConfirm('恢复检索原始值','恢复为检索原始值？本地修改将丢失。','恢复原始值','取消').then(ok=>{
     if(!ok) return;
-    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); recalcAfterLib();
+    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); recalcAfterLib(); setVerBadge(false);
   });
 }
 
@@ -2982,8 +3523,10 @@ function resetLib(){
 let map=null,mapReady=false,polyLayer=null,mkLayer=null,lbLayer=null;
 let tdMap=null,tdReady=false,tdLayer=null;
 
-const dotSvg=f=>`data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='4.5' fill='${encodeURIComponent(f)}' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E`;
-const D_HOT=dotSvg('#185FA5'), D_ON=dotSvg('#0F6E56'), D_BASE=dotSvg('#8A8A85');
+/* 地图圆点图标：data: URI 里的 SVG 不认 CSS 变量，绘制时按当前主题把令牌解析成实际颜色再拼。
+   c 为令牌名（'--map-route'）或 'var(--x)'（区域调色板）。 */
+const dotSvg=c=>`data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='4.5' fill='${encodeURIComponent(tokenColor(c))}' stroke='${encodeURIComponent(tokenColor('--map-casing'))}' stroke-width='1.5'/%3E%3C/svg%3E`;
+const mapDots=()=>({hot:dotSvg('--map-route'),on:dotSvg('--map-end'),base:dotSvg('--map-dot-base')});
 
 /* ---------- 批次 B（grid-map P1）共用辅助 ---------- */
 /* 通道折线点列：[起点,...走廊中间点,终点]，proj 为投影函数；起止缺坐标返回 null。
@@ -3021,26 +3564,28 @@ function initMap(){
   if(typeof TMap==='undefined') return false;
   try{
     map=new TMap.Map('map-view',{center:new TMap.LatLng(34,108),zoom:4});
+    // 腾讯地图样式对象只认真实颜色字符串：初始化时按当前主题解析令牌（renderMap 每次重建地图，换主题后重绘即跟随）
+    const C=k=>tokenColor(k), D=mapDots();
     // 批次 B：tier 线型按（层×tier）建样式，语义与拓扑/天地图一致（design D5）
     const tierStyles={};
     ['gov','grid','region','est'].forEach(t=>{
       const st=tierStyle(t);
       const dash=st.dash?{dashArray:st.dash.split(' ').map(Number)}:{};
-      tierStyles['alt_'+t]=new TMap.PolylineStyle({color:'#EF9F27',width:Math.max(1.4,3*st.w),borderWidth:1,borderColor:'#ffffff',lineCap:'round',...dash});
-      tierStyles['base_'+t]=new TMap.PolylineStyle({color:'#C9C8C3',width:Math.max(0.7,1*st.w),borderWidth:0,lineCap:'round',...dash});
+      tierStyles['alt_'+t]=new TMap.PolylineStyle({color:C('--map-alt'),width:Math.max(1.4,3*st.w),borderWidth:1,borderColor:C('--map-casing'),lineCap:'round',...dash});
+      tierStyles['base_'+t]=new TMap.PolylineStyle({color:C('--map-base'),width:Math.max(0.7,1*st.w),borderWidth:0,lineCap:'round',...dash});
     });
     polyLayer=new TMap.MultiPolyline({map,styles:{
-      hot:new TMap.PolylineStyle({color:'#185FA5',width:6,borderWidth:2,borderColor:'#ffffff',lineCap:'round'}),
+      hot:new TMap.PolylineStyle({color:C('--map-route'),width:6,borderWidth:2,borderColor:C('--map-casing'),lineCap:'round'}),
       ...tierStyles},geometries:[]});
     mkLayer=new TMap.MultiMarker({map,styles:{
-      hot:new TMap.MarkerStyle({width:16,height:16,anchor:{x:8,y:8},src:D_HOT}),
-      on:new TMap.MarkerStyle({width:18,height:18,anchor:{x:9,y:9},src:D_ON}),
-      base:new TMap.MarkerStyle({width:9,height:9,anchor:{x:4.5,y:4.5},src:D_BASE})},geometries:[]});
+      hot:new TMap.MarkerStyle({width:16,height:16,anchor:{x:8,y:8},src:D.hot}),
+      on:new TMap.MarkerStyle({width:18,height:18,anchor:{x:9,y:9},src:D.on}),
+      base:new TMap.MarkerStyle({width:9,height:9,anchor:{x:4.5,y:4.5},src:D.base})},geometries:[]});
     lbLayer=new TMap.MultiLabel({map,styles:{
-      hot:new TMap.LabelStyle({color:'#0C447C',size:12,offset:{x:0,y:-15},alignment:'center'}),
-      st:new TMap.LabelStyle({color:'#0F6E56',size:11,offset:{x:0,y:-14},alignment:'center'}),
-      seq:new TMap.LabelStyle({color:'#ffffff',size:11,offset:{x:0,y:0},alignment:'center',backgroundColor:'#185FA5',padding:'2px 5px',borderRadius:9}),
-      base:new TMap.LabelStyle({color:'#9A9A95',size:10,offset:{x:0,y:-11},alignment:'center'})},geometries:[]});
+      hot:new TMap.LabelStyle({color:C('--map-label-on'),size:12,offset:{x:0,y:-15},alignment:'center'}),
+      st:new TMap.LabelStyle({color:C('--map-end'),size:11,offset:{x:0,y:-14},alignment:'center'}),
+      seq:new TMap.LabelStyle({color:C('--on-fill'),size:11,offset:{x:0,y:0},alignment:'center',backgroundColor:C('--map-route'),padding:'2px 5px',borderRadius:9}),
+      base:new TMap.LabelStyle({color:C('--map-label'),size:10,offset:{x:0,y:-11},alignment:'center'})},geometries:[]});
     mapReady=true; return true;
   }catch(e){ return false; }
 }
@@ -3204,13 +3749,14 @@ function drawMapTD(){
     tdMap.clearOverLays();
     const netOff=state.mapNet==='off';
     const v=visibleChannels(), seen=new Set();
+    const C=k=>tokenColor(k), D=mapDots();   // 天地图样式只认真实颜色：按当前主题解析令牌
     /* 断面高亮垫层（spec: grid-map 断面，与拓扑图同色同语义） */
     if(state.mapSec){
       const mem=new Set(secMemberIds(state.mapSec));
       v.list.forEach(c=>{
         if(!mem.has(c.id)||v.hot.has(c.id)) return;
         const ps=chanPts(c,(lng,lat)=>[lng,lat]);
-        if(ps) tdMap.addOverLay(new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:'#993C1D',weight:7,opacity:0.3}));
+        if(ps) tdMap.addOverLay(new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:C('--map-section'),weight:7,opacity:0.3}));
       });
     }
     // 底图连线：走廊 waypoints 折线化；tier 线型仅作用弱化层（dasharray 若 SDK 不支持则自然忽略，语义降级见 design D5）
@@ -3221,9 +3767,9 @@ function drawMapTD(){
       if(!ps) return;
       const st=tierStyle(c.tier);
       const dashArr=st.dash?st.dash.split(' ').map(Number):null;
-      const sty=isHot?{color:'#185FA5',weight:6,opacity:0.9}
-        :isAlt?{color:'#EF9F27',weight:Math.max(1.4,2*st.w),opacity:0.45,...(dashArr?{dasharray:dashArr}:{})}
-        :{color:'#C9C8C3',weight:Math.max(0.7,1*st.w),opacity:0.3,...(dashArr?{dasharray:dashArr}:{})};
+      const sty=isHot?{color:C('--map-route'),weight:6,opacity:0.9}
+        :isAlt?{color:C('--map-alt'),weight:Math.max(1.4,2*st.w),opacity:0.45,...(dashArr?{dasharray:dashArr}:{})}
+        :{color:C('--map-base'),weight:Math.max(0.7,1*st.w),opacity:0.3,...(dashArr?{dasharray:dashArr}:{})};
       const ln=new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),sty);
       try{ ln.addEventListener('click',()=>toggleChan(c.id)); }catch(e){}  // 事件 API 真机核实，失败仅失去点击
       tdMap.addOverLay(ln);
@@ -3234,7 +3780,7 @@ function drawMapTD(){
         [s.e.stFrom,s.e.stTo].forEach(st=>{
           if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
           const p=ST[st];
-          const mk=new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})});
+          const mk=new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D.hot,iconSize:new T.Point(14,14)})});
           try{ mk.addEventListener('click',()=>stationPop(st)); }catch(e){}
           tdMap.addOverLay(mk);
         });
@@ -3251,7 +3797,7 @@ function drawMapTD(){
       const ll=provLngLat(k); if(!ll||seen.has(k)) return; seen.add(k);
       const onRoute=v.routeNodes.has(k);
       const regColor=(tdRPal&&REGION_OF[k]&&!onRoute)?tdRPal[REGION_OF[k]]:null;
-      const iconUrl=onRoute?D_HOT:(regColor?dotSvg(regColor):D_BASE);
+      const iconUrl=onRoute?D.hot:(regColor?dotSvg(regColor):D.base);
       const size=onRoute?14:(regColor?11:9);
       tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl,iconSize:new T.Point(size,size)})}));
     });
@@ -3272,7 +3818,7 @@ function showMapFallback(){
   const fb=document.getElementById('fallback'); if(!fb) return;
   fb.style.display='block';
   const r=state._res&&state._res.rows;
-  let t='<div style="font-weight:600;color:#1F2328;margin-bottom:6px">底图未加载，已降级为网架清单</div>';
+  let t='<div style="font-weight:600;color:var(--ink);margin-bottom:6px">底图未加载，已降级为网架清单</div>';
   t+='<div style="margin-bottom:12px;line-height:1.7;font-size:11.5px">'+(state.mapProvider==='td'
     ?'天地图未加载：请确认密钥有效且网络可达 api.tianditu.gov.cn。'
     :'腾讯地图需运行环境支持；天地图需你自己的密钥。')+'</div>';
@@ -3280,16 +3826,16 @@ function showMapFallback(){
     const sel=Math.min(state.sel,r.length-1);
     t+=`<div style="font-weight:600;margin-bottom:6px">选中方案 #${sel+1}　${r[sel].nodes.map(N).join(' → ')}</div>`;
     r[sel].segs.forEach((s,i)=>{
-      t+=`<div style="padding:6px 0;border-bottom:.5px solid rgba(0,0,0,.06);line-height:1.6">
+      t+=`<div style="padding:6px 0;border-bottom:var(--hairline) solid var(--line2);line-height:1.6">
         <b>第 ${i+1} 段　${N(s.a)} → ${N(s.b)}</b><br>
         ${s.e.n}　${s.e.kv}　${s.t} 元/MWh　计费线损 ${s.billLossPct}%（物理估算 ${s.e.loss}%）<br>
-        <span style="color:#8A8A85">段入口 ${Math.round(s.inMW)} MW　占用 ${s.util!=null?(s.util*100).toFixed(0)+'%':'待补'}</span></div>`;
+        <span style="color:var(--ink3)">段入口 ${Math.round(s.inMW)} MW　占用 ${s.util!=null?(s.util*100).toFixed(0)+'%':'待补'}</span></div>`;
     });
   }
   t+='<div style="font-weight:600;margin:14px 0 6px">全部通道（'+CH.length+' 条）</div>';
   CH.forEach(c=>{
     const on=r&&r.some(row=>row.edges.some(e=>e.id===c.id))?' ●':'';
-    t+=`<div style="padding:3px 0;border-bottom:.5px solid rgba(0,0,0,.06)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
+    t+=`<div style="padding:3px 0;border-bottom:var(--hairline) solid var(--line2)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
   });
   fb.innerHTML=t;
 }
@@ -3375,7 +3921,7 @@ function topoSVG(){
       if(!mem.has(c.id)||v.hot.has(c.id)) return;
       const ps=chanPts(c,P);
       if(!ps) return;
-      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" stroke="#993C1D" stroke-width="5.5" opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>`;
+      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" style="stroke:var(--map-section)" stroke-width="5.5" opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>`;
     });
   }
   // 底图连线：全部通道（可点击=必经过滤；透明宽线仅作点击热区）。
@@ -3389,13 +3935,13 @@ function topoSVG(){
     const st=tierStyle(c.tier);
     const w=((isAlt?1.2:0.7)*st.w).toFixed(2);
     const dash=st.dash?` stroke-dasharray="${st.dash}"`:'';
-    const vis=`fill="none" stroke="${isAlt?'#EF9F27':'#D3D1C7'}" stroke-width="${w}" opacity="${isAlt?0.3:0.18}"${dash} stroke-linecap="round" stroke-linejoin="round"`;
+    const vis=`fill="none" style="stroke:var(${isAlt?'--map-alt':'--map-edge'})" stroke-width="${w}" opacity="${isAlt?0.3:0.18}"${dash} stroke-linecap="round" stroke-linejoin="round"`;
     if(ps.length===2){
       const d=`x1="${ps[0][0].toFixed(1)}" y1="${ps[0][1].toFixed(1)}" x2="${ps[1][0].toFixed(1)}" y2="${ps[1][1].toFixed(1)}"`;
-      edges+=`<line ${d} ${vis}/><line ${d} stroke="rgba(0,0,0,0)" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
+      edges+=`<line ${d} ${vis}/><line ${d} stroke="transparent" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
     }else{
       const pts=ptsAttr(ps);
-      edges+=`<polyline points="${pts}" ${vis}/><polyline points="${pts}" fill="none" stroke="rgba(0,0,0,0)" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
+      edges+=`<polyline points="${pts}" ${vis}/><polyline points="${pts}" fill="none" stroke="transparent" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
     }
   });
   // 选中路线：加粗并编号，段名标注上下交错；同时记录包围盒供视野聚焦（design D4）
@@ -3406,13 +3952,13 @@ function topoSVG(){
       if(!ps) return;
       ps.forEach(p=>{ fx0=Math.min(fx0,p[0]); fx1=Math.max(fx1,p[0]); fy0=Math.min(fy0,p[1]); fy1=Math.max(fy1,p[1]); });
       const pts=ptsAttr(ps);
-      segs+=`<polyline points="${pts}" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
-      segs+=`<polyline points="${pts}" fill="none" stroke="#185FA5" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="pointer-events:stroke"/>`;
+      segs+=`<polyline points="${pts}" fill="none" style="stroke:var(--map-casing)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
+      segs+=`<polyline points="${pts}" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="stroke:var(--map-route);pointer-events:stroke"/>`;
       const m1=ps[Math.floor((ps.length-1)/2)], m2=ps[Math.ceil((ps.length-1)/2)];
       const mx=(m1[0]+m2[0])/2, my=(m1[1]+m2[1])/2;
-      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" fill="#185FA5"/>`
-          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`
-          + `<text x="${mx.toFixed(1)}" y="${(my+(i%2?17:-14)).toFixed(1)}" font-size="10" font-weight="600" fill="#0C447C" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3">${esc(sg.e.n)}</text>`;
+      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" style="fill:var(--map-route)"/>`
+          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`
+          + `<text x="${mx.toFixed(1)}" y="${(my+(i%2?17:-14)).toFixed(1)}" font-size="10" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="3">${esc(sg.e.n)}</text>`;
     });
   }
   // 节点
@@ -3434,12 +3980,12 @@ function topoSVG(){
     const onRoute=v.routeNodes.has(k);
     const isEnd=selR&&(k===selR.nodes[0]||k===selR.nodes[selR.nodes.length-1]);
     const rad=isEnd?6:(onRoute?4.6:2.6);
-    const fill=isEnd?'#0F6E56':(onRoute?'#185FA5':'#B4B2A9');
-    nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" fill="${fill}" stroke="#ffffff" stroke-width="1.3"/>`;
-    if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad+2.8).toFixed(1)}" fill="none" stroke="${rPal[REGION_OF[k]]}" stroke-width="1.8" opacity="0.95"/>`;
+    const fill=isEnd?'--map-end':(onRoute?'--map-route':'--map-node');
+    nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" style="fill:var(${fill});stroke:var(--map-casing)" stroke-width="1.3"/>`;
+    if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad+2.8).toFixed(1)}" fill="none" style="stroke:${rPal[REGION_OF[k]]}" stroke-width="1.8" opacity="0.95"/>`;
     // 聚焦视野下，离线路径且出画的省名不再绘制（避免跨界半截字，spec: grid-map 聚焦）
     if(focused&&!onRoute&&(x<vbx0||x>vbx1||y<vby0||y>vby1)) return;
-    labels+=`<text x="${x.toFixed(1)}" y="${(y-rad-3).toFixed(1)}" font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" fill="${onRoute?'#0C447C':'#9A9A95'}" text-anchor="middle">${esc(N(k))}</text>`;
+    labels+=`<text x="${x.toFixed(1)}" y="${(y-rad-3).toFixed(1)}" font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" style="fill:var(${onRoute?'--map-label-on':'--map-label'})" text-anchor="middle">${esc(N(k))}</text>`;
   });
   // 选中路线的换流站
   let sts='';
@@ -3449,8 +3995,8 @@ function topoSVG(){
       [['from',sg.e.stFrom],['to',sg.e.stTo]].forEach(([side,st])=>{
         if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
         const [x,y]=P(ST[st].lng,ST[st].lat);
-        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#ffffff" stroke="#0F6E56" stroke-width="2" data-st="${st}" style="pointer-events:all"/>`
-           + `<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" font-size="10" font-weight="600" fill="#0F6E56" text-anchor="middle" data-st="${st}" style="pointer-events:all">${esc(ST[st].n)}</text>`;
+        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" stroke-width="2" data-st="${st}" style="fill:var(--map-casing);stroke:var(--map-end);pointer-events:all"/>`
+           + `<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" font-size="10" font-weight="600" text-anchor="middle" data-st="${st}" style="fill:var(--map-end);pointer-events:all">${esc(ST[st].n)}</text>`;
       });
     });
   }
@@ -3462,7 +4008,7 @@ function topoSVG(){
 
   return `<svg viewBox="${vb}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">
 <title>跨省电网拓扑图</title><desc>按站点经纬度投影的节点连线图，仅示拓扑不绘制行政区划边界。</desc>
-<rect x="-200" y="-200" width="${W+400}" height="${H+400}" fill="#F7F8FA"/>
+<rect x="-200" y="-200" width="${W+400}" height="${H+400}" style="fill:var(--map-ground)"/>
 ${edges}${segs}${nodes}${sts}${labels}
 </svg>`;
 }
@@ -3486,7 +4032,7 @@ function chanPop(id){
   const util=(seg&&seg.util!=null)?fmt(seg.util*100,0)+'%':null;
   const on=state.mustHave.length&&state.mustHave[0]===id;
   const basis={cap:'实际输送能力（非 ATC）',rated:'仅额定容量',estimate:'模型估算（非 ATC）'}[c.capBasis]||'';
-  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:9px;padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.75">
+  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:var(--radius-field);padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.75">
     <button class="btn ghost" style="position:absolute;top:8px;right:8px;width:auto;padding:2px 8px;font-size:11px" onclick="document.getElementById('map-pop').innerHTML=''">关闭</button>
     <b>${esc(c.n)}</b>　<span style="color:var(--ink3)">${esc(N(c.from))} → ${esc(N(c.to))}</span>　${tierTag(c.tier)}<br>
     <span style="color:var(--ink2)">${c.regional?'送出省参考价':'输电价'} <b>${c.t==null?'待补':fmt(c.t,1)+' 元/MWh'}</b>　物理线损 ${c.loss==null?'待补':fmt(c.loss,2)+'%'}</span><br>
@@ -3509,7 +4055,7 @@ function stationPop(st){
   const el=document.getElementById('map-pop'); if(!el||!ST[st]) return;
   const p=ST[st];
   const reg=p.p&&REGION_OF[p.p]?REGION_OF[p.p]:null;
-  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:9px;padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.6">
+  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:var(--radius-field);padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.6">
     <button class="btn ghost" style="position:absolute;top:8px;right:8px;width:auto;padding:2px 8px;font-size:11px" onclick="document.getElementById('map-pop').innerHTML=''">关闭</button>
     <b>${esc(p.n)}</b>　<span style="color:var(--ink3)">${esc(PV[p.p]?PV[p.p].n:(p.p||''))}</span><br>
     <span style="color:var(--ink2)">${esc(p.a||'站址未采集')}</span>${reg?`<br><span style="color:var(--ink3)">区域归属：${esc(reg)}区域电网</span>`:''}</div>`;
@@ -3523,7 +4069,8 @@ function mapQSearch(v){
   const total=hits.stations.length+hits.channels.length;
   if(!String(v||'').trim()){ out.innerHTML=''; return; }
   if(!total){ out.innerHTML='<div class="note" style="margin:0 0 6px">无匹配的站点/通道，换个关键词试试。</div>'; return; }
-  const chip=(label,fn)=>`<button class="btn ghost" style="width:auto;padding:3px 10px;font-size:11px" onclick="${fn}">${esc(label)}</button>`;
+  // 结果按钮换行排布、行距 6px：hit-x 让透明扩区只横向扩，免得下一行的按钮抢走上一行下沿的点击
+  const chip=(label,fn)=>`<button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px" onclick="${fn}">${esc(label)}</button>`;
   let html='<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px">'
     +hits.stations.slice(0,6).map(st=>chip(ST[st].n,`mapGotoStation('${esc(st)}')`)).join('')
     +hits.channels.slice(0,6).map(id=>{ const c=CH.find(x=>x.id===id); return chip(c?c.n:id,`mapGotoChan('${esc(id)}')`); }).join('')
@@ -3553,15 +4100,16 @@ function mapGotoChan(id){
    canvas 会被污染，故导出入口仅在拓扑图视图提供。 */
 function exportTopo(){
   const svgEl=document.querySelector('#map-view svg'); if(!svgEl) return;
-  const url=URL.createObjectURL(new Blob([svgEl.outerHTML],{type:'image/svg+xml'}));
+  // 拓扑图配色写的是 var(--令牌)：序列化成独立图片后页面样式表不再生效，先把用到的令牌按当前值内联到根元素
+  const url=URL.createObjectURL(new Blob([inlineTokenVars(svgEl.cloneNode(true)).outerHTML],{type:'image/svg+xml'}));
   const img=new Image();
   img.onload=()=>{
     try{
       const cv=document.createElement('canvas'); cv.width=660*2; cv.height=430*2;
       const ctx=cv.getContext('2d');
-      ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+      ctx.fillStyle=tokenColor('--card'); ctx.fillRect(0,0,cv.width,cv.height);
       ctx.drawImage(img,0,0,cv.width,cv.height);
-      ctx.fillStyle='rgba(0,0,0,.55)'; ctx.font='16px sans-serif';
+      ctx.fillStyle=tokenColor('--snapshot-caption'); ctx.font='16px sans-serif';
       ctx.fillText(`省间路径优选测算 · priceVersion ${String(PRICE_VERSION).slice(0,8)} · ${new Date().toLocaleString('zh-CN')}`,16,cv.height-14);
       cv.toBlob(b=>{
         if(!b) return;
@@ -3625,7 +4173,7 @@ function renderMap(){
   const secStrip=secObj?`<div class="warn" style="margin:0 0 8px">断面高亮：<b>${esc(secObj.n)}</b>　限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}${secObj.note?'　'+esc(secObj.note):''}${secMemberIds(state.mapSec).length?'':'　<span style="color:var(--red)">成员通道未映射到本图</span>'}</div>`:'';
   // 批次 B 增补：区域着色图例（动态，依据 REGION_OF 区域电网分区）
   const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
-  const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--ink3);margin:0 0 8px;align-items:center">
+  const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
       <span style="color:var(--ink2)">区域着色</span>
       ${Object.entries(rPal).map(([n,c])=>`<span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};margin-right:4px;vertical-align:middle"></i>${esc(n)}</span>`).join('')}
       <span style="margin-left:auto">环=区域归属 · 依据：区域电网分区</span>
@@ -3633,7 +4181,7 @@ function renderMap(){
 
   let out=`<div class="card tight">
     <div class="sec-title">跨省网架<span class="hint">${CH.length} 条通道 · ${Object.keys(ST).length} 个站点</span>
-      <button class="btn ghost" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
+      <button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
     <div class="seg small">${MAP_MODES.map(([k,t])=>`<button class="${mode===k?'on':''}" onclick="switchMap('${k}')">${t}</button>`).join('')}</div>`;
 
   if(!proxyOK && mode!=='svg'){
@@ -3657,18 +4205,18 @@ function renderMap(){
   }
 
   out+=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
-      <span><i style="display:inline-block;width:16px;height:3px;background:#185FA5;vertical-align:middle;margin-right:5px"></i>选中方案</span>
-      <span><i style="display:inline-block;width:16px;height:3px;background:#EF9F27;vertical-align:middle;margin-right:5px"></i>其它候选</span>
-      <span><i style="display:inline-block;width:16px;height:3px;background:#D3D1C7;vertical-align:middle;margin-right:5px"></i>全网架</span>
-      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapnet" ${state.mapNet!=='off'?'checked':''}>显示全网架</label></span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-route);vertical-align:middle;margin-right:5px"></i>选中方案</span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-alt);vertical-align:middle;margin-right:5px"></i>其它候选</span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-edge);vertical-align:middle;margin-right:5px"></i>全网架</span>
+      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapnet" ${state.mapNet!=='off'?'checked':''}>显示全网架</label></span>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--ink3);margin:0 0 8px;align-items:center">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
       <span style="color:var(--ink2)">价格线型（弱化层）</span>
-      <span><i class="lg-line" style="border-top:2.5px solid #8A8A85"></i>核定</span>
-      <span><i class="lg-line" style="border-top:1.5px solid #8A8A85"></i>国网披露</span>
-      <span><i class="lg-line" style="border-top:2.5px dashed #8A8A85"></i>区域口径</span>
-      <span><i class="lg-line" style="border-top:2.5px dotted #8A8A85"></i>待核价</span>
-      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
+      <span><i class="lg-line" style="border-top:2.5px solid var(--ink3)"></i>核定</span>
+      <span><i class="lg-line" style="border-top:1.5px solid var(--ink3)"></i>国网披露</span>
+      <span><i class="lg-line" style="border-top:2.5px dashed var(--ink3)"></i>区域口径</span>
+      <span><i class="lg-line" style="border-top:2.5px dotted var(--ink3)"></i>待核价</span>
+      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
     </div>
     ${regionLegend}
     <div style="display:flex;gap:8px;margin:0 0 8px;align-items:center">
@@ -3680,13 +4228,13 @@ function renderMap(){
     </div>
     <div id="map-search-out"></div>
     ${secStrip}
-    ${mode==='svg'?`<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button class="btn ghost" style="padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button></div>`:''}
+    ${mode==='svg'?`<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button class="btn ghost hit-x" style="padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button></div>`:''}
     <div id="map-view" onclick="mapSvgClick(event)"></div><div id="fallback"></div><div id="map-pop"></div>`;
 
   if(selR){
-    out+=`<div style="margin-top:11px;padding-top:11px;border-top:.5px solid var(--line2)">
+    out+=`<div style="margin-top:11px;padding-top:11px;border-top:var(--hairline) solid var(--line2)">
       <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">选中方案 #${state.sel+1}　${esc(selR.nodes.map(N).join(' → '))}</div>
-      ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:.5px solid var(--line2);line-height:1.6">
+      ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:var(--hairline) solid var(--line2);line-height:1.6">
         <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.t)} 元/MWh　计费线损 ${fmt(s.billLossPct,2)}%（物理估算 ${fmt(s.e.loss,2)}%）
         <span style="color:var(--ink3)">｜入口 ${fmt(s.inMW,0)} MW　${s.util!=null?'占用 '+fmt(s.util*100,0)+'%':'容量待补'}</span>
       </div>`).join('')}
@@ -3706,7 +4254,7 @@ function renderMap(){
     if(stale()) return; // 80ms 内用户已切换底图或页面重画则放弃本次注入，避免迟到回调污染新容器
     if(mode==='svg'){
       const box=document.getElementById('map-view');
-      if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='10px'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
+      if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='var(--radius-btn)'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
       const fb=document.getElementById('fallback'); if(fb) fb.style.display='none';
     } else if(mode==='qq'){
       loadTMap(ok=>{
@@ -3749,7 +4297,7 @@ function applyTk(){
       tkMsgGen++;   // 使在途启动探针的异步回写失效，「已保留」为常驻提示（PRD FR-2）
       m.innerHTML=state.tiandituKey
         ?'<span style="color:var(--ink2)">输入为空，已保留本机已存密钥（尾号 '+esc(state.tiandituKey.slice(-4))+'）。要换新密钥请粘贴后再点「应用密钥」；要停用天地图请点「清除密钥」。</span>'
-        :'<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>';
+        :'<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>';
     }
     return;
   }
@@ -3776,9 +4324,9 @@ function tkMsg(kind){
   const gen=++tkMsgGen;   // 新消息使一切在途异步回写失效
   if(kind==='ok'){ tdTileProbe(el,gen); return; }
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
-  if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
-  if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
-  if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
+  if(kind==='empty'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
+  if(kind==='drawfail'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
+  if(kind==='incomplete'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el,gen);
 }
 /* 瓦片级真校验（FR-2，PRD-体验问题修复）：fetch(no-cors) 对任何 HTTP 状态都 resolve，
@@ -3796,11 +4344,11 @@ function tdTileProbe(el,gen){
       +'/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default'
       +'&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=5&TILEROW=1&TILECOL=1&tk='+encodeURIComponent(tk);
     const live=()=>document.getElementById('tk-msg')===el&&gen===tkMsgGen;   // 重绘/新消息竞态防护
-    const failMsg=txt=>'<span style="color:#B3261E;font-weight:600">✗ '+txt+'</span>已保留地图与叠加物，可核对密钥后重试，或点上方「拓扑图」使用内置底图。';
+    const failMsg=txt=>'<span style="color:var(--error-text);font-weight:600">✗ '+txt+'</span>已保留地图与叠加物，可核对密钥后重试，或点上方「拓扑图」使用内置底图。';
     const img=new Image();
     img.onload=()=>{
       if(!live()) return;
-      if(img.naturalWidth>=256){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥有效，底图可用。</span>'; return; }
+      if(img.naturalWidth>=256){ el.innerHTML='<span style="color:var(--teal);font-weight:600">✓ 密钥有效，底图可用。</span>'; return; }
       el.innerHTML=failMsg('瓦片返回内容异常（未能解码为有效图片）。');
     };
     img.onerror=()=>{
@@ -3820,7 +4368,7 @@ function tdTileProbe(el,gen){
    fetch 失败＝传输层不通（代理/防火墙/DNS）。 */
 function tkFailDiagnose(el,gen){
   if(typeof location!=='undefined'&&location.protocol==='file:'){
-    el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 API 加载失败。</span>当前为离线包（file://）环境，请依次检查：①设备网络能否访问 api.tianditu.gov.cn（关闭飞行模式/代理）；②密钥是否有效（可在天地图开放平台「我的应用」核对）；③仍失败时点上方「拓扑图」使用内置底图。已降级为网架清单。';
+    el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 天地图 API 加载失败。</span>当前为离线包（file://）环境，请依次检查：①设备网络能否访问 api.tianditu.gov.cn（关闭飞行模式/代理）；②密钥是否有效（可在天地图开放平台「我的应用」核对）；③仍失败时点上方「拓扑图」使用内置底图。已降级为网架清单。';
     return;
   }
   if(!tdAttempted){ tkFailShow(el, tdFailKind, false); return; }  // 本次未发新请求：沿用上次诊断，不额外探测
@@ -3834,11 +4382,11 @@ function tkFailDiagnose(el,gen){
 function tkFailShow(el, kind, fresh){
   if(kind==='server'){
     el.innerHTML = (!fresh && Date.now()<tdCooldownUntil)
-      ? '<span style="color:#B3261E;font-weight:600">✗ 天地图风控拦截仍未解除。</span>反复重试会延长封禁，请安静等待约 '+Math.ceil((tdCooldownUntil-Date.now())/60000)+' 分钟后再点「应用密钥」。已降级为网架清单。'
-      : '<span style="color:#B3261E;font-weight:600">✗ 天地图服务端拦截了本次请求（临时风控封禁）。</span>静置 30 分钟以上再点「应用密钥」重试一次，期间勿反复点击。已降级为网架清单。';
+      ? '<span style="color:var(--error-text);font-weight:600">✗ 天地图风控拦截仍未解除。</span>反复重试会延长封禁，请安静等待约 '+Math.ceil((tdCooldownUntil-Date.now())/60000)+' 分钟后再点「应用密钥」。已降级为网架清单。'
+      : '<span style="color:var(--error-text);font-weight:600">✗ 天地图服务端拦截了本次请求（临时风控封禁）。</span>静置 30 分钟以上再点「应用密钥」重试一次，期间勿反复点击。已降级为网架清单。';
     return;
   }
-  el.innerHTML = '<span style="color:#B3261E;font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';
+  el.innerHTML = '<span style="color:var(--error-text);font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';
 }
 
 /* ===== src/app/ui/ai.js ===== */
@@ -4013,7 +4561,7 @@ function renderAI(res){
       <label class="f"><span>API Key</span><input id="i-ai-key" type="password" value="${esc(aiState.key)}" placeholder="sk-…" autocomplete="off" oninput="aiField('key',this.value)"></label>
       <p class="note" style="margin-top:2px">密钥只保存在本机浏览器，不会写入本站点或构建产物。浏览器直接调用服务商接口（OpenAI 兼容的 chat/completions），服务商须允许跨域；DeepSeek 已验证可用。</p>
     </div>`;
-  if(stale) out+=`<div style="display:flex;align-items:center;gap:10px;margin:10px 0 0;background:var(--gray-bg);border-radius:9px;padding:9px 11px;font-size:11.5px;color:var(--ink2);line-height:1.55"><span style="flex:1">参数已变化，原推荐已失效。</span><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;flex:none" onclick="aiRun()">重新推荐</button></div>`;
+  if(stale) out+=`<div style="display:flex;align-items:center;gap:10px;margin:10px 0 0;background:var(--gray-bg);border-radius:var(--radius-field);padding:9px 11px;font-size:11.5px;color:var(--ink2);line-height:1.55"><span style="flex:1">参数已变化，原推荐已失效。</span><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;flex:none" onclick="aiRun()">重新推荐</button></div>`;
   if(ai.error) out+=`<div class="warn bad" style="margin:10px 0 0">${esc(ai.error)}</div>`;
   if(ai.loading) out+=`<div class="ai-loading">已把 ${Math.min(feasible,AI_MAX_ROUTES)} 条参考路线与你的要求发给 ${esc(aiState.model)}，通常需要 10～40 秒…</div>`;
   if(ai.result){
@@ -4097,9 +4645,12 @@ document.addEventListener('change',e=>{
     saveLast(); renderCalc();
   }
 });
-// 参数面板：Esc 关闭；后退（含安卓返回键）先关闭面板
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeParams(); });
-if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>closeParams(true));
+// 参数面板与外观面板：Esc 关闭；后退（含安卓返回键）先关闭面板
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); } });
+if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); });
+// 外观主题：data-theme 已由 <head> 内联脚本在首帧前设好，这里读偏好、同步系统栏颜色（meta theme-color / 安卓壳），并跟随系统明暗
+applyTheme();
+watchSystemTheme();
 loadStored();
 aiLoad();          // 智能推荐的服务商 / 密钥 / 上次输入（独立存储，不随 state 持久化）
 applyDeepLink();   // 批次 A·状态深链：hash 携带的 from/to/sel 优先于 LS_LAST（只覆盖这三个输入态）
@@ -4155,7 +4706,7 @@ function guideStart(){
 function guideRender(){
   const ov=document.getElementById('guide-box'); if(!ov) return;
   const st=GUIDE_STEPS[_guideStep], last=_guideStep===GUIDE_STEPS.length-1;
-  ov.innerHTML=`<div role="dialog" aria-label="新手导览" style="pointer-events:auto;position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;background:var(--card);border:.5px solid var(--line);border-radius:14px;box-shadow:0 10px 34px rgba(0,0,0,.18);padding:14px 15px 12px">
+  ov.innerHTML=`<div role="dialog" aria-label="新手导览" style="pointer-events:auto;position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--radius-dialog);box-shadow:var(--shadow-guide);padding:14px 15px 12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <b style="font-size:13.5px">${esc(st.t)}</b>
       <span style="margin-left:auto;font-size:10.5px;color:var(--ink3);white-space:nowrap">${_guideStep+1} / ${GUIDE_STEPS.length}</span>

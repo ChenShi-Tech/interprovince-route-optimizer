@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 系统深色模式：继承深色 Material 主题（isLightTheme=false → WebView 的 prefers-color-scheme 为 dark，
+         网页「跟随系统」时显示清晰深色）。状态栏 / 导航栏取清晰深色的页头色（system-bar 令牌），浅色图标（系统默认）。
+         资源限定符里 night 的优先级高于 v27，深色模式下 API 27+ 也用这里，不会落到 values-v27 的浅色导航栏。 -->
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#1C1F24</item>
+        <item name="android:navigationBarColor">#1C1F24</item>
+        <!-- 窗口底色 = 清晰深色的页面底色：app 内是清晰深色 / 科技时首帧前不闪白；app 内选了「浅色」时，
+             由 MainActivity.restoreSystemBars() 按网页上次在深色系统下同步的颜色改掉（首次安装没有记录，会先露出深色）。
+             系统的启动预览窗只认这里，代码改不了。 -->
+        <item name="android:windowBackground">@color/page_bg</item>
+    </style>
+</resources>

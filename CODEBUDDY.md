@@ -35,12 +35,12 @@ node tools/baseline2.mjs --accept
 # 门禁变异测试：改费率 / 反转方向 / 删字段 / 破坏占位符，四个反事实必须让门禁变红
 node tools/test-mutation.mjs
 
-# 一键发版：构建 → 7 组测试 → 数据审计 → 提交 → 推送（任一不过即中止）
+# 一键发版：构建 → 8 组测试 → 数据审计 → 提交 → 推送（任一不过即中止）
 node tools/release.mjs "提交信息"
 node tools/release.mjs "提交信息" --no-push     # 只到提交为止
 node tools/release.mjs "提交信息" --mutation    # 额外跑门禁变异测试
 
-# 发版必跑的 7 组测试，可单独跑
+# 发版必跑的 8 组测试，可单独跑
 node tools/test-modules.mjs        # 模块结构 + 算法层纯度守卫
 node tools/test-data-share.mjs     # Web 与安卓端数据一致性
 node tools/baseline-check.mjs      # 算法回归基线（2026-09-18 实测 987 条路线）
@@ -48,6 +48,7 @@ node tools/test-model-audit.mjs    # 全模型独立公式与适用期
 node tools/test-regional-billing.mjs # 全国区域计费回归
 node tools/test-prefill.mjs        # 受端参数预填行为
 node tools/test-interaction.mjs    # 交互与计价口径回归
+node tools/test-design-tokens.mjs  # 设计令牌守卫：颜色/圆角字面值只在 src/tokens.css、令牌引用有定义、字号在允许集合内
 
 # 数据审计（也已纳入 release 前置；audit-voltage-tariffs 需 pdftotext）
 node tools/audit-fees.mjs            # 费率库内部审计：单位换算、数值合理性、来源可追溯
@@ -71,7 +72,7 @@ node tools/restore-from-remote.mjs <commit_sha> [文件路径...]   # 从历史�
 
 ## 架构
 
-### 构建管线：三进一出
+### 构建管线：四进一出
 
 `node tools/build.mjs` 把三个输入合成一个自包含 HTML：
 
@@ -79,7 +80,8 @@ node tools/restore-from-remote.mjs <commit_sha> [文件路径...]   # 从历史�
 |---|---|
 | `data/fixed-prices.json` | **所有价格数值的唯一来源**（改价只改这个文件） |
 | `src/extra.json` | 非价格数据：站点、断面、经纬度、容量、线路长度 |
-| `src/template.html` | 页面骨架 + 样式 + 两处注入占位符 |
+| `src/template.html` | 页面骨架 + 样式 + 三处注入占位符（`__TOKENS__` / `__DATA__` / `__APP__`） |
+| `src/tokens.css` | 设计令牌（`:root` 变量）：全站唯一允许写颜色 / 阴影 / 圆角字面值的地方，构建时注入 `<style>` 开头；样式与界面脚本只写 `var(--令牌)`，由 `tools/test-design-tokens.mjs` 守住 |
 
 `docs/tariff.json` 是采集档案（含原文摘录），**不再参与构建**。
 
@@ -98,14 +100,14 @@ node tools/restore-from-remote.mjs <commit_sha> [文件路径...]   # 从历史�
 `src/app/*.js` 不是 ES 模块，构建时按 `build.mjs` 里的 `APP_FILES` 顺序**字符串拼接**进一个 `<script>`，共享全局作用域。顺序有硬约束：
 
 ```
-config → format → data → state → algo/{network,cost,paths,solve} → ui/{calc,lib,map,ai} → boot
+config → format → data → state → algo/{network,cost,paths,solve} → ui/{theme,calc,lib,map,ai} → boot
 ```
 
 `ui/ai.js` 是智能推荐（**当前隐藏**，`AI_ENABLED=false`，逻辑与测试保留）：把 `solve()` 产出的可行路线摘要与用户的自然语言要求发给 OpenAI 兼容接口（默认 DeepSeek），模型只在候选里挑选。它不参与计价、排序或候选生成，密钥存 `localStorage`（`LS_AI`），推荐结果绑定生成它的 `state._res` 对象，参数一变即失效。
 
 「**通道**」下拉（`ui/calc.js` 的 `renderChannelSelect`，位于测算页顶部主卡，界面单选，选项标注经过该通道的最低价）把直流（专项工程）等通道当作组件来筛选方案：`solve()` 的 `input.mustHave` 是通道 id 数组，路径须**全部包含**它们，不区分行进方向。候选清单来自 `solve()` 返回的 `availChannels`——它取自从绕行度筛选后的**完整候选集**，不能用最终 `rows`，否则用户选中一条组件后其余组件会从选择器里消失、再也点不回来。组件 id 取自 `CH[].id`，旧存档里已失效的 id 要忽略而不是筛成空。
 
-`boot.js` **必须最后**——它是唯一含顶层执行语句的模块。`src/template.html` 里的 `/*__DATA__*/` 与 `/*__APP__*/` **必须独占一行**，替换后残留文字会变成悬空代码导致语法错误。新增模块时要同步改 `build.mjs` 的 `APP_FILES` 和 `tools/test-modules.mjs` 的同一列表。
+`boot.js` **必须最后**——它是唯一含顶层执行语句的模块。`src/template.html` 里的 `/*__TOKENS__*/`、`/*__DATA__*/` 与 `/*__APP__*/` **必须独占一行**，替换后残留文字会变成悬空代码导致语法错误。新增模块时要同步改 `build.mjs` 的 `APP_FILES` 和 `tools/test-modules.mjs` 的同一列表。
 
 `build.mjs` 现在自带**构建期 fail-fast**（不过即 `exit 1`）：占位符各出现且仅出现 1 次并独占一行、两份 `APP_FILES` 逐项一致、注入串不含 `String.replace` 的四种替换模式（美元符后接 & 、美元符、反引号、单引号）、内联脚本可被 `vm` 解析、三份产物 `dataHash`/`priceVersion` 同源、数据值域 lint（坐标包络 / `PV` 线损率 / 区域电价 / 双向通道成对 / `CH` 端点省码）。
 
@@ -178,6 +180,16 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 - `PV[].fund` **可能为 `null`**（当前仅西藏）。消费方必须按「缺失」处理并提示用户，**不要静默当 0**——那会低估落地成本
 - 两端通过 `priceVersion`（`data/fixed-prices.json` 的内容哈希）比对版本，`dataHash` 校验完整性。**版本不一致时不要混用两端数据**
 
+## 界面与设计系统（移动端优先）
+
+> 本节与 CLAUDE.md「界面与设计系统」、AGENTS.md「界面红线」同一口径；完整规范见 `docs/12-设计系统与界面规范.md`，可视化设计系统见 <https://claude.ai/artifact/AnZvVZEak5xQW2uPqGuZMp>。
+
+- 这是以手机为主的 app：安卓 WebView 壳是主要形态，Web 只作辅助。所有界面先按 390px 宽度设计和验收。
+- `src/tokens.css` 是唯一允许写颜色、阴影、圆角字面值的地方，构建时注入模板的 `/*__TOKENS__*/`；样式与脚本只写 `var(--x)`，地图 SDK、data: URI、canvas 用 `ui/theme.js` 的 `tokenColor()`。
+- 三套主题：`clear`（默认）/ `clear-dark` / `tech`（科技·调度大屏，固定深色）。页头「外观」切换，存 `iproute.v2.ui`。安卓壳用 `values-night` 跟随系统明暗，app 内切换时通过 `IPRouteShell.setSystemBars` 同步系统栏（这个桥只能改颜色）。
+- 可读性底线：文字 ≥4.5:1、控件边框 ≥3:1、CSS 最小字号 10.5px、可点区域 ≥44px，`tools/test-design-tokens.mjs` 对三套主题逐一检查。
+- 改界面用 `tools/ui-shots.mjs` 截改前改后：纯重构必须零像素差异，有意改动要逐张看三套主题。
+
 ## 纪律（最高优先级）
 
 来自 `docs/开发约定与操作手册.md`，接手前必读。
@@ -187,7 +199,8 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 3. **费率必须分档标注来源**，不得把报备价与发改委核定价混为一谈。2024 年后新投运的金永、中衡、坤渝、庆东、宝合与吉泉、昭沂目前只有国网报备价（昭沂的还有被追溯清算的可能）。
 4. **改动算法后必须跑基线**，`node tools/baseline-check.mjs` 全绿才算完成（条数随数据修正变化，以脚本输出为准）。
    注意**基线只证明实现未漂移、不证明费率数值正确**（校验时会先用基线快照覆盖 CH）；费率/数据正确性靠 `audit-fees.mjs`、`audit-voltage-tariffs.mjs` 与一手来源核对。基线变更必须 `node tools/baseline2.mjs --accept` 显式接受，默认只读。
-5. **新功能开发必须开新 worktree + 新分支**，不在 `main` 工作区直接改。`git worktree add .worktrees/<名字> -b feat/<名字>`（`.worktrees/` 已在 `.gitignore`），做完合回 `main` 再发版。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs:22` 把分支写死为 `main`，会把未合并的改动直接推到远端。详见 `docs/开发约定与操作手册.md` 纪律 5。
+5. **新功能开发必须开新 worktree + 新分支**，不在 `main` 工作区直接改。`git worktree add .claude/worktrees/<分支名把/换成-> -b feat/<名字> origin/main`（`.claude/worktrees/` 已在 `.gitignore`；旧的 `.worktrees/` 约定作废，存量随 PR 合并自然消亡），做完合回 `main` 再发版。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs:22` 把分支写死为 `main`，会把未合并的改动直接推到远端。详见 `docs/开发约定与操作手册.md` 纪律 5。
+6. **界面改动守设计系统纪律**：只用令牌、390px 截图验收、三套主题过对比度，流程见 `docs/12-设计系统与界面规范.md` 第 13 节。
 
 ## Slack 工作简报（irp-work-bot）
 

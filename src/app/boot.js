@@ -59,9 +59,12 @@ document.addEventListener('change',e=>{
     saveLast(); renderCalc();
   }
 });
-// 参数面板：Esc 关闭；后退（含安卓返回键）先关闭面板
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeParams(); });
-if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>closeParams(true));
+// 参数面板与外观面板：Esc 关闭；后退（含安卓返回键）先关闭面板
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); } });
+if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); });
+// 外观主题：data-theme 已由 <head> 内联脚本在首帧前设好，这里读偏好、同步系统栏颜色（meta theme-color / 安卓壳），并跟随系统明暗
+applyTheme();
+watchSystemTheme();
 loadStored();
 aiLoad();          // 智能推荐的服务商 / 密钥 / 上次输入（独立存储，不随 state 持久化）
 applyDeepLink();   // 批次 A·状态深链：hash 携带的 from/to/sel 优先于 LS_LAST（只覆盖这三个输入态）
@@ -117,7 +120,7 @@ function guideStart(){
 function guideRender(){
   const ov=document.getElementById('guide-box'); if(!ov) return;
   const st=GUIDE_STEPS[_guideStep], last=_guideStep===GUIDE_STEPS.length-1;
-  ov.innerHTML=`<div role="dialog" aria-label="新手导览" style="pointer-events:auto;position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;background:var(--card);border:.5px solid var(--line);border-radius:14px;box-shadow:0 10px 34px rgba(0,0,0,.18);padding:14px 15px 12px">
+  ov.innerHTML=`<div role="dialog" aria-label="新手导览" style="pointer-events:auto;position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--radius-dialog);box-shadow:var(--shadow-guide);padding:14px 15px 12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <b style="font-size:13.5px">${esc(st.t)}</b>
       <span style="margin-left:auto;font-size:10.5px;color:var(--ink3);white-space:nowrap">${_guideStep+1} / ${GUIDE_STEPS.length}</span>

@@ -1,0 +1,371 @@
+/* ==================== 设计令牌（design tokens） ====================
+   全站唯一允许出现颜色 / 阴影 / 圆角字面值的地方。构建时由 tools/build.mjs 注入
+   src/template.html 的 <style> 开头（占位符 __TOKENS__）。样式与界面脚本一律写 var(--x)，
+   tools/test-design-tokens.mjs 守住「别处不出现字面值、引用的令牌必须在此定义」。
+   令牌名与取值对齐设计系统 tokens.json；源码原有的 --ink / --line / --bg / --card / --blue… / --r 保持原名原值。
+   主题：<html data-theme> 取 clear（清晰浅色，默认，即本 :root 块）/ clear-dark（清晰深色）/ tech（科技·调度大屏，固定深色）。
+   两个深色主题在文件末尾的 [data-theme=…] 块里逐个覆盖颜色令牌（含图表、网架图、区域、玻璃层、遮罩、气泡、阴影、焦点环），
+   只换取值、不写组件级样式；结构上的差异（网格底纹、卡片高光、数字发光、描边与圆角）也都通过令牌表达。
+   主题由 <head> 内联脚本在首帧前设定、ui/theme.js 的 applyTheme() 切换；对比度由 tools/test-design-tokens.mjs 逐主题检查。
+   ⚠ JS 里拿真实颜色字符串（腾讯地图 / 天地图样式对象、data: URI、canvas）用 ui/theme.js 的 tokenColor()。 */
+:root{
+  /* ---------- 颜色 · 基础（源码 :root 原名原值） ---------- */
+  --ink:#1F2328;              /* 正文与关键数字 */
+  --ink2:#5F5E5A;             /* 次级文字：字段标签、分项名、说明句 */
+  --ink3:#6D6D68;             /* 第三级：提示、单位、元信息、未选中导航；在 card / bg / gray-bg / blue-bg 上均 ≥4.5:1（原 #8A8A85 仅 3.5:1） */
+  --line:rgba(0,0,0,.10);     /* 0.5px 发丝线：卡片外框、页头下沿、导航上沿 */
+  --line2:rgba(0,0,0,.06);    /* 卡片内部分隔：键值行、小标题下划线、段块外框 */
+  --bg:#F4F5F7;               /* 页面底色 */
+  --card:#FFFFFF;             /* 卡片、输入框、白底按钮与白色面 */
+  --blue:#185FA5;             /* 品牌主色：主按钮、选中态、焦点边框 */
+  --blue-bg:#E6F1FB;          /* 选中与结果的底 */
+  --blue-ink:#0C447C;         /* 蓝底上的文字、价格主数字、路线名 */
+  --teal:#0F6E56;             /* 通过 / 已核定 / 终点 */
+  --teal-bg:#E1F5EE;
+  --amber:#854F0B;            /* 提醒 / 口径改动 / 区域口径 */
+  --amber-bg:#FAEEDA;
+  --coral:#993C1D;            /* 界面未直接使用；网架图断面晕圈借用（--map-section） */
+  --coral-bg:#FAECE7;         /* 预留 */
+  --gray:#5F5E5A;             /* 中性标签文字，与 ink2 同值 */
+  --gray-bg:#F1EFE8;          /* 中性填充：指标块、公式块、口径摘要条、置灰字段 */
+  --red:#A32D2D;              /* 越限 / 错误 / 缺数 */
+  --red-bg:#FCEBEB;
+
+  /* ---------- 颜色 · 具名字面值（源码里反复出现的字面色） ---------- */
+  --on-fill:#FFFFFF;                    /* 实色填充上的字：主按钮、改动计数角标、地图序号 */
+  --field-bg:#FFFFFF;                   /* 输入框 / 下拉框 / 文本框的底（清晰浅色与卡片同为白） */
+  --field-border:rgba(0,0,0,.42);       /* 输入框 / 下拉框发丝边框：与白底 ≥3:1（非文字对比度，原 .16 仅 1.5:1） */
+  --ghost-border:rgba(24,95,165,.35);   /* 幽灵按钮与页头「帮助」按钮的边框 */
+  --hero-field-border:rgba(24,95,165,.45); /* 主报价输入框 1.5px 边框 */
+  --header-glass:rgba(255,255,255,.94); /* 吸顶页头毛玻璃底 */
+  --nav-glass:rgba(255,255,255,.96);    /* 手机底部导航毛玻璃底 */
+  --scrim:rgba(20,24,32,.42);           /* 参数弹层遮罩 */
+  --tooltip-bg:rgba(31,35,40,.94);      /* 价格组成条提示气泡底 */
+  --tooltip-ink:#FFFFFF;                /* 价格组成条提示气泡文字（深色主题气泡改浅底，文字随之变深，不与 --on-fill 共用） */
+  --sheet-grab:rgba(0,0,0,.15);         /* 底部弹层拖动条 */
+  --explain-bg:#FCFCFB;                 /* 长段说明折叠容器（details.explain）底 */
+  --issue-accent:#EF9F27;               /* 「适用条件与缺项」左侧色条 */
+  --timeline-line:#85B7EB;              /* 时间线专项工程段竖线 */
+  --region-line:#70B8AC;                /* 时间线区域网架段竖线 */
+  --region-border:#CEE5DF;              /* 区域共用网络卡外框 */
+  --region-bg:#F5FAF8;                  /* 区域共用网络卡与区域计费指标块底 */
+  --region-dash:#8FC3B5;                /* 「××区域网架」中心块虚线框 */
+  --region-arrow:#5E9E90;               /* 区域接入 ↔ 网架 ↔ 交付 之间的箭头 */
+  --region-card-border:#DEEBE6;         /* 区域计费白块外框 */
+  --error-text:#B3261E;                 /* 网架图底图状态行里的 ✗ 错误句 */
+  /* 以下为 tokens.json 之后源码新增的字面色（本阶段补名） */
+  --toast-close-bg:rgba(163,45,45,.12); /* 运行时错误提示条「关闭」按钮底（red 的淡色） */
+  --seg-divider:rgba(0,0,0,.07);        /* 时间线段卡内「取值依据」上方分隔线（比 line2 略深） */
+  --scrim-dialog:rgba(20,24,32,.45);    /* 应用内确认框（uiConfirm）遮罩，比参数弹层略深 */
+  --snapshot-caption:rgba(0,0,0,.55);   /* 拓扑图快照 PNG 底部的版本 / 时间水印文字 */
+  --system-bar:#FFFFFF;                 /* 页头色的不透明版：<meta name="theme-color"> 与安卓壳状态栏 / 导航栏（ui/theme.js 读取，须为 #RRGGBB） */
+
+  /* ---------- 颜色 · 价格组成（ui/calc.js COMP_ITEMS，按项固定） ---------- */
+  --chart-gen:var(--blue);        /* 送端报价 */
+  --chart-origin-loss:#378ADD;    /* 送端省内网损 */
+  --chart-send:#85B7EB;           /* 送出省输电费 */
+  --chart-trans:#EF9F27;          /* 跨省通道费 */
+  --chart-reg:#5DCAA5;            /* 区域电网费 */
+  --chart-loss:#F0997B;           /* 网损折价 */
+  --chart-in-loss:#AFA9EC;        /* 受端上网线损 */
+  --chart-net:#B4B2A9;            /* 受端输配电价 */
+  --chart-fund:#D3D1C7;           /* 基金及附加 */
+  --chart-cap:#8E8AD6;            /* 容（需）量电费 */
+  --chart-sys-op:#7FA7A0;         /* 系统运行费 */
+
+  /* ---------- 颜色 · 网架图（内置 SVG 拓扑图 / 腾讯地图 / 天地图） ---------- */
+  --map-route:var(--blue);        /* 选中方案线路与站点 */
+  --map-alt:#EF9F27;              /* 其它候选路线 */
+  --map-base:#C9C8C3;             /* 底图模式（腾讯 / 天地图）全网架背景线 */
+  --map-edge:#D3D1C7;             /* 内置拓扑图全网架连线与图例色块 */
+  --map-node:#B4B2A9;             /* 内置拓扑图：不在路线上的省份节点 */
+  --map-end:var(--teal);          /* 起止省份节点、换流站圆点与站名 */
+  --map-label:#9A9A95;            /* 非路线省份名称 */
+  --map-label-on:var(--blue-ink); /* 路线上的省份名、段名 */
+  --map-ground:#F7F8FA;           /* 内置拓扑图画布底 */
+  --map-fallback:#EDEFEF;         /* 地图容器在底图加载前 / 降级时的底色 */
+  /* 以下为 tokens.json 之后源码新增的网架图配色（本阶段补名） */
+  --map-casing:#FFFFFF;           /* 白色衬底：选中线白边、节点描边、站点圆心、段名文字描边、地图圆点描边 */
+  --map-dot-base:var(--ink3);     /* 底图模式：非途经省份圆点 */
+  --map-section:var(--coral);     /* 断面高亮垫层（成员通道晕圈） */
+  /* 区域着色调色板（format.js REGION_COLORS，按区域名排序后依次取用）；与既有令牌同色的直接复用 */
+  --map-region-1:var(--blue);
+  --map-region-2:var(--teal);
+  --map-region-3:#B0651A;
+  --map-region-4:var(--chart-cap);
+  --map-region-5:var(--coral);
+  --map-region-6:var(--chart-reg);
+  --map-region-7:var(--chart-sys-op);
+  --map-region-8:var(--amber);
+
+  /* ---------- 字体 ---------- */
+  --font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font-num:var(--font-sans);    /* 数字字体钩子：金额 / 电量 / 比例等数字位置都挂它，主题可单独换数字字体 */
+
+  /* ---------- 下拉箭头（data: URI 不认 CSS 变量，整条 url() 按主题各写一份；箭头色 = --ink3） ---------- */
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%236D6D68' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+
+  /* ---------- 主题结构钩子（清晰风格一律 none，外观不变；科技风格用它们表达网格底纹、卡片高光、数字发光） ---------- */
+  --num-glow:none;              /* 关键数字的 text-shadow：顶部结果大字 .hero-v、方案卡价格 .plan-price b */
+  --page-pattern:none;          /* body 的 background-image（页面底纹） */
+  --card-highlight:none;        /* .card / .hero / .picker / details.adv.boxed 的 box-shadow（卡片顶边内高光） */
+  --hero-field-glow:none;       /* 主报价输入框静止态的 box-shadow（聚焦态仍用 --focus-ring-hero） */
+
+  /* ---------- 阴影与焦点环 ---------- */
+  --focus-ring:0 0 0 3px rgba(24,95,165,.10);       /* 输入框聚焦外晕（与 blue 边框同时出现） */
+  --focus-ring-hero:0 0 0 4px rgba(24,95,165,.14);  /* 主报价输入框聚焦外晕 */
+  --focus-ring-bar:0 0 0 2px #fff,0 0 0 3.5px rgba(31,35,40,.55); /* 价格组成条某段悬停 / 聚焦 */
+  --focus-ring-bad:0 0 0 3px rgba(163,45,45,.10);   /* 超限输入框（input.clamp-bad）红色外晕（新增） */
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.18);       /* 手机底部弹层 */
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.18);  /* ≥600px 右侧滑出弹层 */
+  --shadow-toast:0 4px 14px rgba(0,0,0,.14);        /* 运行时错误提示条 */
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.22);      /* 应用内确认框（新增） */
+  --shadow-guide:0 10px 34px rgba(0,0,0,.18);       /* 新手导览卡片（新增） */
+
+  /* ---------- 间距（名字即像素值；组件内部的 5/7/9/11px 保留原样，不取整） ---------- */
+  --space-4:4px;
+  --space-6:6px;
+  --space-8:8px;
+  --space-10:10px;
+  --space-12:12px;
+  --space-14:14px;
+  --space-16:16px;              /* 手机页面左右边距 */
+  --space-20:20px;              /* 600–899px 页面左右边距 */
+  --space-24:24px;              /* ≥900px 页面左右边距 */
+
+  /* ---------- 圆角（随层级递减：弹层 16 → 卡片 12 → 按钮 10 → 输入 9 → 行内 6 → 档次标 4） ---------- */
+  --radius-sheet:16px;          /* 参数弹层 */
+  --r:12px;                     /* 卡片、主卡、地图容器、时间线段卡、结果块、主报价输入框 */
+  --radius-btn:10px;            /* 按钮、路线卡、推荐卡、口径摘要条、区域计费块、拓扑图画布 */
+  --radius-field:9px;           /* 输入框、警示条、公式块、指标块、分段按钮、段块、折叠说明 */
+  --radius-compact:8px;         /* 参数弹层紧凑输入框、缺项提示 */
+  --radius-mini:7px;            /* 费率库小输入框、小号分段按钮、提示气泡、密钥显隐按钮 */
+  --radius-inline:6px;          /* 口径摘要白底片、组成条、原文引用块、表格内小输入 */
+  --radius-tag:4px;             /* 来源档次标 .tier、费率库小标 .lc-tag */
+  --radius-swatch:2px;          /* 图例与分项色块、拖动条、滚动条滑块 */
+  --radius-pill:999px;          /* 胶囊：徽标、chip、pill、名次标、路线名 */
+  /* 以下为 tokens.json 之外、源码里已有的单值圆角（本阶段补名） */
+  --radius-dialog:14px;         /* 应用内确认框、新手导览卡片 */
+  --radius-bar:5px;             /* 价格组成条（10px 高的整条胶囊） */
+  --radius-meter:3px;           /* 容量计量条（5px 高）、宽屏侧栏滚动条滑块 */
+  --radius-line:1px;            /* 时间线 2px 竖线的端头 */
+
+  /* ---------- 描边宽度 ---------- */
+  --hairline:.5px;              /* 默认边框：卡片、输入框、按钮、分隔线 */
+  --emphasis:1.5px;             /* 选中路线卡、主报价输入框、区域网架虚线框 */
+  --indicator:2px;              /* 时间线竖线、宽屏标签栏选中下划线 */
+  --issue-bar:3px;              /* 「适用条件与缺项」左侧色条 */
+
+  /* ---------- 层级 ---------- */
+  --z-map:0;                    /* 地图容器（contain:paint 自建层叠上下文） */
+  --z-header:20;                /* 吸顶页头 */
+  --z-nav:3000;                 /* 手机底部导航 */
+  --z-sheet:3500;               /* 参数弹层 */
+  --z-toast:3900;               /* 运行时错误提示 */
+
+  /* ---------- 布局宽度 ---------- */
+  --app-width-phone:480px;      /* 手机与窄屏内容列最大宽度 */
+  --sheet-width:400px;          /* ≥600px 右侧弹层宽度 */
+  --app-width-desktop:1320px;   /* ≥900px 内容最大宽度 */
+  --app-width-wide:1480px;      /* ≥1280px 内容最大宽度 */
+  --col-side:348px;             /* 两栏时左侧路线列表 */
+  --col-side-wide:360px;        /* 三栏时左侧路线列表 */
+  --col-ai:340px;               /* 三栏时右侧智能推荐 */
+
+  /* ---------- 断点（仅供查阅：@media 条件里不能用 var()，样式表中照写字面值） ---------- */
+  --bp-fold:600px;              /* 折叠屏展开 / 小平板 */
+  --bp-desktop:900px;           /* Web 辅助版两栏 */
+  --bp-wide:1280px;             /* 宽屏三栏 */
+}
+
+/* ==================== 清晰 · 深色（clear-dark） ====================
+   保留清晰风格的结构与克制：只换颜色，不动描边、圆角与字体。底色用中性深灰（不偏藏蓝，与科技风格区分）。
+   区域色用深青绿系；阴影加深；网架图画布转深，但腾讯地图 / 天地图底图本身仍是浅色（平台侧样式，应用改不了）。 */
+[data-theme="clear-dark"]{
+  color-scheme:dark;
+  /* 基础 */
+  --ink:#E8EAED;
+  --ink2:#B6BBC2;
+  --ink3:#959BA4;
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.07);
+  --bg:#121417;
+  --card:#1C1F24;
+  --blue:#5AA2F0;
+  --blue-bg:#17293E;
+  --blue-ink:#A3CDFF;
+  --teal:#4FCBA2;
+  --teal-bg:#132F28;
+  --amber:#E9B566;
+  --amber-bg:#35290F;
+  --coral:#F2977A;
+  --coral-bg:#3A2119;
+  --gray:#B6BBC2;
+  --gray-bg:#262A31;
+  --red:#F28B82;
+  --red-bg:#3B1D1D;
+  /* 具名字面值 */
+  --on-fill:#0A1626;
+  --field-bg:#16191D;
+  --field-border:#666C75;               /* 在 field-bg 上 3.3:1 */
+  --ghost-border:rgba(90,162,240,.45);
+  --hero-field-border:rgba(90,162,240,.55);
+  --header-glass:rgba(28,31,36,.94);
+  --nav-glass:rgba(28,31,36,.96);
+  --scrim:rgba(0,0,0,.55);
+  --tooltip-bg:#E8EAED;                 /* 深色界面上气泡改浅底深字 */
+  --tooltip-ink:#121417;
+  --sheet-grab:rgba(255,255,255,.22);
+  --explain-bg:#202329;
+  --issue-accent:#E9B566;
+  --timeline-line:#3F74AE;
+  --region-line:#3C8E7E;
+  --region-border:#27463F;
+  --region-bg:#172522;
+  --region-dash:#3F8474;
+  --region-arrow:#63B3A1;
+  --region-card-border:#2A3B37;
+  --error-text:#F28B82;
+  --toast-close-bg:rgba(242,139,130,.16);
+  --seg-divider:rgba(255,255,255,.09);
+  --scrim-dialog:rgba(0,0,0,.6);
+  --snapshot-caption:rgba(255,255,255,.6);
+  --system-bar:#1C1F24;
+  /* 价格组成（--chart-gen 跟随 --blue） */
+  --chart-origin-loss:#9BC6F7;
+  --chart-send:#3F74B0;
+  --chart-trans:#E9A23B;
+  --chart-reg:#4FCBA2;
+  --chart-loss:#EE8F6F;
+  --chart-in-loss:#A9A3EA;
+  --chart-net:#8E949C;
+  --chart-fund:#6B7178;
+  --chart-cap:#8E8AD6;
+  --chart-sys-op:#6FA59C;
+  /* 网架图（拓扑图画布转深；地图 SDK 叠加层同样按这里取色） */
+  --map-alt:#E9A23B;
+  --map-base:#5E646D;
+  --map-edge:#A0A7B1;
+  --map-node:#5E646D;
+  --map-label:#80868F;
+  --map-ground:#181B20;
+  --map-fallback:#1A1D22;
+  --map-casing:#181B20;                 /* 「白色衬底」在深色画布上改成画布色 */
+  --map-region-3:#D08A45;
+  /* 下拉箭头：箭头色 = --ink3 */
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%23959BA4' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* 阴影与焦点环 */
+  --focus-ring:0 0 0 3px rgba(90,162,240,.22);
+  --focus-ring-hero:0 0 0 4px rgba(90,162,240,.25);
+  --focus-ring-bar:0 0 0 2px #1C1F24,0 0 0 3.5px rgba(232,234,237,.6);
+  --focus-ring-bad:0 0 0 3px rgba(242,139,130,.2);
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.5);
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.5);
+  --shadow-toast:0 4px 14px rgba(0,0,0,.45);
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.55);
+  --shadow-guide:0 10px 34px rgba(0,0,0,.5);
+}
+
+/* ==================== 科技 · 调度大屏（tech，固定深色） ====================
+   深色藏蓝底、青色信号光、等宽数字、24px 网格底纹、1px 描边、更小的圆角、关键数字微微发光。
+   全部落在令牌上：网格 = --page-pattern，卡片顶边高光 = --card-highlight，数字发光 = --num-glow，
+   主报价输入框外晕 = --hero-field-glow，等宽数字 = --font-num，1px 描边 = --hairline，圆角 = --r / --radius-*。 */
+[data-theme="tech"]{
+  color-scheme:dark;
+  /* 基础 */
+  --ink:#E6EDF7;
+  --ink2:#A9B8CD;
+  --ink3:#8698B2;
+  --line:rgba(96,165,250,.20);
+  --line2:rgba(96,165,250,.11);
+  --bg:#070E1A;
+  --card:#0D1728;
+  --blue:#2BC4F2;
+  --blue-bg:#0B2A3E;
+  --blue-ink:#8BE6FF;
+  --teal:#3DDC97;
+  --teal-bg:#0B2E26;
+  --amber:#F7B955;
+  --amber-bg:#33260D;
+  --coral:#FF8A65;
+  --coral-bg:#3A1C12;
+  --gray:#A9B8CD;
+  --gray-bg:#111F36;
+  --red:#FF7B7B;
+  --red-bg:#3A1419;
+  /* 具名字面值 */
+  --on-fill:#04121F;
+  --field-bg:#08111F;
+  --field-border:#4A6891;               /* 在 field-bg 上 3.3:1 */
+  --ghost-border:rgba(43,196,242,.45);
+  --hero-field-border:rgba(43,196,242,.6);
+  --header-glass:rgba(7,14,26,.86);
+  --nav-glass:rgba(7,14,26,.94);
+  --scrim:rgba(2,6,14,.62);
+  --tooltip-bg:#E6EDF7;
+  --tooltip-ink:#070E1A;
+  --sheet-grab:rgba(139,230,255,.28);
+  --explain-bg:#0A1424;
+  --issue-accent:#F7B955;
+  --timeline-line:#2596C4;
+  --region-line:#2BA67A;
+  --region-border:#184A3C;
+  --region-bg:#0A211E;
+  --region-dash:#2E8F6C;
+  --region-arrow:#3DDC97;
+  --region-card-border:#153A31;
+  --error-text:#FF7B7B;
+  --toast-close-bg:rgba(255,123,123,.16);
+  --seg-divider:rgba(96,165,250,.16);
+  --scrim-dialog:rgba(2,6,14,.68);
+  --snapshot-caption:rgba(230,237,247,.6);
+  --system-bar:#070E1A;
+  /* 价格组成（--chart-gen 跟随 --blue = #2BC4F2） */
+  --chart-origin-loss:#5B8CFF;
+  --chart-send:#9DB7FF;
+  --chart-trans:#F7B955;
+  --chart-reg:#3DDC97;
+  --chart-loss:#FF8A65;
+  --chart-in-loss:#B69CFF;
+  --chart-net:#7D8FAA;
+  --chart-fund:#52637D;
+  --chart-cap:#A48BFF;
+  --chart-sys-op:#5FC4B6;
+  /* 网架图 */
+  --map-alt:#F7B955;
+  --map-base:#4A6891;
+  --map-edge:#7FA6D9;
+  --map-node:#3E5A80;
+  --map-label:#61728E;
+  --map-ground:#091324;
+  --map-fallback:#0B1628;
+  --map-casing:#091324;
+  --map-region-3:#FF9F43;
+  /* 下拉箭头：箭头色 = --ink3 */
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238698B2' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* 结构钩子 */
+  --num-glow:0 0 16px rgba(43,196,242,.45);
+  --page-pattern:repeating-linear-gradient(0deg,rgba(43,196,242,.055) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(43,196,242,.055) 0 1px,transparent 1px 24px);
+  --card-highlight:inset 0 1px 0 rgba(139,230,255,.07);
+  --hero-field-glow:0 0 0 1px rgba(43,196,242,.12),0 0 22px rgba(43,196,242,.14);
+  /* 阴影与焦点环 */
+  --focus-ring:0 0 0 3px rgba(43,196,242,.22);
+  --focus-ring-hero:0 0 0 1px rgba(43,196,242,.35),0 0 0 4px rgba(43,196,242,.18),0 0 26px rgba(43,196,242,.22);
+  --focus-ring-bar:0 0 0 2px #0D1728,0 0 0 3.5px rgba(139,230,255,.75);
+  --focus-ring-bad:0 0 0 3px rgba(255,123,123,.22);
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.6);
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.6);
+  --shadow-toast:0 4px 14px rgba(0,0,0,.5);
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.6);
+  --shadow-guide:0 10px 34px rgba(0,0,0,.55);
+  /* 字体、描边、圆角 */
+  --font-num:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --hairline:1px;
+  --r:8px;
+  --radius-btn:6px;
+  --radius-field:6px;
+  --radius-compact:6px;                 /* 参数弹层紧凑输入框与普通输入框同为 6px */
+  --radius-pill:3px;                    /* 标签、胶囊变方角 */
+  --radius-tag:3px;
+}

@@ -337,9 +337,10 @@ function renderHeroResult(res){
     <div class="hero-sub">${stops.map(s=>esc(s.name)).join(' → ')}${landings.length?'　落点 '+landings.map(s=>esc(s.landing)).join('、'):''}</div>
   </div>`;
 }
-/* 价格组成：各项之和即最终价格（comp 与 landed 同口径，见 algo/cost.js）。为 0 的项不列，送端报价始终列出。 */
-const COMP_ITEMS=[['gen','送端报价','#185FA5'],['originLoss','送端省内网损','#378ADD'],['send','送出省输电费','#85B7EB'],['trans','跨省通道费','#EF9F27'],
-  ['reg','区域电网费','#5DCAA5'],['loss','网损折价','#F0997B'],['inLoss','受端上网线损','#AFA9EC'],['net','受端输配电价','#B4B2A9'],['fund','基金及附加','#D3D1C7'],['cap','容（需）量电费','#8E8AD6'],['sysOp','系统运行费','#7FA7A0']];
+/* 价格组成：各项之和即最终价格（comp 与 landed 同口径，见 algo/cost.js）。为 0 的项不列，送端报价始终列出。
+   颜色是设计令牌引用（src/tokens.css 的 --chart-*），只用于 style 属性，随主题变化。 */
+const COMP_ITEMS=[['gen','送端报价','var(--chart-gen)'],['originLoss','送端省内网损','var(--chart-origin-loss)'],['send','送出省输电费','var(--chart-send)'],['trans','跨省通道费','var(--chart-trans)'],
+  ['reg','区域电网费','var(--chart-reg)'],['loss','网损折价','var(--chart-loss)'],['inLoss','受端上网线损','var(--chart-in-loss)'],['net','受端输配电价','var(--chart-net)'],['fund','基金及附加','var(--chart-fund)'],['cap','容（需）量电费','var(--chart-cap)'],['sysOp','系统运行费','var(--chart-sys-op)']];
 function priceItems(r){
   return COMP_ITEMS.filter(([k])=>k==='gen'||Math.abs(r.comp[k])>1e-9).map(([k,label,color])=>({k,label,color,v:r.comp[k]}));
 }
@@ -402,7 +403,7 @@ function renderRouteList(res){
   }
   out+=`<div class="rlist-foot" style="margin-top:7px">
       <span>成本阈值</span>
-      <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:6px">
+      <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:var(--radius-inline)">
         ${[[0.03,'3%'],[0.05,'5%'],[0.10,'10%'],[0.20,'20%'],[9,'不限']].map(([v,t])=>
           `<option value="${v}" ${(state.degrade??0.10)==v?'selected':''}>${t}</option>`).join('')}
       </select>
@@ -535,7 +536,7 @@ function renderRouteSegment(r,i){
         :`<div class="tl-cap">核定容量待补，无法校验占用</div>`}
       <div class="tl-sub">长度 ${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}<i>·</i>段入口功率 ${fmt(s.inMW,0)} MW<i>·</i>段损耗 ${fmt(s.lossMwh,2)} MWh<em>（物理估算）</em></div>
       ${e.regional?`<details class="explain"><summary>计费说明</summary><div class="inner"><p class="note">${e.tariffStatus==='unknown'?'独立输电价待核，当前未计此项；':'区域共用网络接口，不逐个收通道费；'}${i===0?'送出省费用只在交易起点计一次。':'不收过境省外送费。'}${e.type==='AC' && s.billLossPct===0?'计费损耗 0，物理损耗仅作容量估算。':'背靠背损耗为估算，须核对备案标准。'}</p></div></details>`:''}
-      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　生效 '+esc(e.eff):''}</div>
+      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　<span style="white-space:nowrap">生效 '+esc(e.eff)+'</span>':''}</div>
     </div>
   </div>`;
 }
