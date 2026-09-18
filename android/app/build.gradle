@@ -14,11 +14,30 @@ android {
         versionName "1.1.5"
     }
 
+    // 正式发布签名：密钥不入库，靠环境变量传入（发版流水线从仓库 Secrets 还原到临时文件）。
+    // 本机 `node android/build-apk.mjs` 不设这些变量，走 debug 签名自测，不受影响。
+    signingConfigs {
+        release {
+            def ksPath = System.getenv("IPROUTE_KEYSTORE")
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword System.getenv("IPROUTE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("IPROUTE_KEY_ALIAS")
+                keyPassword System.getenv("IPROUTE_KEY_PASSWORD")
+                // v2 是 Android 7.0+ 的整包签名；v3 额外支持将来轮换密钥（AGP 默认不开 v3）。
+                // minSdk 26 用不到 v1（仅 Android 7.0 以下需要）
+                enableV1Signing false
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            // 内部试用先用 debug 签名分发；正式发布时再配置 release 签名
-            signingConfig signingConfigs.debug
+            // 没给密钥就产出未签名包（宁可让发版流水线在验签步骤失败，也不要悄悄用 debug 签名冒充正式包）
+            signingConfig System.getenv("IPROUTE_KEYSTORE") ? signingConfigs.release : null
         }
     }
     compileOptions {
