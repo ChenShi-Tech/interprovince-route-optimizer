@@ -16,9 +16,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 node tools/build.mjs               # 构建：src/ + data/ → index.html + shared/app-data.json(.min)
-node tools/baseline-check.mjs      # 算法回归基线，必须 989/989 通过
+node tools/baseline-check.mjs      # 算法回归基线，全绿才算通过（条数随数据修正变化，2026-09-18 实测 425 省对 / 987 条）
 node tools/baseline2.mjs           # 重生成基线 + 渲染冒烟 + 底图合规检查（改了费率/通道数据后先跑这个）
-node tools/release.mjs "提交信息"   # 一键发版：构建 → 7 组测试 → 提交 → 推送（任一不过即中止）
+node tools/release.mjs "提交信息"   # 一键发版：构建 → 7 组测试 → 数据审计 → 提交 → 推送（任一不过即中止）
 node tools/release.mjs "提交信息" --no-push
 
 # 发版必跑的 7 组，可单独执行
@@ -119,7 +119,7 @@ maxSourceQuote = (pDst − F)/A            // 别名 senderNet，语义是「可
 1. **不得编造费率数值。** 找不到就写 `null` 并记录已检索路径。一个编造的费率比一个缺失的费率危害大得多。容量同理——ATC 我国不公开，宁可标「未获取」。
 2. **价格只有一处来源**：`data/fixed-prices.json`，改完跑 `node tools/build.mjs`。
 3. **费率必须分档标注来源**，不得把国网报备价与发改委核定价混为一谈。
-4. **改动算法后必须跑基线**，`989/989` 通过才算完成。
+4. **改动算法后必须跑基线**，`node tools/baseline-check.mjs` 全绿才算完成（条数以脚本输出为准）。基线只证明实现未漂移、不证明费率数值正确——校验前会用基线快照覆盖 `CH`；费率正确性靠 `audit-fees.mjs` / `audit-voltage-tariffs.mjs` 与一手原件。基线变更须 `node tools/baseline2.mjs --accept` 显式接受。
 5. **新功能开新 worktree + 新分支**，不在 `main` 工作区直接改：`git worktree add .worktrees/<名字> -b feat/<名字>`（`.worktrees/` 已在 `.gitignore`）。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs` 把分支写死为 `main`，会把未合并的改动推到远端。
 6. **数据准确性优先于界面与新功能。** 数据分支阻塞时先审、先修、先合并，再动功能。
 
@@ -156,7 +156,8 @@ ATC、省内重要输电通道清单与限额、交易路径集合、西藏基�
 | `docs/09-算法模型与收费标准审计.md` | 公式来源、全国审查、可复算数字与不可认证范围 |
 | `docs/gaps.md` / `docs/sources.md` / `docs/费率核实报告.md` | 数据缺口、来源清单、逐条核实结论 |
 | `docs/原始文件/` | S01～S34 一手原件，可离线核对每一个费率 |
-| `docs/regression-baseline-v2.json` | 426 个省对的数值基线（端侧移植也必须对它跑） |
+| `docs/regression-baseline-v2.json` | 算法数值基线（2026-09-18 实测 425 省对 / 987 条；端侧移植也必须对它跑） |
+| `docs/11-数据与功能独立复核报告（2026-09-18）.md` | 独立复核：1011 项数据核对 + 91 条功能发现，P0/P1/P2 修复清单 |
 | `docs/01-安卓开发框架.md` / `ios/README.md` | 端侧路线与工具链 |
 
 **定价规则谱系**：`〔2017〕2269号` → `〔2021〕1455号` → **`〔2025〕1490号`（现行）**。引用条款要用现行版本，1455 号已废止。
