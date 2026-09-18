@@ -1,12 +1,16 @@
-// E2E 测试：省间路径优选测算（http://127.0.0.1:8734/）
-// 运行：node tests/e2e.mjs   （需先 node tools/build.mjs 并启动静态服务）
+// E2E 测试：省间路径优选测算（默认 http://127.0.0.1:8734/，可用 E2E_BASE 覆盖）
+// 运行：BROWSER=chrome node tests/e2e.mjs   （需先 node tools/build.mjs 并启动静态服务）
+// 多会话并行时用私有端口：E2E_BASE=http://127.0.0.1:8741/ BROWSER=chrome node tests/e2e.mjs
 // 产出：tests/report.md + tests/shots/*.png + tests/results.json
+// 未实现的功能用例在测试定义里标 skip（见文件内注释），报告单列「未实现，不计入通过率」。
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BASE = 'http://127.0.0.1:8734/';
+// 被测地址默认 8734（tests/dev-server.mjs 的默认端口）。多会话并行时该端口可能被别的
+// 工作区占用，允许用 E2E_BASE 指向自己的私有端口（如 E2E_BASE=http://127.0.0.1:8741/）。
+const BASE = process.env.E2E_BASE || 'http://127.0.0.1:8734/';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SHOTS = path.join(here, 'shots');
 fs.mkdirSync(SHOTS, { recursive: true });
@@ -15,18 +19,26 @@ const ok = (cond, msg) => { if (!cond) throw new Error(msg); };
 const results = [];
 
 async function runTest(browser, def) {
+  const rec = { id: def.id, section: def.section, title: def.title, steps: def.steps, expected: def.expected, actual: '', pass: false, skipped: false, skipReason: def.skip || '', shot: '', logs: { console: [], pageErrors: [], failedReq: [], badStatus: [] } };
+  // 未实现的功能用例：显式跳过并列入报告，不参与通过率，也不假装通过。
+  if (def.skip) {
+    rec.skipped = true;
+    rec.actual = '未实现，不计入通过率：' + def.skip;
+    results.push(rec);
+    console.log(`⏭️  ${def.id} ${def.title}（未实现，不计入通过率）`);
+    return;
+  }
   const context = await browser.newContext({ viewport: def.viewport || { width: 390, height: 844 } });
   // FR-3 新手导览预置「已读」：导览仅在安装后首启弹出，若不预置会闯进每个用例的点击路径与截图。
   // 导览自身行为由 UX-06 专项验证（清除该键后重载触发首启分支）。
   await context.addInitScript(() => { try { localStorage.setItem('iproute.v2.guide', '1'); } catch (e) {} });
   const page = await context.newPage();
-  const logs = { console: [], pageErrors: [], failedReq: [], badStatus: [] };
+  const logs = rec.logs;
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') logs.console.push(`[${m.type()}] ${m.text().slice(0, 160)}`); });
   page.on('pageerror', e => logs.pageErrors.push(String(e).split('\n')[0].slice(0, 160)));
   page.on('requestfailed', r => logs.failedReq.push(`${(r.failure() && r.failure().errorText) || 'failed'} ${r.url().slice(0, 90)}`));
   page.on('response', r => { if (r.status() >= 400) logs.badStatus.push(`${r.status()} ${r.url().slice(0, 90)}`); });
 
-  const rec = { id: def.id, section: def.section, title: def.title, steps: def.steps, expected: def.expected, actual: '', pass: false, shot: '', logs };
   try {
     await def.run(page, s => { rec.actual = s; });
     if (!rec.actual) rec.actual = '通过';
@@ -44,6 +56,18 @@ async function runTest(browser, def) {
   console.log(`${rec.pass ? '✅' : '❌'} ${def.id} ${def.title}${rec.pass ? '' : '\n   ' + rec.actual.slice(0, 200)}`);
 }
 
+/* 应用内确认框（uiConfirm，state.js）与参数弹出面板都带 role="dialog"，
+   定位确认框必须排除 .sheet-panel，否则 Playwright strict mode 报 2 个匹配。 */
+const confirmDlg = (page) => page.locator('[role="dialog"]:not(.sheet-panel)');
+/* 参数弹出面板：费用口径 / 受端到户 / 网损承担方 / 通道范围 / 中长期占用等输入都在面板里，
+   面板收起时这些控件不可见，必须先打开再操作。 */
+const openParams = async (page) => {
+  if (await page.evaluate(() => !document.getElementById('param-sheet').classList.contains('open'))) {
+    await page.click('#btn-params');
+    await page.waitForTimeout(150);
+  }
+};
+
 const G = BASE, DCL = { waitUntil: 'domcontentloaded', timeout: 20000 };
 const tests = [
 
@@ -58,9 +82,14 @@ const tests = [
       ok(await page.locator('#i-to').inputValue() === 'JS', '目的地应为 JS(江苏)');
       const cards = await page.locator('.rc').count();
       ok(cards > 0, '路线卡片应>0，实际 ' + cards);
-      ok(await page.locator('.hero-v').count() > 0, '落地价未渲染');  // 2026-09-18：.big → .hero-v（结果页重构后选择器过时）
+      // 修正(2026-09-18)：落地价元素已由 .big 改为方案卡 .plan-price b / 顶部主卡 .hero-v（calc.js renderDetail），
+      // 断言语义（落地价已渲染且为数字）不变。
+      const planPrice = (await page.locator('.plan-price b').first().innerText()).trim();
+      ok(/^[\d.]+$/.test(planPrice), `落地价未渲染，实际「${planPrice}」`);
+      const hero = (await page.locator('.hero-v').first().innerText()).trim();
+      ok(/^[\d.]+/.test(hero), `顶部主卡落地价未渲染，实际「${hero}」`);
       const hd = (await page.locator('.hd-route').first().innerText()).trim();
-      set(`默认 SC→JS；卡片 ${cards} 张；详情「${hd.slice(0, 36)}」；pageerror=${logs0(page)}`);
+      set(`默认 SC→JS；卡片 ${cards} 张；方案卡落地价 ${planPrice} 元/MWh；详情「${hd.slice(0, 36)}」；pageerror=${logs0(page)}`);
     },
   },
   {
@@ -93,22 +122,32 @@ const tests = [
       ok(await page.evaluate(() => state.sel) === 1, 'state.sel 应为 1');
       const onIdx = await page.evaluate(() => [...document.querySelectorAll('.rc')].findIndex(b => b.classList.contains('on')));
       ok(onIdx === 1, `高亮卡片应为第 2 张(index 1)，实际 ${onIdx}`);
-      const hd = await page.locator('.plan-no').first().innerText();  // 2026-09-18：.sec-title(方案) → .plan-no（方案区重构）
+      // 修正(2026-09-18)：详情标题已由 .sec-title（现仅用于「可选路线 / 交易连接与区域计费」）改为方案卡 .plan-no。
+      const hd = await page.locator('.plan-no').first().innerText();
       ok(hd.includes('方案 #2'), `详情标题应含「方案 #2」，实际「${hd.trim().slice(0, 20)}」`);
       set(`sel=1，第 2 张卡片 .on 高亮，详情「${hd.trim().slice(0, 12)}」`);
     },
   },
   {
-    id: 'F-04', section: '主流程', title: '默认按落地成本升序（2026-09-18 重写）',
-    steps: '打开测算页，读取候选落地成本序列',
-    expected: '三口径排序 UI 已下线（排序口径固定为落地成本 A），候选按落地成本升序排列',
+    id: 'F-04', section: '主流程', title: '路线排序固定按落地价升序（排序按钮已移除）',
+    steps: '检查页面无排序控件；读取可行方案的落地价序列与列表页脚说明',
+    expected: '排序口径固定为「按价格从低到高」（state.sortBy=A，界面不再提供过网费/送端收益排序）；可见可行方案 landed 单调不减',
     async run(page, set) {
       await page.goto(G, DCL);
-      ok(await page.evaluate(() => state.sortBy) === 'A', '排序口径应固定为 A(落地成本)');
-      const ch = await page.evaluate(() => state._res.rows.map(r => r.landed));
-      const sorted = ch.every((v, i) => i === 0 || ch[i - 1] <= v);
-      ok(sorted, `落地成本应升序，实际前 5 项 ${ch.slice(0, 5).map(v => v.toFixed(1)).join(',')}`);
-      set(`固定口径 A；落地成本升序（首项 ${ch[0].toFixed(1)} 元/MWh，共 ${ch.length} 条）`);
+      // 修正(2026-09-18)：REQ 重构（570473e）后排序按钮整体移除，排序固定按落地价升序（test-interaction 亦守住该口径）。
+      // 原用例点击「过网费」按钮断言 sortBy=B，属已移除的功能，改为断言当前唯一存在的排序行为。
+      const btns = await page.locator('.seg.small button', { hasText: /过网费|送端收益|落地价/ }).count();
+      ok(btns === 0, `排序按钮应已移除，实际仍有 ${btns} 个`);
+      const foot = await page.locator('.rlist-foot').first().innerText();
+      ok(foot.includes('按价格从低到高'), `列表页脚应标注排序口径，实际「${foot.trim().slice(0, 30)}」`);
+      const r = await page.evaluate(() => ({
+        sortBy: state.sortBy,
+        landed: state._res.rows.filter(x => x.feasible).map(x => x.landed),
+      }));
+      const sorted = r.landed.every((v, i) => i === 0 || r.landed[i - 1] <= v + 1e-9);
+      ok(sorted, `可行方案应按落地价升序，实际前 5 项 ${r.landed.slice(0, 5).map(v => v.toFixed(1)).join(',')}`);
+      ok(r.sortBy === 'A', `排序口径应固定为 A，实际 ${r.sortBy}`);
+      set(`无排序控件；页脚「${foot.trim()}」；可行方案 ${r.landed.length} 条按落地价升序（首项 ${r.landed[0].toFixed(1)} 元/MWh）`);
     },
   },
   {
@@ -143,8 +182,9 @@ const tests = [
     expected: 'comp.loss=0；费用拆解表不再出现「网损折价」行',
     async run(page, set) {
       await page.goto(G, DCL);
-      // 修正(2026-09-18)：网损承担方等口径输入已迁入参数面板（sheet），需先经 #btn-params 打开
-      await page.click('#btn-params');
+      // 修正(2026-09-18)：参数（含网损承担方）已从页内展开区移入「参数」弹出面板（122e970），
+      // 面板收起时控件不可见，须先打开面板再操作；断言语义不变。
+      await openParams(page);
       await page.selectOption('#i-bearer', '0');
       const loss = await page.evaluate(() => state._res.rows[0].comp.loss);
       ok(loss === 0, `comp.loss 应为 0，实际 ${loss}`);
@@ -164,7 +204,8 @@ const tests = [
     expected: 'showBad=true；列表卡片数不少于之前；顶部显示「共 X 条候选 · 可行 Y 条」',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.selectOption('#i-to', 'SH');   // 2026-09-18：#i-hops 已下线（跳数固定 MAX_HOPS），删除该步
+      // 修正(2026-09-18)：跳数输入已移除（界面固定取上限 MAX_HOPS=10），原 #i-hops 选择作废。
+      await page.selectOption('#i-to', 'SH');
       const before = await page.locator('.rc').count();
       await page.locator('.tg input').check();
       const after = await page.locator('.rc').count();
@@ -177,18 +218,24 @@ const tests = [
   },
   {
     id: 'F-08', section: '主流程', title: '展开全部路线（>18 条）',
-    steps: '四川→上海，跳数选 5，点「展开全部」',
-    expected: '全部候选渲染为卡片（README：5 段 162 条量级）；按钮变「收起」',
+    steps: '四川→上海，点「展开全部」',
+    expected: '默认只列成本接近的若干条；点「展开全部」后全部候选渲染为卡片，展开入口消失（showAll=true）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.selectOption('#i-to', 'SH');   // 2026-09-18：#i-hops 已下线，删除该步
+      // 修正(2026-09-18)：跳数输入已移除（固定 MAX_HOPS=10），原 #i-hops=5 选择作废。
+      await page.selectOption('#i-to', 'SH');
       const btn = page.locator('button', { hasText: '展开全部' });
       ok(await btn.count() > 0, '应出现「展开全部」按钮');
       await btn.first().click();
       const n = await page.locator('.rc').count();
       const rows = await page.evaluate(() => state._res.rows.length);
+      ok(rows > 18, `候选应 >18 条才有展开意义，实际 ${rows}`);
       ok(n === rows, `卡片数 ${n} 应等于 rows ${rows}`);
-      set(`展开后卡片 ${n} 张 = 候选总数 ${rows}`);
+      // 修正(2026-09-18)：展开后 hiddenN=0，按钮整体移除（renderRouteList 只在 hiddenN>0 时渲染切换按钮），
+      // 原期望「按钮变收起」在现实现里不可达；断言语义改为「展开后不再有展开入口且 showAll 已置位」。
+      ok(await page.evaluate(() => state.showAll === true), 'state.showAll 应为 true');
+      ok(await page.locator('button', { hasText: '展开全部' }).count() === 0, '展开后不应再出现「展开全部」按钮');
+      set(`展开后卡片 ${n} 张 = 候选总数 ${rows}；展开入口消失（showAll=true）`);
     },
   },
   {
@@ -222,7 +269,7 @@ const tests = [
       ok(n === exp, `省份下拉应含全部 ${exp} 个省份（含 2026-09-17 补录的海南），实际 ${n}`);
       const dis = await page.evaluate(() => { const o = [...document.getElementById('i-to').options].find(o => o.value === 'SC'); return o && o.disabled; });
       ok(dis === true, '目的地中四川应被禁用');
-      set(`下拉 30 项；目的地中四川 disabled=${dis}`);
+      set(`下拉 ${n} 项（=省级参数省份数）；目的地中四川 disabled=${dis}`);
     },
   },
   {
@@ -270,7 +317,8 @@ const tests = [
       await page.click('#t-lib');
       await page.evaluate(() => { CH[0].t = 123; });
       const btn = page.locator('button', { hasText: '恢复检索原始值' });
-      const dlg = page.locator('[role="dialog"]:not(.sheet-panel)');
+      // 修正(2026-09-18)：role=dialog 现有两个（应用内确认框 + 参数弹出面板 .sheet-panel），须排除后者。
+      const dlg = confirmDlg(page);
       await btn.click();
       await dlg.waitFor({ state: 'visible', timeout: 3000 });
       const msg = await dlg.innerText();
@@ -504,15 +552,14 @@ const tests = [
   },
   {
     id: 'E-05', section: '异常', title: '空结果：无连通路径的错误引导',
-    steps: '出发地北京，跳数选 1（无直达通道）',
-    expected: '显示「在 1 段以内没有…连通路径，请放宽跳数上限」空态卡片',
+    steps: '出发地北京，目的地贵州（库内北方与南方电网间无已录入的连通边）',
+    expected: '显示「在 10 段以内没有 北京 到 贵州 的连通路径」空态卡片（跳数已固定为上限，不再提示放宽跳数）',
     async run(page, set) {
       await page.goto(G, DCL);
-      // 2026-09-18 重写：#i-hops 已下线；改用参数面板「通道范围=仅专项工程」制造空态（BJ 仅 1 条联络线，非专项工程）
+      // 修正(2026-09-18)：跳数输入已移除，原「北京 + 1 段」构造的空态不再成立（BJ 已是连通节点）。
+      // 改用真实的库内不连通省对 北京→贵州（南网 5 条物理直流 pricePending，不参与枚举），语义不变。
       await page.selectOption('#i-from', 'BJ');
-      await page.click('#btn-params');
-      await page.selectOption('#i-tradable', '1');
-      await page.waitForTimeout(200);
+      await page.selectOption('#i-to', 'GZ');
       const msg = await page.locator('.empty').innerText();
       ok(msg.includes('暂无接入') || msg.includes('连通路径'), `应显示空态引导，实际「${msg.slice(0, 50)}」`);  // 2026-09-18：文案已演进为「XX 暂无接入的跨省通道」
       set(`空态卡片：「${msg.trim()}」`);
@@ -531,7 +578,8 @@ const tests = [
         window.__origSetItem = Storage.prototype.setItem;
         Storage.prototype.setItem = function () { throw new Error('HR01 模拟配额超限'); };
       });
-      await page.selectOption('#i-to', 'ZJ');   // 2026-09-18：#i-hops 已下线，改用换受端触发重算
+      // 修正(2026-09-18)：跳数输入已移除，改用同样会触发重算与持久化的「成本阈值」下拉。
+      await page.selectOption('#i-degrade', '0.05');
       await page.waitForTimeout(150);
       const r1 = await page.evaluate(() => ({
         warnN: [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length,
@@ -540,7 +588,7 @@ const tests = [
       ok(r1.warnN === 1, `存储故障提示应恰好 1 条，实际 ${r1.warnN}`);
       ok(r1.rows > 0, `存储故障下测算应正常，实际 ${r1.rows} 条`);
       await page.locator('.rc').nth(1).click();
-      await page.selectOption('#i-to', 'SH');   // 2026-09-18：#i-hops 已下线，改用换受端触发重算
+      await page.selectOption('#i-degrade', '0.2');
       await page.waitForTimeout(150);
       const r2 = await page.evaluate(() => [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length);
       ok(r2 === 1, `多次写入失败后提示仍应 1 条，实际 ${r2}`);
@@ -550,7 +598,7 @@ const tests = [
   },
   {
     id: 'HR-02', section: '运行时健壮性', title: '重渲染保持折叠态（完整明细 + 无 id 说明面板）',
-    steps: '展开「完整明细」与任一口径说明面板，改价格、切跳数触发重算',
+    steps: '展开「完整明细」与任一口径说明面板，改价格、切成本阈值触发重算',
     expected: '重建后两者仍为展开态（修复前完整明细会被收回）',
     async run(page, set) {
       await page.goto(G, DCL);
@@ -564,9 +612,10 @@ const tests = [
       await page.waitForTimeout(150);
       ok(await page.evaluate(() => document.getElementById('d-detail').open), '改价格后完整明细应保持展开');
       const ex1 = await page.evaluate(() => { const d = document.querySelector('details.explain'); return d ? d.open : null; });
-      await page.selectOption('#i-to', 'ZJ');   // 2026-09-18：#i-hops 已下线，改用换受端触发重算
+      // 修正(2026-09-18)：跳数输入已移除，改用「成本阈值」下拉触发第二次重渲染。
+      await page.selectOption('#i-degrade', '0.05');
       await page.waitForTimeout(150);
-      ok(await page.evaluate(() => document.getElementById('d-detail').open), '切跳数后完整明细应保持展开');
+      ok(await page.evaluate(() => document.getElementById('d-detail').open), '切成本阈值后完整明细应保持展开');
       const ex2 = await page.evaluate(() => [...document.querySelectorAll('details.explain')].some(d => d.open));
       ok(ex2 === true, `无 id 说明面板展开态应保持，实际 ${ex2}`);
       set(`d-detail 保持展开；说明面板 open=${ex1}→${ex2}`);
@@ -580,13 +629,14 @@ const tests = [
       await page.goto(G, DCL);
       await page.waitForSelector('.rc');
       await page.evaluate(() => { document.getElementById('d-detail').open = true; });
+      // 修正(2026-09-18)：跳数输入已移除（固定 10 段）。错误态改用库内真实不连通的 北京→贵州，
+      // 往返仍是「错误态 → 恢复结果态」，与 M11 的按 id 恢复展开断言一致。
       await page.selectOption('#i-from', 'BJ');
-      await page.click('#btn-params');   // 2026-09-18：#i-hops 已下线，改用「仅专项工程」制造错误空态（BJ 仅 1 条联络线）
-      await page.selectOption('#i-tradable', '1');
+      await page.selectOption('#i-to', 'GZ');
       await page.waitForTimeout(150);
       const err = await page.evaluate(() => ({ empty: !!document.querySelector('.empty'), dets: document.querySelectorAll('#v-calc details').length }));
       ok(err.empty, '应进入错误空态');
-      await page.selectOption('#i-from', 'SC');
+      await page.selectOption('#i-to', 'JS');
       await page.waitForTimeout(150);
       const back = await page.evaluate(() => ({
         detailOpen: document.getElementById('d-detail').open,
@@ -599,14 +649,15 @@ const tests = [
   },
   {
     id: 'HR-04', section: '运行时健壮性', title: '最坏参数下持久化记录 < 2KB',
-    steps: '西藏→江苏、6 段、绕行不限（候选逾百条）后触发保存',
+    steps: '西藏→江苏（跳数固定上限 10、绕行不限，候选数百条）触发保存',
     expected: 'iproute.v2.last 低于 2048 字节且不含求解结果（修复前最坏约 12MB）',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.waitForSelector('.rc');
+      // 修正(2026-09-18)：6 段 / 绕行度输入已移除（固定 MAX_HOPS、不限绕行），默认即最坏口径。
       await page.evaluate(() => {
         const setv = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
-        setv('i-from', 'XZ'); setv('i-to', 'JS');   // 2026-09-18：#i-hops/#i-detour 已下线（跳数固定、绕行不限）
+        setv('i-from', 'XZ'); setv('i-to', 'JS');
       });
       await page.waitForTimeout(200);
       const r = await page.evaluate(() => {
@@ -673,19 +724,11 @@ const tests = [
   {
     id: 'R-02', section: '响应式', title: '平板 768×1024',
     steps: '以 768×1024 视口打开测算页',
-    expected: '无横向溢出；#app 居中限宽 480；布局不拉伸错乱',
+    expected: '无横向溢出；600–899px 平板档 #app max-width:none（铺满视口，不套手机限宽）；布局不拉伸错乱',
     viewport: { width: 768, height: 1024 },
-    async run(page, set) {
-      // 2026-09-18 重写：600–899px 平板带为全宽纵向堆叠布局（媒体查询 #app max-width:none），不再居中限宽 480
-      await page.goto(G, DCL);
-      const m = await page.evaluate(() => ({
-        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        appMax: getComputedStyle(document.getElementById('app')).maxWidth,
-      }));
-      ok(m.overflow <= 1, `存在横向溢出 ${m.overflow}px`);
-      ok(m.appMax === 'none', `平板带应为全宽布局，实际 max-width=${m.appMax}`);
-      set(`无横向溢出；平板带全宽布局（max-width=${m.appMax}）`);
-    },
+    // 修正(2026-09-18)：600–899px 断点已把 #app 置为 max-width:none（template.html:513），
+    // 原「居中限宽 480」是手机档口径，与当前平板适配矛盾。
+    async run(page, set) { await respCheck(page, set, false, false, 'none'); },
   },
   {
     id: 'R-03', section: '响应式', title: '桌面 1440×900 宽布局',
@@ -695,11 +738,65 @@ const tests = [
     async run(page, set) { await respCheck(page, set, false, true); },
   },
   {
-    id: 'R-04', section: '响应式', title: '两栏 900–1279px：智能推荐与方案之间不得留大片空白',
-    steps: '以 900 / 1100 / 1279 视口打开测算页，量 .col-ai 底边到 .col-main 顶边的垂直距离',
-    expected: '2026-09-18 重写：两栏量距断言已随桌面宽布局演进失效，改为桌面口径检查（无横向溢出、#app 限宽）',
+    id: 'R-04', section: '响应式', title: '两栏 900–1279px：列表与方案同排，不得留大片空白',
+    steps: '以 900 / 1100 / 1279 视口打开测算页，量两栏布局、两栏顶边差与栏距；再滚动验证左栏吸附',
+    expected: '均落在两栏布局（348px + 剩余）；.col-side 与 .col-main 同处第一行、顶边齐平（差 ≤2px）；滚动后左栏 sticky 仍吸在 78px（M14）',
     viewport: { width: 1100, height: 900 },
-    async run(page, set) { await respCheck(page, set, false, true); },
+    async run(page, set) {
+      await page.goto(G, DCL);
+      const out = [];
+      for (const w of [900, 1100, 1279]) {
+        await page.setViewportSize({ width: w, height: 900 });
+        await page.waitForSelector('.layout', { timeout: 15000 });
+        // 修正(2026-09-18)：AI_ENABLED=false 时不再渲染 .col-ai，两栏改为 .col-side/.col-main 同处 grid-row:1
+        //（.layout.no-ai，template.html:576）。原用例对 .col-ai 调 getBoundingClientRect 必抛 TypeError。
+        // 断言改为当前布局的等价几何：两栏同排、顶边齐平、栏距=gap，并补上左栏 sticky 生效（M14 overflow-x:clip）。
+        const m = await page.evaluate(() => {
+          const layout = document.querySelector('.layout');
+          const cs = getComputedStyle(layout);
+          const side = document.querySelector('.col-side'), main = document.querySelector('.col-main');
+          const sr = side.getBoundingClientRect(), mr = main.getBoundingClientRect();
+          return { cols: cs.gridTemplateColumns.split(' ').length, gap: parseFloat(cs.gap),
+            ai: !!document.querySelector('.col-ai'),
+            dTop: +(mr.top - sr.top).toFixed(1), dLeft: +(mr.left - sr.right).toFixed(1),
+            sideRow: getComputedStyle(side).gridRow };
+        });
+        // 回归背景（2026-09-16 修复）：左栏 sticky + max-height 只占 grid-row:1 时会把第一行撑满整屏，
+        // 方案详情被推到屏幕外。当前无 AI 的两栏把两栏同放第一行，故直接量两栏顶边差与栏距。
+        ok(m.cols === 2, `${w}px 应为两栏布局，实际 ${m.cols} 栏`);
+        ok(!m.ai, `${w}px：智能推荐已隐藏（AI_ENABLED=false）时不应存在 .col-ai，实际存在=${m.ai}`);
+        ok(Math.abs(m.dTop) <= 2, `${w}px：列表与详情应顶边齐平，实际差 ${m.dTop}px`);
+        ok(m.dLeft >= m.gap - 1 && m.dLeft <= m.gap + 1, `${w}px：两栏间距应=${m.gap}px，实际 ${m.dLeft}px`);
+        ok(m.sideRow === '1', `${w}px：.col-side 在无 AI 两栏下应 grid-row:1，实际 ${m.sideRow}`);
+        out.push(`${w}px 顶边差=${m.dTop}px 栏距=${m.dLeft}px`);
+      }
+      // 左栏吸附：main 的 overflow-x 必须是 clip，hidden 会把 main 变成滚动容器使 sticky 失效（M14）。
+      // 吸附位置要在「自然位置已越过 78px」且「grid 容器底部仍留有余量」之间取值，否则会停在容器底部约束处
+      // （左栏高 ≈ container 高时，滚过头看到的是 bottom 约束而不是吸附失效）。
+      const y = await page.evaluate(() => {
+        const side = document.querySelector('.col-side'), layout = document.querySelector('.layout');
+        const top0 = layout.getBoundingClientRect().top + window.scrollY;
+        const lh = layout.getBoundingClientRect().height, sh = side.getBoundingClientRect().height;
+        const yMin = top0 - 78 + 10, yMax = top0 + lh - sh - 78 - 10;
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        const pick = yMax > yMin ? yMin + (yMax - yMin) / 2 : yMin;
+        return Math.max(0, Math.min(maxScroll, pick));
+      });
+      await page.evaluate((yy) => window.scrollTo(0, yy), y);
+      await page.waitForTimeout(150);
+      const st = await page.evaluate(() => ({
+        scrollY: Math.round(window.scrollY),
+        top: +document.querySelector('.col-side').getBoundingClientRect().top.toFixed(1),
+        pos: getComputedStyle(document.querySelector('.col-side')).position,
+        cssTop: getComputedStyle(document.querySelector('.col-side')).top,
+        mainOverflowX: getComputedStyle(document.querySelector('main')).overflowX,
+      }));
+      ok(st.scrollY > 0, `页面应可滚动，实际 scrollY=${st.scrollY}`);
+      ok(st.pos === 'sticky' && st.cssTop === '78px', `左栏应为 sticky top:78px，实际 position=${st.pos} top=${st.cssTop}`);
+      ok(st.mainOverflowX === 'clip', `main 的 overflow-x 应为 clip（不得让 main 成为 sticky 的新滚动容器），实际 ${st.mainOverflowX}`);
+      ok(Math.abs(st.top - 78) <= 1.5, `滚动到 ${st.scrollY}px 时左栏应吸附在 78px，实际 top=${st.top}px（sticky 失效会让左栏随页滚出）`);
+      set(out.join('；') + `；滚动 ${st.scrollY}px 后左栏吸附 top=${st.top}px（position:${st.pos}，main overflow-x:${st.mainOverflowX}）`);
+    },
   },
 
   {
@@ -778,7 +875,7 @@ const tests = [
   {
     id: 'RQ-701', section: 'PRD-IPRO', title: 'REQ-701：费率库省级参数三输入框对齐',
     steps: '375×667 与 390×844 展开任一省级参数卡片，量三个 number 输入框 y 坐标；改出清价验证 setPv 取值逻辑',
-    expected: '三个输入框 y 坐标一致（≤1px）；标签完整可读无裁字截断；setPv 即时生效（PV 更新并触发重算），取值逻辑不变',
+    expected: '三个输入框 y 坐标一致（≤1px）；标签完整可读无裁字截断；setPv 即时生效（PV 更新并按新费率重算），切回测算页结果区仍渲染（H6 修复后不再落入空态）',
     async run(page, set) {
       await page.goto(G, DCL);
       const out = [];
@@ -800,32 +897,44 @@ const tests = [
         ok(r.clipped.length === 0, `${w}x${h}：标签被裁截断 ${JSON.stringify(r.clipped)}`);
         out.push(`${w}x${h} dy=${JSON.stringify(r.dys)}`);
       }
-      // setPv 取值逻辑不变：改出清价 → PV 即时更新并重算（state._res 清空）
+      // setPv 取值逻辑 + H6 修复后的重算行为：改出清价 → PV 即时更新并立即重算，
+      // 切回测算页结果区仍渲染（修复前只把 _res 置 null，会落入误导性的「请选择不同的出发地与目的地」空态）。
       await page.locator('.libcard .lib-io input').first().fill('123');
       await page.locator('.libcard .lib-io input').first().blur();
+      await page.waitForTimeout(150);
       const sv = await page.evaluate(() => ({
         pv: Object.values(PV).some(p => p.clear === 123),
-        resCleared: state._res === null,
+        hasRes: !!state._res,
+        rows: state._res && state._res.rows ? state._res.rows.length : 0,
+        err: state._res ? (state._res.err || '') : '(无结果对象)',
       }));
       ok(sv.pv === true, `setPv 后 PV 中应有 clear=123（实际 ${sv.pv}）`);
-      ok(sv.resCleared === true, `setPv 应清空 _res 触发重算（实际 ${sv.resCleared}）`);
-      set(out.join('；') + `；setPv 生效 PV=${sv.pv} 重算=${sv.resCleared}`);
+      ok(sv.hasRes && sv.rows > 0 && !sv.err, `setPv 应立即重算出结果（H6），实际 rows=${sv.rows} err=${sv.err}`);
+      await page.click('#t-calc');
+      await page.waitForTimeout(150);
+      const back = await page.evaluate(() => ({
+        cards: document.querySelectorAll('#v-calc .rc').length,
+        empty: !!document.querySelector('#v-calc .empty'),
+      }));
+      ok(back.cards > 0 && !back.empty, `切回测算页应仍渲染方案卡片，实际卡片=${back.cards} 空态=${back.empty}`);
+      set(out.join('；') + `；setPv 生效 PV=${sv.pv}，重算 rows=${sv.rows}，切回测算页卡片 ${back.cards} 张（未落入空态）`);
     },
   },
   {
     id: 'RQ-704', section: 'PRD-IPRO', title: 'REQ-704：测算②受端输配电价/基金输入框对齐',
-    steps: '375×667 与 390×844 量 #i-pnet 与 #i-fund 输入框 y 坐标；改 #i-pnet 后点「恢复核定值」验证 resetOne 还原',
-    expected: '两输入框 y 坐标一致（≤1px）；标签完整可读（「受端输配电价」「恢复」无截断）；resetOne 点击后还原核定值（SC→JS 为 51.8）',
+    steps: '打开「参数」面板并切到「到户已列费用」；在 375×667 与 390×844 量 #i-pnet 与 #i-fund 输入框 y 坐标；改 #i-pnet 后点「恢复」验证 resetOne 还原',
+    expected: '两输入框 y 坐标一致（≤1px）；标签完整可读（「受端输配电价」「恢复」无截断）；resetOne 点击后还原核定值（SC→JS 为核定输配电价）',
     async run(page, set) {
+      // 修正(2026-09-18)：受端两项已移入「参数」弹出面板（122e970），且只在「到户已列费用」口径下渲染。
+      // 须先开面板并切口径；标签文案随面板同时精简为「受端输配电价 / 恢复」（原「受端省网输配电价 / 恢复核定值」）。
       await page.goto(G, DCL);
+      await openParams(page);
+      await page.selectOption('#i-dstcost', '1');
+      await page.waitForTimeout(200);
       const out = [];
       for (const [w, h] of [[375, 667], [390, 844]]) {
         await page.setViewportSize({ width: w, height: h });
-        await page.evaluate(() => closeParams());   // 2026-09-18：上一轮打开的参数面板会遮住顶部导航，先关再切 Tab
-        await page.click('#t-calc');
-        // 2026-09-18：默认口径为「省间交易节点」，i-pnet/i-fund 需在参数面板选「到户已列费用」后才渲染
-        await page.evaluate(() => { if (!document.querySelector('.sheet.open')) openParams(); });
-        await page.selectOption('#i-dstcost', '1');
+        await openParams(page);
         const r = await page.evaluate(() => {
           const pn = document.getElementById('i-pnet'), fd = document.getElementById('i-fund');
           const spans = [pn, fd].map(i => i.closest('label.f').querySelector('span'));
@@ -834,19 +943,20 @@ const tests = [
             txt: spans.map(s => s.textContent.replace(/\s+/g, ' ').trim()), clipped: spans.filter(clip).length };
         });
         ok(r.dy <= 1, `${w}x${h}：#i-pnet 与 #i-fund y 差 ${r.dy.toFixed(2)}px（应 ≤1px）`);
-        ok(r.txt[0].includes('受端输配电价') && r.txt[0].includes('恢复'), `主标签应完整含「受端输配电价/恢复」，实际「${r.txt[0]}」`);  // 2026-09-18：标签与链接文案已精简
+        ok(r.txt[0].includes('受端输配电价') && r.txt[0].includes('恢复'), `主标签应完整含「受端输配电价/恢复」，实际「${r.txt[0]}」`);
         ok(r.clipped === 0, `${w}x${h}：标签被裁截断 ${r.clipped} 处`);
         out.push(`${w}x${h} dy=${r.dy.toFixed(2)}`);
       }
-      // resetOne 行为不变：改值 → 点「恢复核定值」→ 还原为 PV[state.to].net
+      // resetOne 行为不变：改值 → 点「恢复」→ 还原为所选档核定值（dstAutoNet）
       const rr = await page.evaluate(async () => {
         const net0 = state.pNet;
         const inp = document.getElementById('i-pnet');
         inp.value = String(net0 + 1); inp.dispatchEvent(new Event('change', { bubbles: true }));
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 150));
         const changed = state.pNet;
-        inp.closest('label.f').querySelector('a').click();
-        await new Promise(r => setTimeout(r, 100));
+        // 重算后参数面板正文整体重画，旧引用已脱离文档，须按 id 重新取节点再点「恢复」
+        document.getElementById('i-pnet').closest('label.f').querySelector('a').click();
+        await new Promise(r => setTimeout(r, 150));
         return { net0, changed, restored: state.pNet, inputVal: parseFloat(document.getElementById('i-pnet').value) };
       });
       ok(rr.changed === rr.net0 + 1, `改值后 pNet 应为 ${rr.net0 + 1}，实际 ${rr.changed}`);
@@ -856,8 +966,8 @@ const tests = [
   },
   {
     id: 'RQ-401', section: 'PRD-IPRO', title: 'REQ-401：容量电费测算器（折叠卡 · 电压档选择 · 不参与路径比选）',
-    steps: '打开测算页展开「容量电费测算」卡：断言默认档预选=1~10（20）千伏、P5 固定标注存在；容量方式输入 1000 kVA + 年用电量 12000 MWh → 年费用/分摊断言；切电压档 → 输出随之变化；年电量 0 → 分摊显示 —；西藏 → 暂无数据（负向）',
-    expected: '默认预选档规则（1~10（20）千伏，无此档取第一档）生效；北京按容量 33 元/kVA·月×1000×12=396,000 元/年、分摊 33.00 元/MWh；切 220千伏及以上档 → 336,000 元/年；P5 固定标注「容量电费与电量来自省内或省外无关，不参与路径比选」含发改价格〔2020〕1441号 / 〔2023〕532号；年电量 0 显示 — 不出 Infinity；西藏显示「暂无数据」',
+    steps: '打开测算页展开「容量电费测算」卡：断言默认档预选=1~10（20）千伏、P5 固定标注存在；容量方式输入 1000 kVA + 年用电量 12000 MWh → 年费用/分摊断言；切电压档 → 输出随之变化；年电量 0 → 分摊显示 —；西藏（D1 已补录 30/15）按需量校验；再临时移除条目验证缺数据时「暂无数据」',
+    expected: '默认预选档规则（1~10（20）千伏，无此档取第一档）生效；北京按容量 33 元/kVA·月×1000×12=396,000 元/年、分摊 33.00 元/MWh；切 220千伏及以上档 → 336,000 元/年；P5 固定标注「容量电费与电量来自省内或省外无关，不参与路径比选」含发改价格〔2020〕1441号 / 〔2023〕532号；年电量 0 显示 — 不出 Infinity；西藏需量 30 元/千瓦·月、分摊 30.00 元/MWh；缺 CAP 条目时显示「暂无数据」不补估',
     async run(page, set) {
       await page.goto(G, DCL);
       const card = page.locator('#d-capfee');
@@ -900,17 +1010,26 @@ const tests = [
       });
       const per0 = await page.evaluate(() => document.querySelectorAll('#d-capfee .mc .v')[2].textContent.trim());
       ok(per0 === '—元/MWh' && !per0.includes('Infinity'), `年电量 0 时分摊应显示 —，实际「${per0}」`);
-      // 负向 2：西藏（缺省省）→ 暂无数据，不补估
-      await page.evaluate(() => { state.capProv = 'XZ'; renderCalc(); });
+      // 正向：西藏已由 D1 补录官方两部制容/需量电价（30 / 15，西藏发改委 2026-07-31 通知附件），应显示数值而非缺数据
+      await page.evaluate(() => { state.capProv = 'XZ'; state.capTier = null; state.capValue = 1000; state.capQty = 12000; setCapMode('demand'); });
+      const xz = await page.evaluate(() => {
+        const mc = document.querySelectorAll('#d-capfee .mc .v');
+        return { price: mc[0].textContent.trim(), per: mc[2].textContent.trim() };
+      });
+      ok(xz.price.startsWith('30') && xz.per === '30.00元/MWh', `西藏需量 30 元/千瓦·月、分摊 30.00 元/MWh，实际「${xz.price}」「${xz.per}」`);
+      // 负向：缺数据的省必须 fail-closed（显示「暂无数据」，不补估、不沿用其它省）。
+      // D1 后 31 省均有 CAP 数据，真实数据里已无该情形；运行时临时移除条目守住该分支（不改数据文件）。
+      await page.evaluate(() => { window.__capXZ = CAP.XZ; delete CAP.XZ; state.capProv = 'XZ'; renderCalc(); });
       const xzTxt = await card.locator('.warn').innerText();
-      ok(xzTxt.includes('暂无数据'), `西藏应显示暂无数据，实际「${xzTxt.slice(0, 40)}」`);
-      set(`默认档预选=1~10（20）千伏；BJ 容量 39.6万/33.00、需量 62.4万/52.00（FR-1 缩略）；切档 33.6万；年电量0→—；XZ→暂无数据`);
+      ok(xzTxt.includes('暂无数据'), `缺数据时应显示暂无数据，实际「${xzTxt.slice(0, 40)}」`);
+      await page.evaluate(() => { CAP.XZ = window.__capXZ; delete window.__capXZ; });
+      set(`默认档预选=1~10（20）千伏；BJ 容量 396,000/33.00、需量 624,000/52.00；切档 336,000；年电量0→—；XZ 需量 30.00；移除条目后→暂无数据`);
     },
   },
   {
-    id: 'RQ-705', section: 'PRD-IPRO', title: 'REQ-705：通道组件（直流）作为必经组件筛方案 + 说明文字可折叠',
-    steps: '检查 details.explain 默认收起；放宽跳数/绕行让候选含多条直流；点选一个直流组件，再清除',
-    expected: '长段说明默认收起、点击可展开；直流组件排在最前；点选后列表只保留含该通道的方案，且组件清单仍为完整候选集（其余组件仍可取消）；清除后恢复全量',
+    id: 'RQ-705', section: 'PRD-IPRO', title: 'REQ-705：通道（直流）作为必经组件筛方案 + 说明文字可折叠',
+    steps: '检查 details.explain 默认收起；四川→上海下读取顶部「通道」下拉（直流分组置顶）；选一条直流，再改回「全部通道」',
+    expected: '长段说明默认收起、点击可展开；通道下拉完整列出候选通道、直流分组在最前；选中后方案全部包含该通道，且下拉清单不被收窄（仍可改选）；改回全部通道后恢复全量',
     viewport: { width: 1440, height: 900 },
     async run(page, set) {
       await page.goto(G, DCL);
@@ -925,39 +1044,50 @@ const tests = [
       await page.waitForTimeout(150);
       ok(await page.evaluate(() => document.querySelector('details.explain').open), '点击标题应能展开');
 
-      // 放宽条件，让候选里出现多条直流
-      await page.evaluate(() => { state.from = 'SC'; state.to = 'SH'; state.maxHops = 6; state.maxDetour = 9;
+      // 修正(2026-09-18)：组件选择器已由 .comps button.chip 改为顶部主卡的原生单选下拉 #i-chan
+      //（d56fc4a「通道改为单选下拉」），按下拉分组与选项重新对齐；筛选语义不变。
+      await page.evaluate(() => { state.from = 'SC'; state.to = 'SH'; state.maxHops = MAX_HOPS; state.maxDetour = null;
         state.showBad = true; state.mustHave = []; state.sel = 0; applyBothProv(); doSolve(); });
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(250);
       const b = await page.evaluate(() => {
         const av = state._res.availChannels || [];
-        const firstAc = av.findIndex((c) => c.type !== 'DC' && c.type !== 'AC/DC');
-        return { n: av.length, chips: document.querySelectorAll('#i-chan option').length - 1,
-          dcFirst: av.slice(0, firstAc < 0 ? av.length : firstAc).every((c) => c.type === 'DC' || c.type === 'AC/DC'),
-          rows: state._res.rows.length };
+        const selEl = document.getElementById('i-chan');
+        const groups = selEl ? [...selEl.querySelectorAll('optgroup')].map((g) => ({ label: g.label, n: g.querySelectorAll('option').length })) : [];
+        const optVals = selEl ? [...selEl.querySelectorAll('option')].filter((o) => o.value).map((o) => o.value) : [];
+        const dcN = av.filter((c) => c.type === 'DC' || c.type === 'AC/DC').length;
+        return { n: av.length, rows: state._res.rows.length, groups, dcN, optN: optVals.length,
+          optMatch: optVals.every((id) => av.some((c) => c.id === id)) && optVals.length === av.length,
+          dcFirst: groups.length > 0 && /^直流/.test(groups[0].label) && groups[0].n === dcN };
       });
-      ok(b.n > 0 && b.chips === b.n, `组件选择器应列出全部可选通道（${b.chips}/${b.n}）`);
-      ok(b.dcFirst, '直流（专项工程）组件应排在最前');
+      ok(b.n > 0 && b.optMatch, `通道下拉应列出全部可选通道（${b.optN}/${b.n}）`);
+      ok(b.dcFirst, `直流（专项工程）分组应排在最前且条数完整（${JSON.stringify(b.groups)}）`);
 
-      const dc = await page.evaluate(() => { const c = (state._res.availChannels || []).find((x) => x.type === 'DC' || x.type === 'AC/DC'); return c ? c.id : ''; });
-      await page.selectOption('#i-chan', dc);   // 2026-09-18：组件 chips 已演进为「通道」下拉（i-chan）
+      // 选中直流分组的第一条通道（下拉选项顺序即「直流优先、组内按经过它的最低价」）
+      const firstDc = await page.evaluate(() => {
+        const g = document.querySelector('#i-chan optgroup');
+        const o = g && g.querySelector('option');
+        return o ? o.value : '';
+      });
+      ok(!!firstDc, '直流分组应有可选项');
+      await page.selectOption('#i-chan', firstDc);
       await page.waitForTimeout(250);
       const a = await page.evaluate(() => ({
         must: state.mustHave.slice(), rows: (state._res.rows || []).length,
         allOk: (state._res.rows || []).every((r) => state.mustHave.every((id) => r.edges.some((e) => e.id === id))),
         avail: (state._res.availChannels || []).length,
+        opts: document.querySelectorAll('#i-chan option').length - 1,
         hint: (document.querySelector('.sec-title .hint') || {}).textContent || '',
       }));
-      ok(a.must.length === 1, `点选后应记为必经组件，实际 ${a.must.length} 个`);
+      ok(a.must.length === 1, `选中后应记为必经组件，实际 ${a.must.length} 个`);
       ok(a.rows > 0 && a.allOk, `筛出的 ${a.rows} 条方案应全部包含该组件`);
-      ok(a.avail === b.n, `组件清单不得被筛选收窄（${a.avail}/${b.n}），否则其余组件再也点不回来`);
-      ok((await page.evaluate(() => (document.getElementById('i-chan') || {}).value)) === dc, '通道下拉应保持所选组件');  // 2026-09-18：原「按 1 个组件筛选」标题提示与 chips UI 已演进
+      ok(a.avail === b.n && a.opts === b.n, `通道清单不得被筛选收窄（候选 ${a.avail}/${b.n}、下拉 ${a.opts}/${b.n}），否则其余通道再也选不回来`);
+      ok(/已按通道筛选/.test(a.hint), `标题应提示已按通道筛选，实际「${a.hint.trim()}」`);
 
       await page.selectOption('#i-chan', '');
       await page.waitForTimeout(250);
       const c = await page.evaluate(() => ({ must: state.mustHave.length, rows: state._res.rows.length }));
-      ok(c.must === 0 && c.rows === b.rows, `清除后应恢复全量 ${b.rows} 条候选，实际 ${c.rows} 条`);
-      set(`说明区 ${ex.length} 处默认收起；组件 ${b.chips} 个（直流优先）；筛出 ${a.rows}/${b.rows} 条；清除后恢复`);
+      ok(c.must === 0 && c.rows === b.rows, `改回「全部通道」后应恢复全量 ${b.rows} 条候选，实际 ${c.rows} 条`);
+      set(`说明区 ${ex.length} 处默认收起；下拉 ${b.n} 条（直流分组 ${b.dcN} 条置顶）；筛出 ${a.rows}/${b.rows} 条；改回全部通道后恢复`);
     },
   },
   {
@@ -976,7 +1106,7 @@ const tests = [
         }));
       }, NCH);
       await page.goto(G, DCL);
-      const dlg = page.locator('[role="dialog"]:not(.sheet-panel)');
+      const dlg = confirmDlg(page);   // 排除参数弹出面板 .sheet-panel，见 confirmDlg 说明
       await dlg.waitFor({ state: 'visible', timeout: 5000 });
       const tip = await dlg.innerText();
       ok(tip.includes('priceVersion') && tip.includes('不一致'), `应有旧版本提示（应用内确认框），实际「${tip.slice(0, 30)}」`);
@@ -1003,7 +1133,7 @@ const tests = [
         }));
       }, NCH);
       await page.goto(G, DCL);
-      const dlg = page.locator('[role="dialog"]:not(.sheet-panel)');
+      const dlg = confirmDlg(page);   // 排除参数弹出面板 .sheet-panel，见 confirmDlg 说明
       await dlg.waitFor({ state: 'visible', timeout: 5000 });
       const tip = await dlg.innerText();
       ok(tip.includes('priceVersion') && tip.includes('不一致'), '应弹出旧版本提示（应用内确认框）');
@@ -1028,20 +1158,33 @@ const tests = [
     },
   },
   {
-    id: 'RQ-02a', section: 'PRD-IPRO', title: 'REQ-201：方案含未确认联络线黄条',
-    steps: '江苏→上海 测算，查看方案区告警',
-    expected: '默认方案含苏沪联络线（tradable=false）时出现「未确认属于省间现货交易网络」黄条',
+    id: 'RQ-02a', section: 'PRD-IPRO', title: 'REQ-201：方案含未确认通道黄条',
+    steps: '北京→四川 测算（首条经渝鄂背靠背直流，tradable=false 且非区域网架接口）；再对照 江苏→上海（仅苏沪联络线，属区域网架）',
+    expected: '方案自有段含未确认通道时出现「当期可交易性待确认」黄条；区域网架内的联络线不再触发告警（REQ-201 范围收窄为自有通道）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.selectOption('#i-to', 'SH');     // 先改受端，避免「江苏」作为当前受端被互斥禁用
+      // 修正(2026-09-18)：告警范围已收窄为「方案自有通道」，区域网架内的联络线（regional=true，如苏沪）不再告警
+      //（calc.js renderDetail：ntSegs 只取 ownEdges；test-interaction 第十二节同口径）。
+      // 原用例用 江苏→上海 的苏沪联络线构造，现行为下不会出现黄条；改用首条含 渝鄂联络线（背靠背直流，非区域网架）的省对。
+      await page.selectOption('#i-from', 'BJ');
+      await page.selectOption('#i-to', 'SC');
+      await page.waitForTimeout(150);
+      const hit = await page.evaluate(() => ({
+        warn: [...document.querySelectorAll('.col-main .warn')].some(w => w.textContent.includes('当期可交易性待确认')),
+        ownBad: ownEdges(state._res.rows[0]).filter(e => e.tradable === false).map(e => e.n),
+      }));
+      ok(hit.ownBad.length > 0 && hit.warn, `自有未确认段 ${hit.ownBad.join('、')} 应触发黄条，实际黄条=${hit.warn}`);
+      // 对照：区域网架内的联络线不告警
+      await page.selectOption('#i-to', 'SH');
       await page.selectOption('#i-from', 'JS');
       await page.waitForTimeout(150);
-      const hit = await page.evaluate(() =>
-        [...document.querySelectorAll('#v-calc .warn')].some(w => w.textContent.includes('未确认')));  // 2026-09-18：黄条文案已精简为「未确认的联络线」
-      const viaSuhu = await page.evaluate(() => state._res.rows[0].edges.some(e => e.tradable === false));
-      // 2026-09-18 口径演进（calc.js:574）：区域网架内的联络线不再告警，苏沪联络线正属此类——断言反向
-      ok(!hit && viaSuhu, `区域网架内联络线不应告警（方案含未确认联络线=${viaSuhu}），实际黄条=${hit}`);
-      set(`JS→SH 默认方案含 tradable=false 段；黄条出现=${hit}`);
+      const suhu = await page.evaluate(() => ({
+        regionalBad: state._res.rows[0].edges.filter(e => e.tradable === false),
+        warn: [...document.querySelectorAll('.col-main .warn')].some(w => w.textContent.includes('当期可交易性待确认')),
+      }));
+      ok(suhu.regionalBad.length > 0 && suhu.regionalBad.every(e => e.regional) && !suhu.warn,
+        `苏沪联络线属区域网架，不应触发黄条（实际 warn=${suhu.warn}）`);
+      set(`BJ→SC 自有未确认段 ${hit.ownBad.join('、')} → 黄条；JS→SH 区域网架联络线 → 无黄条`);
     },
   },
   {
@@ -1063,12 +1206,14 @@ const tests = [
   },
   {
     id: 'RQ-02c', section: 'PRD-IPRO', title: 'REQ-203：仅按已确认可交易通道开关',
-    steps: '出发地北京、跳数 1，开启「仅按已确认可交易通道」',
+    steps: '出发地北京，在「参数」面板把通道范围切为「仅专项工程」',
     expected: '北京相连通道均为未确认联络线，开启后为空态引导文案（非脚本报错）',
     async run(page, set) {
       await page.goto(G, DCL);
+      // 修正(2026-09-18)：跳数输入已移除；「通道范围」下拉随参数面板迁移，须先开面板再切换。
+      // 北京无专项工程接入，开启「仅专项工程」后仍为空态引导（err 文案：北京 暂无接入的跨省通道）。
       await page.selectOption('#i-from', 'BJ');
-      await page.click('#btn-params');   // 2026-09-18：#i-hops 已下线；i-tradable 已迁入参数面板
+      await openParams(page);
       await page.selectOption('#i-tradable', '1');
       await page.waitForTimeout(150);
       const r = await page.evaluate(() => ({ err: state._res.err || '', empty: document.querySelector('.empty')?.textContent || '' }));
@@ -1096,6 +1241,8 @@ const tests = [
       await page.goto(G, DCL);
       await page.click('#btn-params');   // 2026-09-18：i-zyocc 已迁入参数面板
       const m0 = await page.evaluate(() => state._res.rows[0].maxLoad);
+      // 修正(2026-09-18)：中长期占用输入已随参数面板迁移，须先打开「参数」面板再填写。
+      await openParams(page);
       await page.fill('#i-zyocc', '30');
       await page.locator('#i-zyocc').blur();
       await page.waitForTimeout(150);
@@ -1106,39 +1253,47 @@ const tests = [
     },
   },
   {
-    id: 'RQ-04', section: 'PRD-IPRO', title: 'REQ-303：测算辅助声明（2026-09-18 重写：96 时段文案已下线）',
-    steps: '查看页面底部声明',
-    expected: '页脚含「不构成交易建议」的测算辅助声明',
+    id: 'RQ-04', section: 'PRD-IPRO', title: 'REQ-303：单时点测算声明',
+    steps: '展开「政策与取值依据」折叠区，查看测算范围声明',
+    expected: '声明存在且写明单时段边界（「省间中长期单时段交付成本…合同分时曲线、交易组织…需另行处理」）',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.waitForSelector('.rc');
-      const ok1 = await page.evaluate(() => document.body.innerText.includes('不构成交易建议'));
-      ok(ok1, '应含测算辅助声明（不构成交易建议）');
-      set('测算辅助声明可见');
+      // 修正(2026-09-18)：声明文案随测算页重构（570473e）由「96 时段」改写为「单时段交付成本 + 合同分时曲线另行处理」，
+      // 且移入默认收起的「政策与取值依据」内，须先展开再断言；单时点边界声明的语义不变。
+      await page.evaluate(() => { document.querySelectorAll('details.explain').forEach(d => d.open = true); });
+      await page.waitForTimeout(80);
+      const t = await page.evaluate(() => document.getElementById('v-calc').innerText);
+      ok(t.includes('单时段') && t.includes('合同分时曲线'), `应含单时段边界声明，实际片段「${t.replace(/\s+/g, ' ').slice(0, 60)}」`);
+      set('单时段边界声明可见（合同分时曲线、交易组织、安全校核另行处理）');
     },
+  },
+  {
+    id: 'RQ-05', section: 'PRD-IPRO', title: 'REQ-304：口径三非结算口径标注',
+    steps: '（未实现）查看「送端收益」按钮提示与⑦口径位置标注',
+    expected: '按钮 title 含「非结算口径」；⑦口径位置旁有同义标注',
+    // skip 依据：界面重构（570473e）后口径比选排序入口整体移除（排序固定按价格，state.sortBy 恒为 A），
+    //「送端收益」按钮与其 title、⑦口径标注均不存在；构建产物全文搜索 '非结算' 命中 0。
+    // 待产品确认是否以其它形式补「非结算口径」标注后再恢复本用例。
+    skip: '口径比选入口已随界面重构移除（排序固定），「送端收益」按钮与「非结算口径」标注在构建产物中不存在',
   },
   /* 用例已移除（RQ-05）：原 REQ-304 口径三排序按钮已随「排序口径下线」移除（boot.js:97），所测 title 与标注不复存在 用例所测对象已下线。2026-09-18 e2e 清算。 */
   {
     id: 'RQ-06', section: 'PRD-IPRO', title: 'REQ-305：区域电网费适用性标注',
-    steps: '查看②区区域电网输电价格说明',
+    steps: '（未实现）查看②区区域电网输电价格说明',
     expected: '说明含 S14 3.4.2(a) 统一计入口径（新语义）',
-    async run(page, set) {
-      await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
-      // 说明文字已改为默认收起的 details.explain（RQ-705），innerText 不含未渲染内容，须先展开再断言
-      await page.evaluate(() => { document.querySelectorAll('details.explain').forEach(d => d.open = true); });
-      await page.waitForTimeout(80);
-      // 2026-09-18：3.4.2(a) 静态说明已演进为参数面板口径选项（区域费范围/区域网损）
-      await page.click('#btn-params');
-      const r = await page.evaluate(() => {
-        const t = document.querySelector('.sheet-panel').innerText;
-        return t.includes('区域费范围') && t.includes('途经区域各计一次') && t.includes('另计受端区域') && t.includes('区域网损');
-      });
-      ok(r, '应含区域电网费适用性口径选项（区域费范围/区域网损）');
-      set('新口径说明可见');
-    },
+    // skip 依据：REQ-305 指定的 S14 3.4.2(a)「统一计入买方区域」标注不存在（构建产物 '3.4.2' 命中 0）。
+    // 区域费范围现为「途经区域各计一次」（network，默认）与「另计受端区域」（buyer）二选一口径，
+    // 属语义变更而非文案迁移；按未实现处理，是否补标注待产品确认。
+    skip: 'REQ-305 的 S14 3.4.2(a)「统一计入买方区域」标注已随区域计费口径改为 network 默认而不存在',
   },
-  /* 用例已移除（RQ-306）：原 REQ-306 结算机制折叠区已下线（结算机制/D+5/边际价格 在当前构建 0 命中） 用例所测对象已下线。2026-09-18 e2e 清算。 */
+  {
+    id: 'RQ-306', section: 'PRD-IPRO', title: 'REQ-306：结算机制折叠区',
+    steps: '（未实现）展开完整明细，查看「结算机制」',
+    expected: '折叠块存在且四条齐备（买方支出/卖方边际价/执行顺序/日清月结 D+5）',
+    // skip 依据：构建产物全文搜索 '结算机制' / 'D+5' 命中 0；该折叠区已随界面重构移除。
+    skip: '「结算机制」折叠区（买方支出/卖方边际价/执行顺序/日清月结 D+5）在构建产物中不存在',
+  },
   {
     id: 'RQ-307', section: 'PRD-IPRO', title: 'REQ-307：页脚定位声明',
     steps: '任意 Tab 滚到底',
@@ -1232,7 +1387,7 @@ const tests = [
     async run(page, set) {
       await page.goto(G, DCL);
       await page.waitForSelector('.rc');
-      const dlg = page.locator('[role="dialog"]:not(.sheet-panel)');
+      const dlg = confirmDlg(page);   // 排除参数弹出面板 .sheet-panel，见 confirmDlg 说明
       const clickQQ = async () => {
         await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
           await page.evaluate(() => go('map'));
@@ -1800,8 +1955,7 @@ const tests = [
   },
 ];
 
-
-async function respCheck(page, set, expectCentered, desktop = false) {
+async function respCheck(page, set, expectCentered, desktop = false, expectMax = '480px') {
   await page.goto(G, DCL);
   const m = await page.evaluate(() => {
     const de = document.documentElement, app = document.getElementById('app');
@@ -1821,7 +1975,7 @@ async function respCheck(page, set, expectCentered, desktop = false) {
     ok(['1320px', '1480px'].includes(m.appMax), `桌面端 #app max-width 应 1320/1480px，实际 ${m.appMax}`);
     ok(m.left <= 1, `桌面宽布局 #app 应铺满视口，left=${m.left}`);
   } else {
-    ok(m.appMax === '480px', `#app max-width 应 480px，实际 ${m.appMax}`);
+    ok(m.appMax === expectMax, `#app max-width 应 ${expectMax}，实际 ${m.appMax}`);
   }
   ok(m.nav && m.card, '底部导航/路线卡片缺失');
   if (expectCentered) ok(m.left > 100, `桌面端 #app 应居中留白，left=${m.left}`);
@@ -1839,16 +1993,25 @@ await browser.close();
 
 // 汇总
 const sections = [...new Set(results.map(r => r.section))];
+const ran = results.filter(r => !r.skipped);          // 跳过 = 未实现，不计入通过率
+const skipped = results.filter(r => r.skipped);
 let md = `# E2E 测试报告 — 省间路径优选测算\n\n`;
-md += `- 被测地址：${BASE}\n- 执行时间：${new Date().toLocaleString('zh-CN')}\n- 浏览器：Playwright headless（channel=${channel}）\n- 默认视口：390×844（响应式用例单独指定）\n- 用例总数：${results.length}，通过 ${results.filter(r => r.pass).length}，失败 ${results.filter(r => !r.pass).length}\n\n`;
-md += `| 分组 | 通过/总数 |\n|---|---|\n`;
+md += `- 被测地址：${BASE}\n- 执行时间：${new Date().toLocaleString('zh-CN')}\n- 浏览器：Playwright headless（channel=${channel}）\n- 默认视口：390×844（响应式用例单独指定）\n`;
+md += `- 用例总数：${results.length}，执行 ${ran.length}，通过 ${ran.filter(r => r.pass).length}，失败 ${ran.filter(r => !r.pass).length}，跳过 ${skipped.length}（未实现，不计入通过率）\n\n`;
+md += `| 分组 | 通过/执行 | 跳过（未实现） |\n|---|---|---|\n`;
 for (const s of sections) {
   const g = results.filter(r => r.section === s);
-  md += `| ${s} | ${g.filter(r => r.pass).length}/${g.length} |\n`;
+  const gr = g.filter(r => !r.skipped);
+  md += `| ${s} | ${gr.filter(r => r.pass).length}/${gr.length} | ${g.filter(r => r.skipped).length} |\n`;
+}
+if (skipped.length) {
+  md += `\n## 未实现用例（跳过，不计入通过率）\n\n`;
+  for (const r of skipped) md += `- **${r.id} ${r.title}**：${r.skipReason}\n`;
 }
 md += `\n---\n`;
 for (const r of results) {
-  md += `\n### ${r.id} ${r.title} — ${r.pass ? '✅ PASS' : '❌ FAIL'}\n`;
+  const head = r.skipped ? '⏭️ SKIP（未实现，不计入通过率）' : (r.pass ? '✅ PASS' : '❌ FAIL');
+  md += `\n### ${r.id} ${r.title} — ${head}\n`;
   md += `- **操作步骤**：${r.steps}\n- **预期**：${r.expected}\n- **实际结果**：${r.actual}\n`;
   md += `- **截图**：${r.shot.startsWith('shots/') ? `[${r.shot}](${r.shot})` : r.shot}\n`;
   const errs = [];
@@ -1860,5 +2023,5 @@ for (const r of results) {
 }
 fs.writeFileSync(path.join(here, 'report.md'), md);
 fs.writeFileSync(path.join(here, 'results.json'), JSON.stringify(results, null, 2));
-console.log(`\n完成：${results.filter(r => r.pass).length}/${results.length} 通过；报告 tests/report.md`);
-process.exit(results.some(r => !r.pass) ? 1 : 0);
+console.log(`\n完成：${ran.filter(r => r.pass).length}/${ran.length} 通过（跳过 ${skipped.length} 个未实现用例，不计入通过率）；报告 tests/report.md`);
+process.exit(ran.some(r => !r.pass) ? 1 : 0);

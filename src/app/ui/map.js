@@ -67,7 +67,7 @@ function initMap(){
 }
 
 function drawMapQQ(){
-  if(!initMap()){ loadQQSdk(); return false; }
+  if(!initMap()) return false;   // SDK 由 renderMap 的 loadTMap 先行加载（M17 机制），此处只做容器初始化
   const v=visibleChannels(), netOff=state.mapNet==='off';
   const polys=[],mks=[],lbs=[],seen=new Set();
   v.list.forEach(c=>{
@@ -115,8 +115,13 @@ function drawMapQQ(){
 }
 
 /* tdTried：同一密钥只自动尝试一次，失败后不再自动重发（每次渲染都重发会形成请求风暴，
-   触发天地图 CloudWAF 风控临时拦截）；点「应用密钥」或换密钥才重新尝试。 */
+   触发天地图 CloudWAF 风控临时拦截）；点「应用密钥」或换密钥才重新尝试。
+   tdQueue/tdAttempt：同一密钥下载期间的重复调用挂到同一轮询上等结果，不再直接判失败；
+   一轮尝试只回放它自己的回调，旧一轮（换过密钥）的结果丢弃。回调是否采用结果由调用方
+   用代际判定决定（M16）——5 秒轮询窗口内切换底图后，迟到的回调不得再 new T.Map 覆盖新容器。 */
 let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
+let tdAttempt=0, tdLoading=false;
+const tdQueue=[];
 /* tkMsgGen：#tk-msg 消息代数戳。探针/诊断的结论是异步回写的，若用户在此期间产生新消息
   （如空输入应用的「已保留密钥」常驻提示），迟到的旧结论会把新提示盖掉——每次 tkMsg/显式
   写入使代数 +1，在途回写发现代数不符即放弃（元素身份检查仍保留，防跨重绘污染）。 */
@@ -154,14 +159,27 @@ function tdApiReady(){
   try{ if(T.Protocol&&T.Protocol.value==='http://') T.Protocol.value='https://'; }catch(e){}
   return true;
 }
+function tdFlush(ok,why){
+  const q=tdQueue.splice(0,tdQueue.length);
+  q.forEach(cb=>{ try{ cb(ok,why); }catch(e){} });
+}
 function loadTianditu(cb){
   tdAttempted=false;
   if(tdReady) return cb(true);
   if(tdApiReady()){ tdReady=true; return cb(true); }
   if(!state.tiandituKey) return cb(false);
   const src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
-  if(tdTried===src) return cb(false);
-  tdTried=src; tdAttempted=true;
+  if(tdTried===src){
+    if(tdLoading){ if(cb) tdQueue.push(cb); return; }   // 同一密钥正在下载：等这一轮结果，别急着降级
+    return cb(false);                                   // 该密钥此前已试过并失败：沿用「只自动尝试一次」
+  }
+  tdTried=src; tdAttempted=true; tdLoading=true;
+  const myId=++tdAttempt;                               // 本次尝试的代次：换密钥后旧一轮的结果作废
+  const done=(ok,why)=>{
+    if(myId!==tdAttempt) return;
+    tdLoading=false; tdFlush(ok,why);
+  };
+  if(cb) tdQueue.push(cb);
   const s=document.createElement('script');
   s.src=src;
   // script 元素的 load 事件在脚本解析失败时也会触发，必须确认所需类真正可用才算成功。
@@ -169,30 +187,17 @@ function loadTianditu(cb){
   // 超时单独回一句 why='incomplete'，避免被误诊成网络或风控问题。
   let waited=0;
   const poll=()=>{
-    if(tdApiReady()){ tdReady=true; return cb(true); }
+    if(tdApiReady()){ tdReady=true; return done(true); }
     waited+=TD_POLL_MS;
-    if(waited>=TD_WAIT_MS){ tdReady=false; return cb(false,'incomplete'); }
+    if(waited>=TD_WAIT_MS){ tdReady=false; return done(false,'incomplete'); }
     setTimeout(poll,TD_POLL_MS);
   };
   s.onload=poll;
-  s.onerror=()=>cb(false);
+  s.onerror=()=>done(false);
   document.head.appendChild(s);
 }
-/* 腾讯地图 SDK 按需加载：仅 isProxyEnv() 且用户切到腾讯地图视图时才注入脚本。
-   旧实现把它无条件放在 <head> 解析阻塞加载——APK 内白下载用不上的 SDK，且占位符
-   serviceHost 使 SDK 内部 XHR 每次加载抛 Invalid URL（design D9）。 */
-let qqSdkState='';
-function loadQQSdk(){
-  if(typeof TMap!=='undefined'){ qqSdkState='ready'; return true; }
-  if(qqSdkState) return false;
-  qqSdkState='loading';
-  const s=document.createElement('script');
-  s.src='https://map.qq.com/api/gljs?v=1.exp';
-  s.onload=()=>{ qqSdkState='ready'; if(state.mapProvider==='qq') renderMap(); };
-  s.onerror=()=>{ qqSdkState='fail'; if(state.mapProvider==='qq') renderMap(); };
-  document.head.appendChild(s);
-  return false;
-}
+/* 腾讯地图 SDK 加载已由 loadTMap（M17：__WB_TMAP_PROXY__ 判据 + head #tmap-sdk data-src 惰性注入）承接，
+   旧 loadQQSdk 直连注入实现已废弃删除。 */
 /* 地图视野适配（design D4）：按选中方案节点包围盒估算中心与缩放级，用各 SDK 已在用的
    基础 API（centerAndZoom / setCenter+setZoom）实现，不引入未核实的 fitBounds 类 API；
    估算含纬度余弦校正，缩放夹取安全区间并整体 try/catch——失败保持原视野，不阻断绘制。 */
@@ -311,15 +316,47 @@ function showMapFallback(){
 }
 
 /* 判断当前是否运行在带腾讯地图代理的环境里（WorkBuddy 本地预览）。
-   托管到外网后代理不可用，必须改用天地图或内置拓扑图，否则底图会是一片空白。 */
+   判定只在 template.html 的 head 脚本里做一次（M17），这里只读那个显式标志，
+   不再与 _TMapSecurityConfig 占位符互相推断。标志缺失（旧构建产物、端侧复用）按 false 处理：
+   宁可降级为内置拓扑图，也不要空白底图。 */
 function isProxyEnv(){
-  try{
-    const h=(typeof location!=='undefined'&&location.hostname)||'';
-    const cfg=window._TMapSecurityConfig||{};
-    return /^(127\.0\.0\.1|localhost)$/.test(h)
-      && typeof cfg.serviceHost==='string' && cfg.serviceHost.indexOf('__WB_HTTP_PORT__')<0;
-  }catch(e){ return false; }
+  return typeof window!=='undefined' && window.__WB_TMAP_PROXY__===true;
 }
+
+/* ---------- 腾讯地图 SDK 按环境加载（H7） ----------
+   旧实现把 <script src="https://map.qq.com/api/gljs?v=1.exp">（约 2.13MB）静态放在 <head>：
+   APK 以 file:// 加载时该域名不可达、线上托管环境也没有本地代理，白白阻塞首屏解析。
+   现在非代理环境一次请求都不发；代理环境在脚本求值时就注入（本脚本位于 body 末尾，不阻塞首屏），
+   SDK 若尚未就绪则把回调挂起，就绪后统一回放——回调是否采用结果由 renderMap 的代际判定决定。
+   SDK 地址只写在 head 的 #tmap-sdk 标签上，此处不再重复硬编码。 */
+let tmapState='idle';                                // idle | loading | ready | failed | unavailable
+const tmapQueue=[];
+function tmapSdkSrc(){
+  const tag=document.getElementById('tmap-sdk');
+  return tag?String(tag.getAttribute('data-src')||tag.getAttribute('src')||''):'';
+}
+function tmapFlush(ok){
+  const q=tmapQueue.splice(0,tmapQueue.length);
+  q.forEach(cb=>{ try{ cb(ok); }catch(e){} });
+}
+function loadTMap(cb){
+  if(typeof TMap!=='undefined'){ tmapState='ready'; if(cb) cb(true); return; }
+  if(!isProxyEnv()){ tmapState='unavailable'; if(cb) cb(false); return; }
+  if(tmapState==='failed'||tmapState==='unavailable'){ if(cb) cb(false); return; }
+  if(cb) tmapQueue.push(cb);
+  if(tmapState==='loading') return;
+  const src=tmapSdkSrc();
+  if(!src){ tmapState='failed'; return tmapFlush(false); }
+  tmapState='loading';
+  const tag=document.getElementById('tmap-sdk');
+  const s=tag||document.createElement('script');
+  s.src=src;
+  s.async=true;                                      // 动态注入的脚本本就异步，再显式标一次避免将来被静态化后阻塞
+  s.onload=()=>{ tmapState=(typeof TMap==='undefined')?'failed':'ready'; tmapFlush(tmapState==='ready'); };
+  s.onerror=()=>{ tmapState='failed'; tmapFlush(false); };
+  if(!tag) document.head.appendChild(s);
+}
+if(isProxyEnv()) loadTMap();   // 代理环境：脚本求值即开始下载（body 末尾，不阻塞首屏）；非代理环境不请求
 
 /* 内置拓扑图：纯 SVG，不依赖任何外部地图服务，离线与托管环境均可用。
    按站点经纬度做等距圆柱投影，只画节点与连线，不绘制任何行政区划边界。 */
@@ -590,12 +627,18 @@ function copyMapLink(btn){
 
 /* ---------- 网架视图 ---------- */
 const MAP_MODES=[['svg','拓扑图'],['qq','腾讯地图'],['td','天地图']];
+/* 代际计数（M16）：每次 renderMap 都换代。异步回调（天地图最长 5s 轮询、腾讯 SDK 下载）
+   回来时若已换代或底图已切换，就直接丢弃——否则会 new T.Map 覆盖新容器，
+   或走降级分支把刚画好的图藏起来。 */
+let mapGen=0;
 function renderMap(){
+  const gen=++mapGen;
   mapReady=false; map=null; polyLayer=null; mkLayer=null; lbLayer=null; tdMap=null;
   const proxyOK=isProxyEnv();
   // 托管环境下腾讯地图代理不可用，自动退回内置拓扑图
   if(state.mapProvider==='qq' && !proxyOK) state.mapProvider='svg';
   const mode=MAP_MODES.some(m=>m[0]===state.mapProvider)?state.mapProvider:'svg';
+  const stale=()=>gen!==mapGen||state.mapProvider!==mode;
   const r=state._res&&state._res.rows;
   const selR=(r&&r.length)?r[Math.min(state.sel,r.length-1)]:null;
   // 批次 B：断面高亮提示条（数据与费率库断面分区同源）
@@ -681,15 +724,19 @@ function renderMap(){
 
   document.getElementById('v-map').innerHTML=out;
   setTimeout(()=>{
-    if(state.mapProvider!==mode) return; // 80ms 内用户已切换底图则放弃本次注入，避免迟到回调污染新容器
+    if(stale()) return; // 80ms 内用户已切换底图或页面重画则放弃本次注入，避免迟到回调污染新容器
     if(mode==='svg'){
       const box=document.getElementById('map-view');
       if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='10px'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
       const fb=document.getElementById('fallback'); if(fb) fb.style.display='none';
     } else if(mode==='qq'){
-      if(!drawMapQQ()) showMapFallback();
+      loadTMap(ok=>{
+        if(stale()) return;                 // SDK 迟到：容器已换代，丢弃
+        if(!ok||!drawMapQQ()) showMapFallback();
+      });
     } else {
       loadTianditu((ok,why)=>{
+        if(stale()) return;                 // 轮询窗口内迟到：不得 new T.Map 覆盖新容器、也不得降级隐藏容器
         if(ok&&drawMapTD()) tkMsg('ok');
         else { showMapFallback(); tkMsg(ok?'drawfail':(why||(state.tiandituKey?'loadfail':'empty'))); }
       });
@@ -698,7 +745,7 @@ function renderMap(){
 }
 function switchMap(p){
   // REQ-703：不可用底图必须给出明确反馈，不得静默回退（真机 APK 以 file:// 加载，
-  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）。原生 confirm 在 WebView 中
+  // __WB_TMAP_PROXY__ 恒为 false，点击「腾讯地图」必然走到这里）。原生 confirm 在 WebView 中
   // 不显示且恒按「取消」返回，改用应用内确认框 uiConfirm（见 state.js）
   if(p==='qq'&&!isProxyEnv()){
     uiConfirm('腾讯地图不可用','腾讯地图需要本地代理环境，当前环境不可用。','改用天地图','保持内置拓扑图').then(ok=>{

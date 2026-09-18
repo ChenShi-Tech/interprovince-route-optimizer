@@ -1,0 +1,39 @@
+@page { size: A4; margin: 18mm 15mm 16mm; }
+:root{ --ink:#1b2430; --ink2:#4a5568; --line:#d8dee8; --accent:#1f5fa8; --bg2:#f6f8fb; }
+html{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+body{
+  font-family:"Source Han Serif SC","Songti SC","PingFang SC","Helvetica Neue",serif;
+  color:var(--ink); font-size:10.5pt; line-height:1.75; margin:0; padding:0;
+}
+#title-block-header{ text-align:center; border-bottom:2px solid var(--accent); padding-bottom:14px; margin-bottom:22px; }
+h1.title{ font-size:24pt; margin:0 0 6px; letter-spacing:1px; }
+p.subtitle{ font-size:12pt; color:var(--ink2); margin:0 0 8px; }
+p.date{ font-size:9.5pt; color:var(--ink2); margin:0; }
+h1{ font-size:17pt; color:var(--accent); border-bottom:1.5px solid var(--accent);
+    padding-bottom:5px; margin:26px 0 14px; page-break-before:always; page-break-after:avoid; }
+#title-block-header + h1, h1:first-of-type{ page-break-before:avoid; }
+h2{ font-size:13.5pt; margin:20px 0 9px; padding-left:9px; border-left:4px solid var(--accent); page-break-after:avoid; }
+h3{ font-size:11.5pt; margin:15px 0 7px; color:#243447; page-break-after:avoid; }
+h4{ font-size:10.5pt; margin:12px 0 6px; color:var(--ink2); page-break-after:avoid; }
+p{ margin:7px 0; text-align:justify; }
+ul,ol{ margin:7px 0 7px 1.1em; padding-left:.6em; }
+li{ margin:3px 0; }
+code{ font-family:"SF Mono","Menlo","Consolas",monospace; font-size:9pt;
+      background:var(--bg2); padding:1px 4px; border-radius:3px; }
+pre{ background:var(--bg2); border:1px solid var(--line); border-left:3px solid var(--accent);
+     border-radius:5px; padding:9px 12px; margin:10px 0; overflow:visible;
+     page-break-inside:avoid; white-space:pre-wrap; word-break:break-word; }
+pre code{ background:none; padding:0; font-size:9pt; line-height:1.6; }
+blockquote{ margin:10px 0; padding:8px 13px; background:#fdf8ec; border-left:3px solid #d8a13a;
+            color:#4a4030; border-radius:0 5px 5px 0; page-break-inside:avoid; }
+blockquote p{ margin:4px 0; font-size:9.8pt; }
+table{ border-collapse:collapse; width:100%; margin:11px 0; font-size:9pt;
+       page-break-inside:avoid; table-layout:auto; }
+th,td{ border:1px solid var(--line); padding:5px 7px; text-align:left; vertical-align:top;
+       word-break:break-word; }
+th{ background:#eaf0f8; font-weight:600; color:#1a3352; }
+tr:nth-child(even) td{ background:#fafbfd; }
+hr{ border:none; border-top:1px solid var(--line); margin:20px 0; }
+a{ color:var(--accent); text-decoration:none; }
+strong{ color:#0f2540; }
+#TOC, nav#TOC{ page-break-after:always; }

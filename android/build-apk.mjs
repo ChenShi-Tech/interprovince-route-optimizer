@@ -26,8 +26,13 @@ const assetDir = path.join(root, 'android', 'app', 'src', 'main', 'assets');
 fs.mkdirSync(assetDir, { recursive: true });
 fs.copyFileSync(path.join(root, 'index.html'), path.join(assetDir, 'index.html'));
 
-console.log('③ gradle assembleDebug（首次运行会下载依赖，需数分钟）…');
-run(`"${gradleBin}" clean assembleDebug --no-daemon`, path.join(root, 'android'));
+// 给了 IPROUTE_KEYSTORE（发版流水线）就打正式签名包，否则打 debug 包自测
+const release = !!process.env.IPROUTE_KEYSTORE;
+const variant = release ? 'Release' : 'Debug';
+console.log(`③ gradle assemble${variant}（首次运行会下载依赖，需数分钟）…`);
+run(`"${gradleBin}" clean assemble${variant} --no-daemon`, path.join(root, 'android'));
 
-const apk = path.join(root, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+const apk = path.join(root, 'android', 'app', 'build', 'outputs', 'apk',
+  release ? 'release' : 'debug', release ? 'app-release.apk' : 'app-debug.apk');
+if (!fs.existsSync(apk)) throw new Error(`未找到产物 ${apk}——release 变体缺签名配置时 gradle 会产出 -unsigned.apk`);
 console.log(`\n✅ APK 已生成: ${apk} (${(fs.statSync(apk).size / 1024 / 1024).toFixed(2)} MB)`);

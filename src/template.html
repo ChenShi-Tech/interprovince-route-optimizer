@@ -43,6 +43,28 @@ window._TMapSecurityConfig = {
   serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
 };
 </script>
+<script>
+/* 腾讯地图代理环境标志（M17）：全页唯一判断点，供 ui/map.js 的 isProxyEnv() 直接读取。
+   判据＝页面就在本机回环地址上，且 _TMapSecurityConfig.serviceHost 已被下发环境替换成
+   具体端口（构建产物里是 http://127.0.0.1:__WB_HTTP_PORT__/…，未替换时冒号后没有数字）。
+   刻意不写成「字符串里还含不含 __WB_HTTP_PORT__」这类自指判据：下发环境的替换粒度不可知，
+   若做全局文本替换，判据字面量本身会被一起替换掉而恒为 false（M17 的原始症状）。
+   标志为 false 时 ui/map.js 一次请求都不发：APK(file://)、线上托管、本地未注入都属此列。 */
+(function(){
+  var ok=false;
+  try{
+    var h=(typeof location!=='undefined'&&location.hostname)||'';
+    var cfg=window._TMapSecurityConfig||{};
+    var svc=typeof cfg.serviceHost==='string'?cfg.serviceHost:'';
+    ok=/^(127\.0\.0\.1|localhost)$/.test(h) && /:\d{2,5}\//.test(svc);
+  }catch(e){ ok=false; }
+  window.__WB_TMAP_PROXY__=ok;
+})();
+</script>
+<!-- 腾讯地图 SDK（约 2.13MB）不再静态外链：<head> 同步外链会阻塞首屏，且 APK/托管环境到不了 map.qq.com。
+     改为由 ui/map.js 按 __WB_TMAP_PROXY__ 动态注入（非代理环境零请求）。此标签只承载 SDK 地址，
+     只有 src 被真正赋值时才发起请求；defer 作为兜底——万一被改回静态 src 也不会阻塞解析。 -->
+<script id="tmap-sdk" defer data-src="https://map.qq.com/api/gljs?v=1.exp"></script>
 <style>
 :root{
   --ink:#1F2328; --ink2:#5F5E5A; --ink3:#8A8A85;
@@ -68,7 +90,11 @@ h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .help-link{border:.5px solid rgba(24,95,165,.35);background:#fff;color:var(--blue);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
-main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
+/* overflow-x 用 clip 而不是 hidden（M14）：hidden 会把计算值 overflow-y 变成 auto，main 随之
+   成为滚动容器，其内部 .col-side / .col-ai 的 sticky 参照系就是 main 的 scrollport 而非视口，
+   吸附位移恒为 0（宽屏下左栏滚出视野）。clip 同样横向裁切但不创建滚动容器，sticky 恢复正常。
+   注意：不要给 main 或任一祖先加 overflow 的 hidden/auto/scroll，同类问题会在其它 sticky 元素上重演。 */
+main{flex:1;padding:14px 16px 8px;overflow-x:clip}
 /* 末尾卡片的外边距属于尾部留白，由页脚间距接管。
    深层选择器：各 Tab 内容末尾的 margin 在任意嵌套层泄漏会导致
    「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），

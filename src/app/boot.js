@@ -23,10 +23,13 @@ document.addEventListener('change',e=>{
   // 受端到户：主体 / 档别 / 计价方式决定输配电价，先读其余输入再用所选档核定值覆盖 pNet（手改值随之重置）
   if(['i-dstentity','i-dsttier','i-dstbilling'].indexOf(id)>=0){
     readInputs();
-    if(id==='i-dstentity'){ state.dstEntity=e.target.value; state.dstTier=null; }
+    // 换主体等同重新核准：清手改标记，避免把上一主体的手填电价带进新主体
+    // （广东↔深圳同属一省，applyToProv 的换省判定不触发，旧值会被当成深圳的手填值继续参与计算）
+    if(id==='i-dstentity'){ state.dstEntity=e.target.value; state.dstTier=null; state.pNetManual=false; }
     if(id==='i-dsttier') state.dstTier=e.target.value;
     if(id==='i-dstbilling') state.dstBilling=e.target.value;
     const vt=dstTariff(); state.dstBilling=vt.billing;
+    // 新主体不能自动带入（深圳：结构特殊）时不写值，交给 solveState() 里的 syncDstAuto 置空 → 界面提示「缺项须手填」
     if(vt.net!=null) state.pNet=vt.net;
     state.sel=0; state._res=solveState(); saveLast(); renderCalc();
     return;
