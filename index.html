@@ -81,7 +81,7 @@ window._TMapSecurityConfig = {
   /* ---------- 颜色 · 基础（源码 :root 原名原值） ---------- */
   --ink:#1F2328;              /* 正文与关键数字 */
   --ink2:#5F5E5A;             /* 次级文字：字段标签、分项名、说明句 */
-  --ink3:#8A8A85;             /* 第三级：提示、单位、元信息、未选中导航；对比度仅 3.5:1，别写必读内容 */
+  --ink3:#6D6D68;             /* 第三级：提示、单位、元信息、未选中导航；在 card / bg / gray-bg / blue-bg 上均 ≥4.5:1（原 #8A8A85 仅 3.5:1） */
   --line:rgba(0,0,0,.10);     /* 0.5px 发丝线：卡片外框、页头下沿、导航上沿 */
   --line2:rgba(0,0,0,.06);    /* 卡片内部分隔：键值行、小标题下划线、段块外框 */
   --bg:#F4F5F7;               /* 页面底色 */
@@ -103,7 +103,7 @@ window._TMapSecurityConfig = {
   /* ---------- 颜色 · 具名字面值（源码里反复出现的字面色） ---------- */
   --on-fill:#FFFFFF;                    /* 实色填充上的字：主按钮、改动计数角标、地图序号 */
   --field-bg:#FFFFFF;                   /* 输入框 / 下拉框 / 文本框的底（清晰浅色与卡片同为白） */
-  --field-border:rgba(0,0,0,.16);       /* 输入框 / 下拉框 0.5px 边框 */
+  --field-border:rgba(0,0,0,.42);       /* 输入框 / 下拉框发丝边框：与白底 ≥3:1（非文字对比度，原 .16 仅 1.5:1） */
   --ghost-border:rgba(24,95,165,.35);   /* 幽灵按钮与页头「帮助」按钮的边框 */
   --hero-field-border:rgba(24,95,165,.45); /* 主报价输入框 1.5px 边框 */
   --header-glass:rgba(255,255,255,.94); /* 吸顶页头毛玻璃底 */
@@ -172,7 +172,7 @@ window._TMapSecurityConfig = {
   --font-num:var(--font-sans);    /* 数字字体钩子：金额 / 电量 / 比例等数字位置都挂它，主题可单独换数字字体 */
 
   /* ---------- 下拉箭头（data: URI 不认 CSS 变量，整条 url() 按主题各写一份；箭头色 = --ink3） ---------- */
-  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%236D6D68' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
 
   /* ---------- 主题结构钩子（清晰风格一律 none，外观不变；科技风格用它们表达网格底纹、卡片高光、数字发光） ---------- */
   --num-glow:none;              /* 关键数字的 text-shadow：顶部结果大字 .hero-v、方案卡价格 .plan-price b */
@@ -375,7 +375,7 @@ th,td{padding:6px 4px;text-align:right;border-bottom:var(--hairline) solid var(-
 th:first-child,td:first-child{text-align:left}
 th{color:var(--ink3);font-weight:500;font-size:11px}
 td b{font-weight:600}
-.tier{display:inline-block;font-size:9.5px;padding:1px 5px;border-radius:var(--radius-tag);font-weight:600;vertical-align:middle;margin-left:4px;white-space:nowrap}
+.tier{display:inline-block;font-size:10.5px;padding:1px 5px;border-radius:var(--radius-tag);font-weight:600;vertical-align:middle;margin-left:4px;white-space:nowrap}
 .tier.gov{background:var(--teal-bg);color:var(--teal)}
 .tier.grid{background:var(--blue-bg);color:var(--blue-ink)}
 .tier.region{background:var(--amber-bg);color:var(--amber)}
@@ -400,9 +400,9 @@ td b{font-weight:600}
 .libcard summary::-webkit-details-marker{display:none}
 .libcard[open] summary{border-bottom:var(--hairline) solid var(--line2);background:var(--gray-bg)}
 .lc-n{font-size:13px;font-weight:600;grid-column:1;grid-row:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lc-tag{font-size:9.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:1px 5px;border-radius:var(--radius-tag);margin-left:5px}
+.lc-tag{font-size:10.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:1px 5px;border-radius:var(--radius-tag);margin-left:5px}
 .lc-p{grid-column:2;grid-row:1/3;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num);text-align:right;align-self:center}
-.lc-p small{font-size:9.5px;font-weight:500;color:var(--ink3);margin-left:1px}
+.lc-p small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:1px}
 .lc-m{grid-column:1;grid-row:2;font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lc-b{grid-column:1;grid-row:3}
 .lc-body{padding:11px 12px}
@@ -417,7 +417,7 @@ td b{font-weight:600}
   .lc-n{display:flex;flex-wrap:wrap;align-items:center;gap:3px 5px;white-space:normal;line-height:1.45}
   .lc-tag{margin-left:0;max-width:100%;line-height:1.35}
   .lc-m{white-space:normal;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
-  .lc-pre{display:block;font-size:10px;font-weight:500;color:var(--ink3)}
+  .lc-pre{display:block;font-size:10.5px;font-weight:500;color:var(--ink3)}
   .lc-kv>div{padding-left:74px;text-indent:-74px}
   .lc-kv span{text-indent:0}
   .lib-src{overflow-wrap:anywhere}   /* 来源里的长网址不会自然断行，卡片 overflow:hidden 下会被裁掉 */
@@ -441,7 +441,7 @@ td b{font-weight:600}
 .mc{background:var(--gray-bg);border-radius:var(--radius-field);padding:8px 10px}
 .mc .l{font-size:10.5px;color:var(--ink3);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mc .v{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
-.mc .v small{font-size:10px;font-weight:500;color:var(--ink3);margin-left:2px}
+.mc .v small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:2px}
 .sub{font-size:11.5px;font-weight:600;color:var(--ink2);margin:15px 0 8px;padding-bottom:5px;border-bottom:var(--hairline) solid var(--line2);display:flex;justify-content:space-between;gap:8px}
 .sub:first-child{margin-top:0}
 .sub em{font-style:normal;font-weight:400;color:var(--ink3);font-size:10.5px}
@@ -456,7 +456,7 @@ td b{font-weight:600}
 .segblk .grid b{display:block;font-size:12.5px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
 .src{font-size:10.5px;color:var(--ink3);line-height:1.6;margin-top:8px;padding-top:7px;border-top:var(--hairline) solid var(--line2)}
 .src q{display:block;font-style:normal;color:var(--ink2);background:var(--gray-bg);border-radius:var(--radius-inline);padding:6px 8px;margin-top:5px;line-height:1.6;word-break:break-all}
-.pill{display:inline-block;font-size:10px;padding:1px 6px;border-radius:var(--radius-pill);background:var(--blue-bg);color:var(--blue-ink);font-weight:600;margin-right:4px;white-space:nowrap}
+.pill{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:var(--radius-pill);background:var(--blue-bg);color:var(--blue-ink);font-weight:600;margin-right:4px;white-space:nowrap}
 .pill.g{background:var(--gray-bg);color:var(--ink3)}
 .pill.a{background:var(--amber-bg);color:var(--amber)}
 .meter{height:5px;border-radius:var(--radius-meter);background:var(--gray-bg);overflow:hidden;margin-top:4px}
@@ -502,7 +502,7 @@ td b{font-weight:600}
 .cmp-item .l{font-size:11px;color:var(--ink2);display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cmp-item .l i{flex:0 0 auto;width:8px;height:8px;border-radius:var(--radius-swatch)}
 .cmp-item .v{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.3}
-.cmp-item .p{font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums;font-family:var(--font-num)}
+.cmp-item .p{font-size:10.5px;color:var(--ink3);font-variant-numeric:tabular-nums;font-family:var(--font-num)}
 .cmp-item.tot{background:var(--blue-bg)}
 .cmp-item.tot .l,.cmp-item.tot .v{color:var(--blue-ink);font-weight:700}
 /* 费用口径与参数：紧凑网格，每项只占一格，不再整行铺满 */
@@ -568,7 +568,7 @@ body.sheet-open{overflow:hidden}
 .ai-rec-hd{display:flex;align-items:center;gap:8px}
 .ai-rec-hd .rc-no{font-size:11px;font-weight:700;color:var(--blue-ink)}
 .ai-rec-price{margin-left:auto;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num)}
-.ai-rec-price small{font-size:10px;font-weight:500;color:var(--ink3);margin-left:2px}
+.ai-rec-price small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:2px}
 .ai-rec-route{font-size:12px;font-weight:600;margin-top:5px}
 .ai-rec-line{font-size:11px;color:var(--ink3);margin-top:2px}
 .ai-rec-why{font-size:11.5px;color:var(--ink2);line-height:1.55;margin-top:6px;padding-top:6px;border-top:var(--hairline) dashed var(--line2)}
@@ -584,13 +584,26 @@ details.adv.boxed>summary{font-size:12.5px}
 .rc-top{display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:5px}
 .rc-no{font-size:10.5px;font-weight:700;color:var(--blue);flex:0 0 auto}
 .rc.on .rc-no{color:var(--blue-ink)}
-.rc-tag{font-size:9.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rc-tag{font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rc-price{font-size:17px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.1}
-.rc-price small{font-size:9.5px;font-weight:500;color:var(--ink3);margin-left:1px;letter-spacing:0}
-.rc-meta{font-size:10px;color:var(--ink3);margin-top:3px}
+.rc-price small{font-size:10.5px;font-weight:500;color:var(--ink3);margin-left:1px;letter-spacing:0}
+.rc-meta{font-size:10.5px;color:var(--ink3);margin-top:3px}
 .rlist-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:10.5px;color:var(--ink3);margin-top:4px}
 .tg{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
 .tg input{width:auto;margin:0;padding:0}
+/* 复选框 / 单选框恢复原生外观：全局 input{appearance:none} 会把它们画成空白圆角框，勾上后看不出状态。
+   同时撤掉全局 input 的铺满宽度与内边距（原生控件会被拉伸），勾选色取品牌蓝、随主题变化 */
+input[type=checkbox],input[type=radio]{appearance:auto;accent-color:var(--blue);width:auto;padding:0;margin:0;flex:none;cursor:pointer}
+/* 可点区域 ≥44px、外观尺寸不变：给小控件挂一个透明伪元素，向外扩到至少 44×44（已够大的方向不扩）。
+   inset 用 min(0px, 50% − 22px)：百分比相对控件自身，控件已 ≥44px 时取 0，不会缩小原命中区。
+   只挂在不会盖住相邻可点控件的地方：换行排布的 .seg.wrap（行距 5px）不扩，免得抢邻行的点击。
+   控件自建层叠上下文（z-index:0）、伪元素垫在 -1 层：扩出的透明区压在邻近静态内容之上可点，
+   但压不住控件自己的子元素（复选框、图标、角标），点它们时命中的仍是子元素本身 */
+.sheet-x,.help-link,.tg,.btn.ghost,.seg:not(.wrap) button,details.adv>summary,details.explain>summary,.plan-issues>summary{position:relative;z-index:0}
+.tk-eye{z-index:0}
+.sheet-x::after,.tk-eye::after,.help-link::after,.tg::after,.btn.ghost::after,.seg:not(.wrap) button::after,
+details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::after{content:"";position:absolute;
+  top:min(0px,calc(50% - 22px));bottom:min(0px,calc(50% - 22px));left:min(0px,calc(50% - 22px));right:min(0px,calc(50% - 22px));z-index:-1}
 /* 方案卡片：路线（左）+ 价格（右，突出）→ 价格组成条（悬停 / 聚焦显示分项）→ 关键指标 → 标签与区域网损对照 */
 .plan-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
 .plan-no{font-size:12.5px;font-weight:700;color:var(--ink2)}
@@ -608,7 +621,7 @@ details.adv.boxed>summary{font-size:12.5px}
 .lines{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
 .ln{font-size:11px;font-weight:600;padding:2px 9px;border-radius:var(--radius-pill);background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
 .ln.ac{background:var(--teal-bg);color:var(--teal)}
-.plus{font-size:10px;color:var(--ink3)}
+.plus{font-size:10.5px;color:var(--ink3)}
 .plan-price{flex:none;text-align:right}
 .plan-price b{display:block;font-size:30px;font-weight:750;letter-spacing:-.6px;color:var(--blue-ink);font-variant-numeric:tabular-nums;font-family:var(--font-num);line-height:1.1;text-shadow:var(--num-glow)}
 .plan-price small{display:block;font-size:11px;color:var(--ink3);margin-top:3px;white-space:nowrap}
@@ -684,7 +697,7 @@ details.adv.boxed>summary{font-size:12.5px}
 .region-charge-grid>div>span{display:block;font-size:11px;color:var(--ink3);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .region-charge-grid b{font-size:20px;font-weight:700;line-height:1.3;font-variant-numeric:tabular-nums;font-family:var(--font-num);color:var(--ink)}
 .region-charge-grid small{font-size:11px;color:var(--ink3);margin-left:3px}
-.region-charge-grid em{display:inline-block;font-style:normal;font-size:10px;font-weight:600;color:var(--amber);background:var(--amber-bg);border-radius:var(--radius-pill);padding:0 6px;margin-left:5px;vertical-align:middle}
+.region-charge-grid em{display:inline-block;font-style:normal;font-size:10.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);border-radius:var(--radius-pill);padding:0 6px;margin-left:5px;vertical-align:middle}
 .region-charge details.explain{margin:10px 0 0}
 .region-charge-note{font-size:11px;line-height:1.65;color:var(--ink2);margin:8px 0 0}
 .region-charge-note a{color:var(--blue-ink)}
@@ -716,7 +729,7 @@ details.adv.boxed>summary{font-size:12.5px}
 .seg.wrap{flex-wrap:wrap}
 @media (max-width:899px){ .seg.wrap button{white-space:nowrap} }
 .rc{width:118px;padding:9px 10px 10px}
-.rc-hop{font-size:9.5px;font-weight:600;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:var(--radius-pill);flex:0 0 auto}
+.rc-hop{font-size:10.5px;font-weight:600;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:var(--radius-pill);flex:0 0 auto}
 .rc.on .rc-hop{background:var(--card)}
 .rc-line{font-size:12px;font-weight:600;color:var(--ink);margin:4px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rc.on .rc-line{color:var(--blue-ink)}
@@ -874,7 +887,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 11:37';
+const BUILD_TIME='2026-09-18 11:52';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -2461,7 +2474,7 @@ function renderRouteSegment(r,i){
         :`<div class="tl-cap">核定容量待补，无法校验占用</div>`}
       <div class="tl-sub">长度 ${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}<i>·</i>段入口功率 ${fmt(s.inMW,0)} MW<i>·</i>段损耗 ${fmt(s.lossMwh,2)} MWh<em>（物理估算）</em></div>
       ${e.regional?`<details class="explain"><summary>计费说明</summary><div class="inner"><p class="note">${e.tariffStatus==='unknown'?'独立输电价待核，当前未计此项；':'区域共用网络接口，不逐个收通道费；'}${i===0?'送出省费用只在交易起点计一次。':'不收过境省外送费。'}${e.type==='AC' && s.billLossPct===0?'计费损耗 0，物理损耗仅作容量估算。':'背靠背损耗为估算，须核对备案标准。'}</p></div></details>`:''}
-      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　生效 '+esc(e.eff):''}</div>
+      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　<span style="white-space:nowrap">生效 '+esc(e.eff)+'</span>':''}</div>
     </div>
   </div>`;
 }
@@ -3842,7 +3855,7 @@ function renderMap(){
   const secStrip=secObj?`<div class="warn" style="margin:0 0 8px">断面高亮：<b>${esc(secObj.n)}</b>　限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}${secObj.note?'　'+esc(secObj.note):''}${secMemberIds(state.mapSec).length?'':'　<span style="color:var(--red)">成员通道未映射到本图</span>'}</div>`:'';
   // 批次 B 增补：区域着色图例（动态，依据 REGION_OF 区域电网分区）
   const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
-  const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--ink3);margin:0 0 8px;align-items:center">
+  const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
       <span style="color:var(--ink2)">区域着色</span>
       ${Object.entries(rPal).map(([n,c])=>`<span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c};margin-right:4px;vertical-align:middle"></i>${esc(n)}</span>`).join('')}
       <span style="margin-left:auto">环=区域归属 · 依据：区域电网分区</span>
@@ -3877,15 +3890,15 @@ function renderMap(){
       <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-route);vertical-align:middle;margin-right:5px"></i>选中方案</span>
       <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-alt);vertical-align:middle;margin-right:5px"></i>其它候选</span>
       <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-edge);vertical-align:middle;margin-right:5px"></i>全网架</span>
-      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapnet" ${state.mapNet!=='off'?'checked':''}>显示全网架</label></span>
+      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapnet" ${state.mapNet!=='off'?'checked':''}>显示全网架</label></span>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--ink3);margin:0 0 8px;align-items:center">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
       <span style="color:var(--ink2)">价格线型（弱化层）</span>
       <span><i class="lg-line" style="border-top:2.5px solid var(--ink3)"></i>核定</span>
       <span><i class="lg-line" style="border-top:1.5px solid var(--ink3)"></i>国网披露</span>
       <span><i class="lg-line" style="border-top:2.5px dashed var(--ink3)"></i>区域口径</span>
       <span><i class="lg-line" style="border-top:2.5px dotted var(--ink3)"></i>待核价</span>
-      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
+      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
     </div>
     ${regionLegend}
     <div style="display:flex;gap:8px;margin:0 0 8px;align-items:center">

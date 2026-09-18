@@ -10,7 +10,7 @@
  *       <meta name="theme-color">（浏览器状态栏色只认字面值）。
  *   二、令牌引用：var(--x) 与 JS 里以字符串传递的 '--x'（tokenColor('--x') 等）都必须在 src/tokens.css 定义；
  *       src/tokens.css 定义了但 src/ 下无人引用的令牌给出警告（不失败）。
- *   三、字号：font-size 只能取 FONT_SIZES 里的现有取值。
+ *   三、字号：CSS / canvas 的 font-size 只能取 FONT_SIZES；拓扑图 SVG 的 font-size 属性另按 SVG_FONT_SIZES。
  *   四、圆角：border-radius 字面值只能是 0 / 50% / 复合值（多值简写）/ 令牌引用。
  *   五、令牌文件自身：只有一个 :root 块、:root 内名字不重复、主题覆盖块（[data-theme] 等）只覆盖已定义的令牌。
  * 用法：node tools/test-design-tokens.mjs
@@ -26,8 +26,12 @@ const warns = [];
 const ok = (c, l, d) => { if (c) { pass++; console.log('  ✅ ' + l); } else { fail++; console.log('  ❌ ' + l + (d ? '\n' + d : '')); } };
 
 /* 允许的字号（px）。新增字号须先进设计系统（tokens.json 的 type 分组），再同步到这里——
-   不要为了让守卫变绿直接往这里加值。9 只出现在拓扑图 SVG 的 font-size 属性（非路线省名）。 */
-const FONT_SIZES = [9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16, 17, 18, 19, 20, 21, 24, 26, 30, 34, 40];
+   不要为了让守卫变绿直接往这里加值。
+   可读性下限 10.5px：原 9.5 / 10px 两档已统一提到 10.5（手机上太小）。 */
+const FONT_SIZES = [10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16, 17, 18, 19, 20, 21, 24, 26, 30, 34, 40];
+/* 拓扑图 SVG 的 font-size 属性（ui/map.js）：单位是 viewBox（660×430）用户单位，随画布整体缩放，不是屏幕 px，
+   不受上面的可读性下限约束。9 = 非路线省名，10 = 段序号 / 段名 / 站名，10.5 = 路线省名。 */
+const SVG_FONT_SIZES = [9, 10, 10.5];
 
 
 /* ---------- 读取 ---------- */
@@ -139,9 +143,10 @@ console.log(`  ⚠ 未引用令牌 ${unused.length} 个（警告，不失败；�
 console.log('\n══ 三、字号只能取现有取值（新增字号须先进设计系统）══');
 const fsHits = [];
 const allowed = new Set(FONT_SIZES.map(String));
-const checkFs = (file, text, idx, raw, v) => {
+const allowedSvg = new Set(SVG_FONT_SIZES.map(String));
+const checkFs = (file, text, idx, raw, v, set = allowed) => {
   const n = String(Number(v));
-  if (!allowed.has(n)) fsHits.push(`      ${file}:${lineOf(text, idx)}　${raw}`);
+  if (!set.has(n)) fsHits.push(`      ${file}:${lineOf(text, idx)}　${raw}`);
 };
 for (const t of [{ file: 'src/template.html', text: tpl, scan: stripHtmlComments(stripJsComments(tpl)) }, ...jsScan]) {
   const s = t.scan;
@@ -154,12 +159,12 @@ for (const t of [{ file: 'src/template.html', text: tpl, scan: stripHtmlComments
   }
   // SVG font-size 属性（无单位即 px）；模板表达式 ${a?10.5:9} 里的每个数字都查
   for (const m of s.matchAll(/font-size="([^"]*)"/g)) {
-    for (const x of m[1].match(/\d+(?:\.\d+)?/g) || []) checkFs(t.file, t.text, m.index, `font-size="${m[1]}"`, x);
+    for (const x of m[1].match(/\d+(?:\.\d+)?/g) || []) checkFs(t.file, t.text, m.index, `font-size="${m[1]}"`, x, allowedSvg);
   }
   // canvas 字体（ctx.font='16px sans-serif'）
   for (const m of s.matchAll(/\.font\s*=\s*['"`](\d+(?:\.\d+)?)px/g)) checkFs(t.file, t.text, m.index, m[0], m[1]);
 }
-ok(fsHits.length === 0, `字号全部在允许集合内（${FONT_SIZES.length} 档：${FONT_SIZES.join(' / ')}）`, fsHits.join('\n'));
+ok(fsHits.length === 0, `字号全部在允许集合内（CSS ${FONT_SIZES.length} 档：${FONT_SIZES.join(' / ')}；拓扑图 SVG 属性：${SVG_FONT_SIZES.join(' / ')}）`, fsHits.join('\n'));
 
 /* ================= 四、圆角 ================= */
 console.log('\n══ 四、圆角字面值只能是 0 / 50% / 复合值 / 令牌引用 ══');

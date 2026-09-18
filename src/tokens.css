@@ -9,7 +9,7 @@
   /* ---------- 颜色 · 基础（源码 :root 原名原值） ---------- */
   --ink:#1F2328;              /* 正文与关键数字 */
   --ink2:#5F5E5A;             /* 次级文字：字段标签、分项名、说明句 */
-  --ink3:#8A8A85;             /* 第三级：提示、单位、元信息、未选中导航；对比度仅 3.5:1，别写必读内容 */
+  --ink3:#6D6D68;             /* 第三级：提示、单位、元信息、未选中导航；在 card / bg / gray-bg / blue-bg 上均 ≥4.5:1（原 #8A8A85 仅 3.5:1） */
   --line:rgba(0,0,0,.10);     /* 0.5px 发丝线：卡片外框、页头下沿、导航上沿 */
   --line2:rgba(0,0,0,.06);    /* 卡片内部分隔：键值行、小标题下划线、段块外框 */
   --bg:#F4F5F7;               /* 页面底色 */
@@ -31,7 +31,7 @@
   /* ---------- 颜色 · 具名字面值（源码里反复出现的字面色） ---------- */
   --on-fill:#FFFFFF;                    /* 实色填充上的字：主按钮、改动计数角标、地图序号 */
   --field-bg:#FFFFFF;                   /* 输入框 / 下拉框 / 文本框的底（清晰浅色与卡片同为白） */
-  --field-border:rgba(0,0,0,.16);       /* 输入框 / 下拉框 0.5px 边框 */
+  --field-border:rgba(0,0,0,.42);       /* 输入框 / 下拉框发丝边框：与白底 ≥3:1（非文字对比度，原 .16 仅 1.5:1） */
   --ghost-border:rgba(24,95,165,.35);   /* 幽灵按钮与页头「帮助」按钮的边框 */
   --hero-field-border:rgba(24,95,165,.45); /* 主报价输入框 1.5px 边框 */
   --header-glass:rgba(255,255,255,.94); /* 吸顶页头毛玻璃底 */
@@ -100,7 +100,7 @@
   --font-num:var(--font-sans);    /* 数字字体钩子：金额 / 电量 / 比例等数字位置都挂它，主题可单独换数字字体 */
 
   /* ---------- 下拉箭头（data: URI 不认 CSS 变量，整条 url() 按主题各写一份；箭头色 = --ink3） ---------- */
-  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%236D6D68' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
 
   /* ---------- 主题结构钩子（清晰风格一律 none，外观不变；科技风格用它们表达网格底纹、卡片高光、数字发光） ---------- */
   --num-glow:none;              /* 关键数字的 text-shadow：顶部结果大字 .hero-v、方案卡价格 .plan-price b */

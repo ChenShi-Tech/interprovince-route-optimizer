@@ -536,7 +536,7 @@ function renderRouteSegment(r,i){
         :`<div class="tl-cap">核定容量待补，无法校验占用</div>`}
       <div class="tl-sub">长度 ${e.lenKm?e.lenKm+' km':'约 '+fmt(s.crow,0)+' km*'}<i>·</i>段入口功率 ${fmt(s.inMW,0)} MW<i>·</i>段损耗 ${fmt(s.lossMwh,2)} MWh<em>（物理估算）</em></div>
       ${e.regional?`<details class="explain"><summary>计费说明</summary><div class="inner"><p class="note">${e.tariffStatus==='unknown'?'独立输电价待核，当前未计此项；':'区域共用网络接口，不逐个收通道费；'}${i===0?'送出省费用只在交易起点计一次。':'不收过境省外送费。'}${e.type==='AC' && s.billLossPct===0?'计费损耗 0，物理损耗仅作容量估算。':'背靠背损耗为估算，须核对备案标准。'}</p></div></details>`:''}
-      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　生效 '+esc(e.eff):''}</div>
+      <div class="tl-src">${tierTag(e.tier)} ${esc(e.doc||'无发改委文号')}${e.eff?'　<span style="white-space:nowrap">生效 '+esc(e.eff)+'</span>':''}</div>
     </div>
   </div>`;
 }
