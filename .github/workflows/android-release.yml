@@ -122,7 +122,7 @@ jobs:
           for t in test-modules test-data-share baseline-check test-model-audit test-regional-billing test-prefill test-interaction; do
             if [ ! -f "tools/$t.mjs" ]; then
               # 凡要上传就必须 7 组齐全（web-check 只跑其中 3 组，这里是其余 4 组的唯一防线），手动重跑也不例外；
-              # 只有 dry_run（不上传）容忍缺失，用于核对早期标签（如 v1.1.5 还没有 test-model-audit）
+              # 只有 dry_run（不上传）容忍缺失（早期标签测试清单不全）
               if [ "$DRY_RUN" != true ]; then echo "::error::缺少 tools/$t.mjs——测试被删除或改名？同步本工作流的测试清单（仅 dry_run 可跳过）"; exit 1; fi
               echo "::warning::该标签没有 tools/$t.mjs，dry_run 下跳过"
               continue
