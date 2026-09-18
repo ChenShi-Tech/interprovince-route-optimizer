@@ -14,15 +14,16 @@
  *   params-open  参数弹层打开态（视口）
  *   map          网架图页（整页，内置 SVG 拓扑图）
  *   lib          费率库页（整页）
- * 另有 x- 开头的扩展画面（整页测算、价格条悬停、含区域网架的时间线、网架图叠加层、导览与错误提示、确认框），
- * 覆盖上面 6 个画面照不到的配色。
+ * 另有 x- 开头的扩展画面（整页测算、价格条悬停、含区域网架的时间线、网架图叠加层、导览与错误提示、确认框、
+ * 外观面板），覆盖上面 6 个画面照不到的配色。
  *
  * 确定性处理（两次截图之间只允许代码改动带来的差异）：
  *   - 每个画面用全新浏览器上下文，预置新手导览「已读」（与 tests/e2e.mjs 同口径），不带任何历史存档；
  *   - 截图关闭动画与过渡（animations:'disabled'）、隐藏光标；
  *   - 费率库页会显示构建时间 BUILD_TIME（每次构建都变），截图前把页面上的该字符串替换成固定占位。
  *
- * --theme <名字>：截图前给 <html> 设 data-theme（主题阶段用；本阶段未定义任何主题，设了也不应有变化）。
+ * --theme <名字>：clear / clear-dark / tech。截图前把对应的外观偏好写进本机存储 iproute.v2.ui（页面 <head> 内联脚本
+ *   据此设 data-theme，与真实用户切换走同一条路），并固定浏览器 prefers-color-scheme 为浅色；不给则为默认（清晰浅色）。
  *
  * 浏览器：用 tests/node_modules/playwright-core。若其默认版本的浏览器未安装，
  * 自动在 ms-playwright 缓存目录里找已安装的 chromium_headless_shell-*（取最高版本）兜底；
@@ -122,6 +123,9 @@ for (let i = 0; i < args.length; i++) {
   else if (!args[i].startsWith('--')) outDir = args[i];
 }
 if (args.includes('--theme') && !theme) { console.error('--theme 需要一个名字'); process.exit(2); }
+/* 主题 id → 外观偏好（与 src/app/ui/theme.js 的 resolveTheme 对应） */
+const THEME_PREFS = { clear: { style: 'clear', mode: 'light' }, 'clear-dark': { style: 'clear', mode: 'dark' }, tech: { style: 'tech', mode: 'system' } };
+if (theme && !THEME_PREFS[theme]) { console.error(`未知主题 ${theme}（可选：${Object.keys(THEME_PREFS).join(' / ')}）`); process.exit(2); }
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
 outDir = path.resolve(outDir || path.join(root, '.runtime/ui-shots', stamp));
 fs.mkdirSync(outDir, { recursive: true });
@@ -227,6 +231,14 @@ const SCREENS = [
       await page.waitForSelector('[role=dialog]:not(.sheet-panel)');
     },
   },
+  {
+    // 外观面板（风格 / 明暗分段按钮；科技风格下「明暗」组禁用并附说明）
+    name: 'x-appearance', target: 'viewport', async prepare(page) {
+      await page.click('#btn-theme');
+      await page.waitForSelector('#theme-sheet.open');
+      await page.waitForTimeout(350);
+    },
+  },
 ];
 /** 网架图重绘后 SVG 由 setTimeout(80ms) 注入：给旧 SVG 打标，等新 SVG 出现再继续。 */
 async function mapRedraw(page, action) {
@@ -256,20 +268,20 @@ let n = 0, errPages = 0;
 try {
   for (const size of SIZES) {
     for (const scr of SCREENS) {
-      const ctx = await browser.newContext({ viewport: size.viewport, deviceScaleFactor: size.deviceScaleFactor });
-      await ctx.addInitScript((th) => {
-        try { localStorage.setItem('iproute.v2.guide', '1'); } catch (e) { /* 存储不可用时导览会弹出，截图会暴露出来 */ }
-        if (th) {
-          const set = () => document.documentElement && document.documentElement.setAttribute('data-theme', th);
-          if (document.documentElement) set();
-          else new MutationObserver((m, o) => { if (document.documentElement) { set(); o.disconnect(); } }).observe(document, { childList: true });
-        }
-      }, theme);
+      const ctx = await browser.newContext({ viewport: size.viewport, deviceScaleFactor: size.deviceScaleFactor, colorScheme: 'light' });
+      await ctx.addInitScript((prefs) => {
+        try {
+          localStorage.setItem('iproute.v2.guide', '1');   // 存储不可用时导览会弹出，截图会暴露出来
+          if (prefs) localStorage.setItem('iproute.v2.ui', JSON.stringify(prefs));
+        } catch (e) { /* 同上 */ }
+      }, theme ? THEME_PREFS[theme] : null);
       const page = await ctx.newPage();
       const errs = [];
       page.on('pageerror', (e) => errs.push(String(e).split('\n')[0]));
       await page.goto(url, { waitUntil: 'load' });
       await page.waitForSelector('.card.plan');
+      const got = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      if (got !== (theme || 'clear')) throw new Error(`data-theme 应为 ${theme || 'clear'}，实际 ${got}`);
       await page.evaluate(() => document.fonts && document.fonts.ready);
       if (scr.prepare) await scr.prepare(page);
       await normalize(page);

@@ -59,9 +59,12 @@ document.addEventListener('change',e=>{
     saveLast(); renderCalc();
   }
 });
-// 参数面板：Esc 关闭；后退（含安卓返回键）先关闭面板
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeParams(); });
-if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>closeParams(true));
+// 参数面板与外观面板：Esc 关闭；后退（含安卓返回键）先关闭面板
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); } });
+if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); });
+// 外观主题：data-theme 已由 <head> 内联脚本在首帧前设好，这里读偏好、同步系统栏颜色（meta theme-color / 安卓壳），并跟随系统明暗
+applyTheme();
+watchSystemTheme();
 loadStored();
 aiLoad();          // 智能推荐的服务商 / 密钥 / 上次输入（独立存储，不随 state 持久化）
 applyDeepLink();   // 批次 A·状态深链：hash 携带的 from/to/sel 优先于 LS_LAST（只覆盖这三个输入态）

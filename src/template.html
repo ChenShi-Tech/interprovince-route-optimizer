@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
-<!-- theme-color 是浏览器 / 系统状态栏色，只能写字面值（不认 CSS 变量）；主题阶段需由脚本随主题同步改写 -->
+<!-- theme-color 是浏览器 / 系统状态栏色，只能写字面值（不认 CSS 变量）：这里是清晰浅色的初值，
+     启动后由 ui/theme.js 的 syncSystemBars() 按当前主题的 --system-bar 改写 -->
 <meta name="theme-color" content="#ffffff">
 <title>省间中长期交付成本与报价测算</title>
 <script>
@@ -39,6 +40,21 @@
   document.addEventListener('click',function(ev){
     if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
   });
+})();
+</script>
+<script>
+/* 外观主题首帧设定（防首屏闪白）：先于样式表与应用脚本，按本机外观偏好算出 data-theme 设到 <html>。
+   存储键 'iproute.v2.ui' 与 src/app/config.js 的 LS_UI 同名——这里在应用脚本之前执行、引用不到 config.js，
+   只能写字面串，改名须两处同步；取值规则与 ui/theme.js 的 resolveTheme() 一致（科技固定深色；
+   清晰按明暗，跟随系统时看 prefers-color-scheme）。存储不可用或内容损坏时静默回退默认（清晰 · 跟随系统）。 */
+(function(){
+  var style='clear', mode='system', dark=false;
+  try{
+    var o=JSON.parse(localStorage.getItem('iproute.v2.ui')||'null');
+    if(o&&typeof o==='object'){ if(o.style==='tech') style='tech'; if(o.mode==='light'||o.mode==='dark') mode=o.mode; }
+  }catch(e){}
+  try{ dark=mode==='dark'||(mode==='system'&&!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)); }catch(e){}
+  document.documentElement.setAttribute('data-theme',style==='tech'?'tech':(dark?'clear-dark':'clear'));
 })();
 </script>
 <script type="text/javascript">
@@ -78,10 +94,12 @@ body{background:var(--bg);background-image:var(--page-pattern);color:var(--ink);
 #app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
 header{position:sticky;top:0;z-index:20;background:var(--header-glass);backdrop-filter:saturate(180%) blur(12px);border-bottom:var(--hairline) solid var(--line);padding:12px 16px 10px}
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
-h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
-.badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
+h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowrap}
+/* 页头右侧：状态徽标 + 外观 + 帮助。手机宽度放不下全部时，徽标先收缩成省略号，标题与两个按钮不换行、不缩 */
+.hd-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
+.badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
-.help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap}
+.help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 /* overflow-x 用 clip 而不是 hidden（M14）：hidden 会把计算值 overflow-y 变成 auto，main 随之
@@ -363,6 +381,8 @@ td b{font-weight:600}
 .sheet-ft{flex:none;display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:var(--hairline) solid var(--line2)}
 .sheet-ft .btn{padding:11px;font-size:14px}
 body.sheet-open{overflow:hidden}
+/* 外观面板（#theme-sheet）复用上面的弹层结构；没有底部按钮栏，正文自己让出底部安全区 */
+#theme-sheet .sheet-body{padding-bottom:max(16px,env(safe-area-inset-bottom))}
 @media (min-width:600px){
   .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:var(--radius-sheet) 0 0 var(--radius-sheet);transform:translateX(100%);box-shadow:var(--shadow-sheet-side)}
   .sheet-grab{display:none}
@@ -547,6 +567,7 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
 .seg{display:flex;gap:6px;margin-bottom:12px}
 .seg button{flex:1;font-family:inherit;font-size:12px;padding:8px;border:var(--hairline) solid var(--line);background:var(--card);color:var(--ink2);border-radius:var(--radius-field);cursor:pointer}
 .seg button.on{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-ink);font-weight:600}
+.seg button:disabled{opacity:.45;cursor:not-allowed}
 .seg.small{gap:5px;margin-bottom:9px}
 .seg.small button{font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)}
 /* 可换行的筛选按钮组（费率库）：<900px 时 flex:1 会把按钮压成一字一行，禁止按钮内折行，
@@ -666,8 +687,9 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
   <header>
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
-      <div style="display:flex;align-items:center;gap:8px;flex:none">
+      <div class="hd-acts">
         <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
+        <button class="help-link" id="btn-theme" type="button" onclick="openAppearance()" aria-label="外观：风格与明暗">外观</button>
         <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
       </div>
     </div>
@@ -702,6 +724,19 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
         <button class="btn ghost" type="button" onclick="resetParams()">恢复默认</button>
         <button class="btn" type="button" onclick="closeParams()">完成</button>
       </div>
+    </div>
+  </div>
+  <!-- 外观面板：与参数弹层同一套 .sheet 结构（手机底部滑出，≥600px 右侧滑出）；正文由 ui/theme.js 的 renderAppearance 生成，
+       改动立即生效并存本机（LS_UI） -->
+  <div id="theme-sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-mask" onclick="closeAppearance()"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="theme-title">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <div class="sheet-hd">
+        <div class="sheet-title" id="theme-title">外观</div>
+        <button class="sheet-x" id="theme-close" type="button" onclick="closeAppearance()" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-body" id="theme-body"></div>
     </div>
   </div>
 </div>

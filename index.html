@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
-<!-- theme-color 是浏览器 / 系统状态栏色，只能写字面值（不认 CSS 变量）；主题阶段需由脚本随主题同步改写 -->
+<!-- theme-color 是浏览器 / 系统状态栏色，只能写字面值（不认 CSS 变量）：这里是清晰浅色的初值，
+     启动后由 ui/theme.js 的 syncSystemBars() 按当前主题的 --system-bar 改写 -->
 <meta name="theme-color" content="#ffffff">
 <title>省间中长期交付成本与报价测算</title>
 <script>
@@ -39,6 +40,21 @@
   document.addEventListener('click',function(ev){
     if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
   });
+})();
+</script>
+<script>
+/* 外观主题首帧设定（防首屏闪白）：先于样式表与应用脚本，按本机外观偏好算出 data-theme 设到 <html>。
+   存储键 'iproute.v2.ui' 与 src/app/config.js 的 LS_UI 同名——这里在应用脚本之前执行、引用不到 config.js，
+   只能写字面串，改名须两处同步；取值规则与 ui/theme.js 的 resolveTheme() 一致（科技固定深色；
+   清晰按明暗，跟随系统时看 prefers-color-scheme）。存储不可用或内容损坏时静默回退默认（清晰 · 跟随系统）。 */
+(function(){
+  var style='clear', mode='system', dark=false;
+  try{
+    var o=JSON.parse(localStorage.getItem('iproute.v2.ui')||'null');
+    if(o&&typeof o==='object'){ if(o.style==='tech') style='tech'; if(o.mode==='light'||o.mode==='dark') mode=o.mode; }
+  }catch(e){}
+  try{ dark=mode==='dark'||(mode==='system'&&!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)); }catch(e){}
+  document.documentElement.setAttribute('data-theme',style==='tech'?'tech':(dark?'clear-dark':'clear'));
 })();
 </script>
 <script type="text/javascript">
@@ -448,10 +464,12 @@ body{background:var(--bg);background-image:var(--page-pattern);color:var(--ink);
 #app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
 header{position:sticky;top:0;z-index:20;background:var(--header-glass);backdrop-filter:saturate(180%) blur(12px);border-bottom:var(--hairline) solid var(--line);padding:12px 16px 10px}
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
-h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
-.badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
+h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowrap}
+/* 页头右侧：状态徽标 + 外观 + 帮助。手机宽度放不下全部时，徽标先收缩成省略号，标题与两个按钮不换行、不缩 */
+.hd-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
+.badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
-.help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap}
+.help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 /* overflow-x 用 clip 而不是 hidden（M14）：hidden 会把计算值 overflow-y 变成 auto，main 随之
@@ -733,6 +751,8 @@ td b{font-weight:600}
 .sheet-ft{flex:none;display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:var(--hairline) solid var(--line2)}
 .sheet-ft .btn{padding:11px;font-size:14px}
 body.sheet-open{overflow:hidden}
+/* 外观面板（#theme-sheet）复用上面的弹层结构；没有底部按钮栏，正文自己让出底部安全区 */
+#theme-sheet .sheet-body{padding-bottom:max(16px,env(safe-area-inset-bottom))}
 @media (min-width:600px){
   .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:var(--radius-sheet) 0 0 var(--radius-sheet);transform:translateX(100%);box-shadow:var(--shadow-sheet-side)}
   .sheet-grab{display:none}
@@ -917,6 +937,7 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
 .seg{display:flex;gap:6px;margin-bottom:12px}
 .seg button{flex:1;font-family:inherit;font-size:12px;padding:8px;border:var(--hairline) solid var(--line);background:var(--card);color:var(--ink2);border-radius:var(--radius-field);cursor:pointer}
 .seg button.on{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-ink);font-weight:600}
+.seg button:disabled{opacity:.45;cursor:not-allowed}
 .seg.small{gap:5px;margin-bottom:9px}
 .seg.small button{font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)}
 /* 可换行的筛选按钮组（费率库）：<900px 时 flex:1 会把按钮压成一字一行，禁止按钮内折行，
@@ -1036,8 +1057,9 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
   <header>
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
-      <div style="display:flex;align-items:center;gap:8px;flex:none">
+      <div class="hd-acts">
         <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
+        <button class="help-link" id="btn-theme" type="button" onclick="openAppearance()" aria-label="外观：风格与明暗">外观</button>
         <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
       </div>
     </div>
@@ -1074,6 +1096,19 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
       </div>
     </div>
   </div>
+  <!-- 外观面板：与参数弹层同一套 .sheet 结构（手机底部滑出，≥600px 右侧滑出）；正文由 ui/theme.js 的 renderAppearance 生成，
+       改动立即生效并存本机（LS_UI） -->
+  <div id="theme-sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-mask" onclick="closeAppearance()"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="theme-title">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <div class="sheet-hd">
+        <div class="sheet-title" id="theme-title">外观</div>
+        <button class="sheet-x" id="theme-close" type="button" onclick="closeAppearance()" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-body" id="theme-body"></div>
+    </div>
+  </div>
 </div>
 <script>
 'use strict';
@@ -1087,6 +1122,7 @@ const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
 const LS_GUIDE='iproute.v2.guide';   // FR-3：新手导览完成标记（存在即不再自动弹出；仅清应用数据重置）
+const LS_UI='iproute.v2.ui';   // 外观偏好 {style:'clear'|'tech', mode:'system'|'light'|'dark'}；src/template.html <head> 内联脚本里写的是同名字面串，改名须两处同步
 
 /* ===== src/app/format.js ===== */
 /* 显示格式化与徽标。纯函数，不依赖任何数据。 */
@@ -2093,7 +2129,7 @@ function pricingIssues(r,input,data,date){
 }
 
 /* ===== src/app/ui/theme.js ===== */
-/* 主题工具：读取设计令牌（src/tokens.css）当前生效的实际值。
+/* 主题工具：读取设计令牌（src/tokens.css）当前生效的实际值；外观主题的应用、切换与外观面板（文件后半）。
    界面样式与模板字符串一律直接写 var(--x)，主题切换时浏览器自动重算，不需要本文件。
    只有「不认 CSS 变量、必须拿到真实颜色字符串」的地方才用这里：
      腾讯地图 / 天地图的样式对象、data: URI 里的 SVG、canvas 绘制、脱离页面的 SVG 快照。
@@ -2128,6 +2164,122 @@ function inlineTokenVars(svgEl){
   collect(svgEl);
   names.forEach(n=>{ const v=tokenColor(n); if(v) svgEl.style.setProperty(n,v); });
   return svgEl;
+}
+
+/* ================= 外观主题：风格 × 明暗 → <html data-theme> ================= */
+/* 三套主题：clear（清晰浅色，默认）/ clear-dark（清晰深色）/ tech（科技·调度大屏，固定深色）。
+   偏好存本机 LS_UI：{style:'clear'|'tech', mode:'system'|'light'|'dark'}。
+   首帧的 data-theme 由 src/template.html <head> 内联脚本按同一规则先行设定（防闪白），这里负责启动后的同步与切换。 */
+const UI_STYLES=[['clear','清晰'],['tech','科技']];
+const UI_MODES=[['system','跟随系统'],['light','浅色'],['dark','深色']];
+let uiPrefs=null;
+
+/** 读取外观偏好；存储不可用或内容非法时回退默认（清晰 · 跟随系统） */
+function loadUiPrefs(){
+  const p={style:'clear',mode:'system'};
+  try{
+    const o=JSON.parse(localStorage.getItem(LS_UI)||'null');
+    if(o&&typeof o==='object'){
+      if(UI_STYLES.some(s=>s[0]===o.style)) p.style=o.style;
+      if(UI_MODES.some(m=>m[0]===o.mode)) p.mode=o.mode;
+    }
+  }catch(e){ /* 存储不可用：静默用默认 */ }
+  return p;
+}
+function systemPrefersDark(){
+  try{ return !!(typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches); }catch(e){ return false; }
+}
+/** 偏好 → 主题 id（与 <head> 内联脚本同一规则：科技固定深色；清晰按明暗，跟随系统时看 prefers-color-scheme） */
+function resolveTheme(p){
+  if(p.style==='tech') return 'tech';
+  return (p.mode==='dark'||(p.mode==='system'&&systemPrefersDark()))?'clear-dark':'clear';
+}
+
+/** 应用主题：设 data-theme → 同步浏览器 / 安卓壳的系统栏颜色 → 网架图页在场时重绘（地图 SDK 样式、
+    data: URI 圆点、快照都在绘制时读令牌）→ 外观面板打开时刷新选中态。传入 prefs 时先保存到本机。 */
+function applyTheme(prefs){
+  if(prefs){ uiPrefs=prefs; try{ localStorage.setItem(LS_UI,JSON.stringify(prefs)); }catch(e){} }
+  if(!uiPrefs) uiPrefs=loadUiPrefs();
+  const th=resolveTheme(uiPrefs);
+  const de=typeof document!=='undefined'&&document.documentElement;
+  if(!de||!de.setAttribute) return th;   // 无 DOM 的测试环境
+  const changed=de.getAttribute('data-theme')!==th;
+  de.setAttribute('data-theme',th);
+  syncSystemBars();
+  if(changed){
+    const mv=document.getElementById('v-map');
+    if(mv&&!mv.hidden&&typeof renderMap==='function') renderMap();
+  }
+  renderAppearance();
+  return th;
+}
+/** 系统明暗变化：只在「跟随系统」时跟随 */
+function watchSystemTheme(){
+  try{
+    if(typeof window==='undefined'||!window.matchMedia) return;
+    const mq=window.matchMedia('(prefers-color-scheme: dark)');
+    const h=()=>{ if(uiPrefs&&uiPrefs.mode==='system') applyTheme(); };
+    if(mq.addEventListener) mq.addEventListener('change',h); else if(mq.addListener) mq.addListener(h);
+  }catch(e){ /* 老内核不支持：保持启动时的主题 */ }
+}
+
+/** 系统栏颜色 = 当前主题的 --system-bar（页头色的不透明版，#RRGGBB）。
+    <meta name="theme-color">：浏览器地址栏 / PWA 状态栏；window.IPRouteShell：安卓壳的桥（Web / iOS 没有，忽略）。 */
+function syncSystemBars(){
+  const hex=String(tokenColor('--system-bar')).trim().toUpperCase();
+  if(!/^#[0-9A-F]{6}$/.test(hex)) return;
+  try{
+    const meta=typeof document.querySelector==='function'&&document.querySelector('meta[name="theme-color"]');
+    if(meta) meta.setAttribute('content',hex);
+  }catch(e){}
+  // 深底配浅色图标：按相对亮度判断（与 WCAG 同一公式）
+  const ch=[1,3,5].map(i=>{ const v=parseInt(hex.slice(i,i+2),16)/255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); });
+  const lightIcons=(0.2126*ch[0]+0.7152*ch[1]+0.0722*ch[2])<0.4;
+  try{
+    const sh=typeof window!=='undefined'&&window.IPRouteShell;
+    if(sh&&typeof sh.setSystemBars==='function') sh.setSystemBars(hex,lightIcons);
+  }catch(e){ /* 壳侧异常不影响页面 */ }
+}
+
+/* ---------- 外观面板（复用参数弹层 .sheet 结构；手机从底部滑出，≥600px 从右侧滑出） ---------- */
+let _appearanceOpen=false;
+function renderAppearance(){
+  const body=typeof document!=='undefined'&&document.getElementById&&document.getElementById('theme-body');
+  if(!body||!uiPrefs) return;
+  const tech=uiPrefs.style==='tech';
+  const seg=(key,list,cur,dis)=>`<div class="seg" role="radiogroup" aria-label="${key==='style'?'风格':'明暗'}">${list.map(([v,t])=>
+    `<button type="button" role="radio" aria-checked="${cur===v}" class="${cur===v?'on':''}"${dis?' disabled':''} data-ui-${key}="${v}" onclick="setUiPref('${key}','${v}')">${t}</button>`).join('')}</div>`;
+  body.innerHTML=`<div class="psub">风格</div>${seg('style',UI_STYLES,uiPrefs.style,false)}
+    <div class="psub">明暗</div>${seg('mode',UI_MODES,uiPrefs.mode,tech)}
+    ${tech?'<p class="note" style="margin:0">科技风格固定为深色</p>':''}`;
+}
+function setUiPref(key,val){
+  const p=Object.assign({},uiPrefs||loadUiPrefs());
+  p[key]=val;
+  applyTheme(p);
+}
+function openAppearance(){
+  const el=document.getElementById('theme-sheet');
+  if(!el||_appearanceOpen) return;
+  if(!uiPrefs) uiPrefs=loadUiPrefs();
+  _appearanceOpen=true;
+  renderAppearance();
+  el.classList.add('open'); el.setAttribute('aria-hidden','false');
+  document.body.classList.add('sheet-open');
+  // 与参数弹层同样压一条历史：安卓返回键 / 浏览器后退先关面板
+  try{ history.pushState({themeSheet:1},''); }catch(e){}
+  const x=document.getElementById('theme-close');
+  if(x&&x.focus){ try{ x.focus({preventScroll:true}); }catch(e){} }
+}
+function closeAppearance(fromHistory){
+  if(!_appearanceOpen) return;
+  _appearanceOpen=false;
+  const el=document.getElementById('theme-sheet');
+  if(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
+  document.body.classList.remove('sheet-open');
+  if(!fromHistory){ try{ if(history.state&&history.state.themeSheet) history.back(); }catch(e){} }
+  const b=document.getElementById('btn-theme');
+  if(b&&b.focus){ try{ b.focus({preventScroll:true}); }catch(e){} }
 }
 
 /* ===== src/app/ui/calc.js ===== */
@@ -4522,9 +4674,12 @@ document.addEventListener('change',e=>{
     saveLast(); renderCalc();
   }
 });
-// 参数面板：Esc 关闭；后退（含安卓返回键）先关闭面板
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeParams(); });
-if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>closeParams(true));
+// 参数面板与外观面板：Esc 关闭；后退（含安卓返回键）先关闭面板
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); } });
+if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); });
+// 外观主题：data-theme 已由 <head> 内联脚本在首帧前设好，这里读偏好、同步系统栏颜色（meta theme-color / 安卓壳），并跟随系统明暗
+applyTheme();
+watchSystemTheme();
 loadStored();
 aiLoad();          // 智能推荐的服务商 / 密钥 / 上次输入（独立存储，不随 state 持久化）
 applyDeepLink();   // 批次 A·状态深链：hash 携带的 from/to/sel 优先于 LS_LAST（只覆盖这三个输入态）

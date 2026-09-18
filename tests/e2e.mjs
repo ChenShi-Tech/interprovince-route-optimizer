@@ -1957,6 +1957,107 @@ const tests = [
       set(`区域环 ${r1.n} 个 / ${r1.colors.length} 色；六区域图例+依据在场；浮层含归属；关闭恢复默认`);
     },
   },
+
+  /* ================= 外观主题（clear / clear-dark / tech） ================= */
+  {
+    id: 'TH-01', section: '外观主题', title: '外观面板切换三套主题：data-theme 与系统栏颜色同步',
+    steps: '点页头「外观」→ 明暗选「深色」→「浅色」→ 风格选「科技」→ 再切回「清晰」',
+    expected: 'data-theme 依次为 clear-dark / clear / tech / clear；<meta name="theme-color"> 与安卓壳桥 IPRouteShell.setSystemBars 随主题取 --system-bar（深底配浅色图标）；偏好写入 iproute.v2.ui',
+    async run(page, set) {
+      // 模拟安卓壳注入的桥：记录每次调用（Web / iOS 没有这个对象，页面应静默跳过）
+      await page.addInitScript(() => { window.__bars = []; window.IPRouteShell = { setSystemBars: (hex, lightIcons) => window.__bars.push(hex + (lightIcons ? '/浅色图标' : '/深色图标')) }; });
+      await page.goto(G, DCL);
+      await page.waitForSelector('.card.plan');
+      const th = () => page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      const meta = () => page.evaluate(() => document.querySelector('meta[name="theme-color"]').getAttribute('content'));
+      ok(await th() === 'clear', `默认（跟随系统，浏览器为浅色）应为 clear，实际 ${await th()}`);
+      await page.click('#btn-theme');
+      await page.waitForSelector('#theme-sheet.open');
+      const seen = [];
+      for (const [sel, want, bar] of [['[data-ui-mode="dark"]', 'clear-dark', '#1C1F24'], ['[data-ui-mode="light"]', 'clear', '#FFFFFF'],
+        ['[data-ui-style="tech"]', 'tech', '#070E1A'], ['[data-ui-style="clear"]', 'clear', '#FFFFFF']]) {
+        await page.click('#theme-body ' + sel);
+        const got = await th(), m = await meta();
+        ok(got === want, `点 ${sel} 后 data-theme 应为 ${want}，实际 ${got}`);
+        ok(m === bar, `${want} 的 theme-color 应为 ${bar}，实际 ${m}`);
+        ok(await page.locator('#theme-body ' + sel).getAttribute('aria-checked') === 'true', `${sel} 应处于选中态`);
+        seen.push(`${want}(${m})`);
+      }
+      const bars = await page.evaluate(() => window.__bars);
+      ok(['#FFFFFF/深色图标', '#1C1F24/浅色图标', '#070E1A/浅色图标'].every((x) => bars.includes(x)), `安卓壳桥应收到三种系统栏配色，实际 ${bars.join('、')}`);
+      const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.ui')));
+      ok(saved.style === 'clear' && saved.mode === 'light', `偏好应存为 clear/light，实际 ${JSON.stringify(saved)}`);
+      await page.click('#theme-close');
+      ok(!(await page.evaluate(() => document.getElementById('theme-sheet').classList.contains('open'))), '关闭按钮应收起外观面板');
+      set(`依次切换：${seen.join(' → ')}；偏好存本机；面板可关闭`);
+    },
+  },
+  {
+    id: 'TH-02', section: '外观主题', title: '主题偏好刷新后保持，首帧即生效；「跟随系统」随系统明暗切换',
+    steps: '选「科技」→ 刷新 → 检查首个脚本执行时的 data-theme；改回「清晰 · 跟随系统」→ 模拟系统深色 / 浅色',
+    expected: '刷新后 data-theme 仍为 tech，且在应用脚本运行前（DOMContentLoaded 之前）已设好；跟随系统时系统切深色 → clear-dark、切浅色 → clear',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.card.plan');
+      await page.click('#btn-theme');
+      await page.click('#theme-body [data-ui-style="tech"]');
+      // 记录首帧：<body> 一出现（此时只跑过 <head> 里的脚本，应用脚本还没执行）就读 data-theme
+      await page.addInitScript(() => {
+        new MutationObserver((m, o) => {
+          if (document.body) { window.__th0 = document.documentElement.getAttribute('data-theme'); o.disconnect(); }
+        }).observe(document, { childList: true, subtree: true });
+      });
+      await page.reload(DCL);
+      await page.waitForSelector('.card.plan');
+      const t0 = await page.evaluate(() => window.__th0), t1 = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      ok(t0 === 'tech' && t1 === 'tech', `刷新后应保持 tech（首帧 ${t0}，启动后 ${t1}）`);
+      await page.click('#btn-theme');
+      await page.click('#theme-body [data-ui-style="clear"]');
+      await page.click('#theme-body [data-ui-mode="system"]');
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.waitForTimeout(150);
+      const d = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.waitForTimeout(150);
+      const l = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      ok(d === 'clear-dark' && l === 'clear', `跟随系统：深色应为 clear-dark、浅色应为 clear，实际 ${d} / ${l}`);
+      // 显式选了「浅色」后不再跟随系统
+      await page.click('#theme-body [data-ui-mode="light"]');
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.waitForTimeout(150);
+      const fixed = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      await page.emulateMedia({ colorScheme: 'light' });
+      ok(fixed === 'clear', `选定浅色后系统切深色不应跟随，实际 ${fixed}`);
+      set(`刷新保持 tech（首帧即 ${t0}）；跟随系统 深→${d} 浅→${l}；选定浅色后不跟随（${fixed}）`);
+    },
+  },
+  {
+    id: 'TH-03', section: '外观主题', title: '科技风格下「明暗」组禁用并说明；网架图页切换主题即重绘',
+    steps: '进入网架图页 → 打开「外观」→ 选「科技」→ 检查明暗三按钮与说明 → 切回「清晰」',
+    expected: '科技风格下明暗三按钮 disabled，出现「科技风格固定为深色」；切回清晰后恢复可点；网架图 SVG 随主题重绘（画布底色取新主题的 --map-ground）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.card.plan');
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      const ground = () => page.evaluate(() => getComputedStyle(document.querySelector('#map-view svg rect')).fill);
+      const g0 = await ground();
+      await page.evaluate(() => { document.querySelector('#map-view svg').dataset.stale = '1'; });
+      await page.click('#btn-theme');
+      await page.click('#theme-body [data-ui-style="tech"]');
+      await page.waitForSelector('#map-view svg:not([data-stale])', { timeout: 3000 });
+      const g1 = await ground();
+      const dis = await page.evaluate(() => [...document.querySelectorAll('#theme-body [data-ui-mode]')].map((b) => b.disabled));
+      ok(dis.length === 3 && dis.every(Boolean), `科技风格下明暗三按钮应全部禁用，实际 ${JSON.stringify(dis)}`);
+      ok((await page.locator('#theme-body').innerText()).includes('科技风格固定为深色'), '应显示「科技风格固定为深色」说明');
+      ok(g0 !== g1, `切到科技后网架图画布底色应变化（${g0} → ${g1}）`);
+      await page.click('#theme-body [data-ui-style="clear"]');
+      const dis2 = await page.evaluate(() => [...document.querySelectorAll('#theme-body [data-ui-mode]')].map((b) => b.disabled));
+      ok(dis2.every((x) => !x), '切回清晰后明暗按钮应恢复可点');
+      ok(!(await page.locator('#theme-body').innerText()).includes('科技风格固定为深色'), '切回清晰后说明应消失');
+      set(`科技：明暗组禁用 + 说明；网架图画布 ${g0} → ${g1} 重绘；切回清晰恢复`);
+    },
+  },
 ];
 
 async function respCheck(page, set, expectCentered, desktop = false, expectMax = '480px') {
