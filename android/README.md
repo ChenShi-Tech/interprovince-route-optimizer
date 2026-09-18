@@ -52,6 +52,11 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 - **凡上传必须 7 组测试齐全**：测试文件缺失只在 `dry_run` 下告警跳过（用于核对早期标签），正式发版和手动重跑上传都会中止。
 - 用 `GITHUB_TOKEN` 在别的工作流里创建的 Release 不会触发本工作流（GitHub 防递归），发版须由人发布。
 
+runner 网络：南洋**直连 `github.com` 与 `nodejs.org` 不通**（走本机 clash 才通），工作流在 job 级注入仓库变量 `RUNNER_HTTPS_PROXY`
+（现为 `http://127.0.0.1:7890`）作为 `https_proxy`/`http_proxy`，checkout 与 setup-node 才能下载。代理只加在 job 级，
+runner 服务本身不设代理——给服务设全局代理会在代理故障时连带击穿控制面、runner 掉线。变量置空即回到直连（用于 GitHub 云端机器）。
+注意 `/etc/environment` 给登录会话设了代理，所以手动 `sudo -u irp-runner -i` 测试时是走代理的，与服务环境不同，别据此判断直连可用。
+
 runner 前置条件：南洋工具链位于 runner 用户 `irp-runner` 的 `~/android-toolchain/`（Temurin JDK 17 + Gradle 8.7 +
 SDK `platform-tools` / `platforms;android-34` / `build-tools;34.0.0`），签名密钥为该用户的 `~/.android/debug.keystore`；
 另需系统 `PATH` 里有 GitHub CLI `gh`（南洋现为 `/usr/bin/gh`，上传附件用，重建 runner 时别漏装）。工作流在构建前逐项检查，缺了直接报错。
