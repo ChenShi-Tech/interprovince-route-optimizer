@@ -670,7 +670,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 03:00';
+const BUILD_TIME='2026-09-18 05:05';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -1209,8 +1209,9 @@ function enumPaths(adj,src,dst,maxHops,cap,weightOf){
  *   以下均为可选，缺省时与旧口径完全一致：
  *   dstInLossPct        受端省内上网环节线损率 %（按所选受端电网主体，覆盖省默认值）；另计线损费用
  *   dstQtyLossPct       可选：仅用于终端电量折算的受端上网环节线损率 %。受端主体电价已含线损费用时
- *                       （如深圳，1077号附件1 第22页注2）使用：终端电量按 (1-ρ) 折算，但不另计线损费用。
- *                       缺省（不传）时行为与旧口径完全一致（不折算、不另计）。
+ *                       （如深圳，1077号附件1 第22页注2）使用：终端电量按 (1-ρ) 折算，不单列线损费用行。
+ *                       省界及以前各项的金额仍按节点交付电量实付（单价改按到户电量表述），
+ *                       landed = 省界价/(1-ρ) + 受端各项。缺省（不传）时与旧口径完全一致。
  *   dstBilling          受端计价方式 'single' | 'twopart'（只用于缺项提示，输配电价仍由 pNet 传入）
  *   dstCapFee           两部制容（需）量电费分摊 元/到户MWh（用户负荷假设下的估算）
  *   dstSysOpFee         系统运行费 元/到户MWh（手填；null = 缺项）
@@ -1437,16 +1438,25 @@ function pathKeyOf(p){ return p.nodes.join('>')+'#'+p.edges.map(e=>e.id).join(',
 
 /** 受端电价已含上网环节线损费用时的终端电量折算（M10）。
  *  这类主体（深圳：1077号附件1 第22页注2「各电价含…上网环节线损费用」）线损率只用于把省间节点交付电量
- *  折算成终端用电量，不另计线损费用。cost.js 的 amountQty/金额按 dstInLossPct 计算，这里按 dstQtyLossPct
- *  改基数并等比重算金额；landed 与各 comp 单价不变，避免与「电价已含线损」重复计费。
+ *  折算成终端用电量，不单列「受端上网环节线损费用」一项。
+ *  ⚠ 折算只改金额基数，不改实付总额：qty 是买方在省间节点的交付电量，省界及以前的每一项都按 qty 实付，
+ *  折量后金额不得跟着缩水（曾经整体等比缩放，1000 MWh / 2.11% 少计了 2.11% 的上游成本）。
+ *  因此：上游项金额不动、单价改按到户电量表述（÷k）；受端项单价本就按到户电量计、金额改按到户电量（×k）。
+ *  结果满足 Σ单价 = landed、Σ金额 = 实付总额，landed = 省界价/(1−ρ) + 受端各项。
  *  缺省（不传 dstQtyLossPct）时不进入本函数，旧口径完全不变。 */
+const UPSTREAM_COMPS=['gen','loss','send','trans','reg','originLoss'];   // 省界及以前，按节点交付电量实付
+const DST_COMPS=['inLoss','net','fund','cap','sysOp'];                   // 受端省内，单价按到户电量计
 function applyDstQtyLoss(r, ctx){
   if(ctx.dstQtyLossPct==null || ctx.includeDstCost===false) return r;
   const consumerQty=ctx.qty*(1-ctx.dstQtyLossPct/100);
   if(!(r.amountQty>0) || !(consumerQty>0)) return r;
   const k=consumerQty/r.amountQty;
+  for(const key of UPSTREAM_COMPS) r.comp[key]/=k;      // 金额不变 ⇒ 单价 = 金额/到户电量
+  for(const key of DST_COMPS) r.yuan[key]*=k;           // 单价不变 ⇒ 金额 = 单价×到户电量
+  r.yuan.total=UPSTREAM_COMPS.concat(DST_COMPS).reduce((a,key)=>a+r.yuan[key],0);
   r.consumerQty=consumerQty; r.amountQty=consumerQty;
-  for(const key of Object.keys(r.yuan)) r.yuan[key]*=k;
+  r.landed=r.yuan.total/consumerQty;
+  r.qtyLossPct=ctx.dstQtyLossPct;                       // 界面据此说明「电价已含线损、不单列线损费用行」
   return r;
 }
 
@@ -1571,7 +1581,7 @@ function pricingIssues(r,input,data,date){
     const inLoss=input.dstInLossPct ?? data.PV[input.to].inLoss;
     if(data.PV[input.to].fund==null) issues.push('受端基金及附加核定标准待补；手填值仅为测算输入。');
     if(inLoss==null) issues.push('受端上网环节线损未获取，当前未计此项。');
-    if(input.dstQtyLossPct!=null) issues.push('受端电网主体电价已含上网环节线损费用：终端电量按 '+input.dstQtyLossPct+'% 折算，不另计线损费用（1077号附件1 注2、注3）。');
+    if(input.dstQtyLossPct!=null) issues.push('受端电网主体电价已含上网环节线损费用：终端电量按 '+input.dstQtyLossPct+'% 折算，不单列线损费用行；省界及以前各项金额仍按节点交付电量实付（1077号附件1 注2、注3）。');
     if(input.dstBilling==='twopart' && !(input.dstCapFee>0)) issues.push('受端按两部制计价，未含容量/需量电费，到户价偏低。');
     if(input.dstCapFee>0) issues.push('容量/需量电费按用户负荷假设分摊为度电费用，属估算，实际按月度账单计收。');
     if(input.dstSysOpFee==null) issues.push('系统运行费未计入（按月变化，可手填）。');
@@ -2230,7 +2240,7 @@ function renderDetail(res,r){
 
   // 完整明细
   out+=`<details class="adv boxed" id="d-detail"><summary>完整明细</summary><div class="inner">
-    <div class="sub">费用拆解<em>单价 元/MWh · 总额 元</em></div><p class="note">输入为省间节点交付 ${fmt(r.qty,2)} MWh；${state.includeDstCost!==false?'按省内线损推算终端用电 '+fmt(r.consumerQty,2)+' MWh，以下到户单价及金额以此为基数':'省界单价及金额以交付电量为基数'}。区域网损电量包含在计费总损耗中。</p>
+    <div class="sub">费用拆解<em>单价 元/MWh · 总额 元</em></div><p class="note">输入为省间节点交付 ${fmt(r.qty,2)} MWh；${state.includeDstCost!==false?'按省内线损推算终端用电 '+fmt(r.consumerQty,2)+' MWh，以下到户单价及金额以此为基数':'省界单价及金额以交付电量为基数'}。区域网损电量包含在计费总损耗中。${r.qtyLossPct!=null?'本主体电价已含上网环节线损费用（1077号附件1 注2），因此不单列「受端上网环节线损费用」；省界及以前各项的<b>总额仍按节点交付电量实付</b>，单价已按 '+fmt(r.qtyLossPct,2)+'% 折成到户电量口径。':''}</p>
     <table>
       <tr><th style="width:40%">费用项</th><th>单价</th><th>总额</th><th>占比</th></tr>
       <tr><td>送端省内网损另计</td><td>${fmt(r.comp.originLoss)}</td><td>${num(r.yuan.originLoss)}</td><td>—</td></tr>
@@ -3466,10 +3476,13 @@ document.addEventListener('change',e=>{
   // 受端到户：主体 / 档别 / 计价方式决定输配电价，先读其余输入再用所选档核定值覆盖 pNet（手改值随之重置）
   if(['i-dstentity','i-dsttier','i-dstbilling'].indexOf(id)>=0){
     readInputs();
-    if(id==='i-dstentity'){ state.dstEntity=e.target.value; state.dstTier=null; }
+    // 换主体等同重新核准：清手改标记，避免把上一主体的手填电价带进新主体
+    // （广东↔深圳同属一省，applyToProv 的换省判定不触发，旧值会被当成深圳的手填值继续参与计算）
+    if(id==='i-dstentity'){ state.dstEntity=e.target.value; state.dstTier=null; state.pNetManual=false; }
     if(id==='i-dsttier') state.dstTier=e.target.value;
     if(id==='i-dstbilling') state.dstBilling=e.target.value;
     const vt=dstTariff(); state.dstBilling=vt.billing;
+    // 新主体不能自动带入（深圳：结构特殊）时不写值，交给 solveState() 里的 syncDstAuto 置空 → 界面提示「缺项须手填」
     if(vt.net!=null) state.pNet=vt.net;
     state.sel=0; state._res=solveState(); saveLast(); renderCalc();
     return;

@@ -21,8 +21,9 @@
  *   以下均为可选，缺省时与旧口径完全一致：
  *   dstInLossPct        受端省内上网环节线损率 %（按所选受端电网主体，覆盖省默认值）；另计线损费用
  *   dstQtyLossPct       可选：仅用于终端电量折算的受端上网环节线损率 %。受端主体电价已含线损费用时
- *                       （如深圳，1077号附件1 第22页注2）使用：终端电量按 (1-ρ) 折算，但不另计线损费用。
- *                       缺省（不传）时行为与旧口径完全一致（不折算、不另计）。
+ *                       （如深圳，1077号附件1 第22页注2）使用：终端电量按 (1-ρ) 折算，不单列线损费用行。
+ *                       省界及以前各项的金额仍按节点交付电量实付（单价改按到户电量表述），
+ *                       landed = 省界价/(1-ρ) + 受端各项。缺省（不传）时与旧口径完全一致。
  *   dstBilling          受端计价方式 'single' | 'twopart'（只用于缺项提示，输配电价仍由 pNet 传入）
  *   dstCapFee           两部制容（需）量电费分摊 元/到户MWh（用户负荷假设下的估算）
  *   dstSysOpFee         系统运行费 元/到户MWh（手填；null = 缺项）
@@ -249,16 +250,25 @@ function pathKeyOf(p){ return p.nodes.join('>')+'#'+p.edges.map(e=>e.id).join(',
 
 /** 受端电价已含上网环节线损费用时的终端电量折算（M10）。
  *  这类主体（深圳：1077号附件1 第22页注2「各电价含…上网环节线损费用」）线损率只用于把省间节点交付电量
- *  折算成终端用电量，不另计线损费用。cost.js 的 amountQty/金额按 dstInLossPct 计算，这里按 dstQtyLossPct
- *  改基数并等比重算金额；landed 与各 comp 单价不变，避免与「电价已含线损」重复计费。
+ *  折算成终端用电量，不单列「受端上网环节线损费用」一项。
+ *  ⚠ 折算只改金额基数，不改实付总额：qty 是买方在省间节点的交付电量，省界及以前的每一项都按 qty 实付，
+ *  折量后金额不得跟着缩水（曾经整体等比缩放，1000 MWh / 2.11% 少计了 2.11% 的上游成本）。
+ *  因此：上游项金额不动、单价改按到户电量表述（÷k）；受端项单价本就按到户电量计、金额改按到户电量（×k）。
+ *  结果满足 Σ单价 = landed、Σ金额 = 实付总额，landed = 省界价/(1−ρ) + 受端各项。
  *  缺省（不传 dstQtyLossPct）时不进入本函数，旧口径完全不变。 */
+const UPSTREAM_COMPS=['gen','loss','send','trans','reg','originLoss'];   // 省界及以前，按节点交付电量实付
+const DST_COMPS=['inLoss','net','fund','cap','sysOp'];                   // 受端省内，单价按到户电量计
 function applyDstQtyLoss(r, ctx){
   if(ctx.dstQtyLossPct==null || ctx.includeDstCost===false) return r;
   const consumerQty=ctx.qty*(1-ctx.dstQtyLossPct/100);
   if(!(r.amountQty>0) || !(consumerQty>0)) return r;
   const k=consumerQty/r.amountQty;
+  for(const key of UPSTREAM_COMPS) r.comp[key]/=k;      // 金额不变 ⇒ 单价 = 金额/到户电量
+  for(const key of DST_COMPS) r.yuan[key]*=k;           // 单价不变 ⇒ 金额 = 单价×到户电量
+  r.yuan.total=UPSTREAM_COMPS.concat(DST_COMPS).reduce((a,key)=>a+r.yuan[key],0);
   r.consumerQty=consumerQty; r.amountQty=consumerQty;
-  for(const key of Object.keys(r.yuan)) r.yuan[key]*=k;
+  r.landed=r.yuan.total/consumerQty;
+  r.qtyLossPct=ctx.dstQtyLossPct;                       // 界面据此说明「电价已含线损、不单列线损费用行」
   return r;
 }
 
@@ -383,7 +393,7 @@ function pricingIssues(r,input,data,date){
     const inLoss=input.dstInLossPct ?? data.PV[input.to].inLoss;
     if(data.PV[input.to].fund==null) issues.push('受端基金及附加核定标准待补；手填值仅为测算输入。');
     if(inLoss==null) issues.push('受端上网环节线损未获取，当前未计此项。');
-    if(input.dstQtyLossPct!=null) issues.push('受端电网主体电价已含上网环节线损费用：终端电量按 '+input.dstQtyLossPct+'% 折算，不另计线损费用（1077号附件1 注2、注3）。');
+    if(input.dstQtyLossPct!=null) issues.push('受端电网主体电价已含上网环节线损费用：终端电量按 '+input.dstQtyLossPct+'% 折算，不单列线损费用行；省界及以前各项金额仍按节点交付电量实付（1077号附件1 注2、注3）。');
     if(input.dstBilling==='twopart' && !(input.dstCapFee>0)) issues.push('受端按两部制计价，未含容量/需量电费，到户价偏低。');
     if(input.dstCapFee>0) issues.push('容量/需量电费按用户负荷假设分摊为度电费用，属估算，实际按月度账单计收。');
     if(input.dstSysOpFee==null) issues.push('系统运行费未计入（按月变化，可手填）。');

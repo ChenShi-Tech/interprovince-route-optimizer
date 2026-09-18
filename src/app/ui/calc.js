@@ -646,7 +646,7 @@ function renderDetail(res,r){
 
   // 完整明细
   out+=`<details class="adv boxed" id="d-detail"><summary>完整明细</summary><div class="inner">
-    <div class="sub">费用拆解<em>单价 元/MWh · 总额 元</em></div><p class="note">输入为省间节点交付 ${fmt(r.qty,2)} MWh；${state.includeDstCost!==false?'按省内线损推算终端用电 '+fmt(r.consumerQty,2)+' MWh，以下到户单价及金额以此为基数':'省界单价及金额以交付电量为基数'}。区域网损电量包含在计费总损耗中。</p>
+    <div class="sub">费用拆解<em>单价 元/MWh · 总额 元</em></div><p class="note">输入为省间节点交付 ${fmt(r.qty,2)} MWh；${state.includeDstCost!==false?'按省内线损推算终端用电 '+fmt(r.consumerQty,2)+' MWh，以下到户单价及金额以此为基数':'省界单价及金额以交付电量为基数'}。区域网损电量包含在计费总损耗中。${r.qtyLossPct!=null?'本主体电价已含上网环节线损费用（1077号附件1 注2），因此不单列「受端上网环节线损费用」；省界及以前各项的<b>总额仍按节点交付电量实付</b>，单价已按 '+fmt(r.qtyLossPct,2)+'% 折成到户电量口径。':''}</p>
     <table>
       <tr><th style="width:40%">费用项</th><th>单价</th><th>总额</th><th>占比</th></tr>
       <tr><td>送端省内网损另计</td><td>${fmt(r.comp.originLoss)}</td><td>${num(r.yuan.originLoss)}</td><td>—</td></tr>

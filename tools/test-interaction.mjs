@@ -575,7 +575,7 @@ console.log('══ 十四、受端到户：电网主体 × 电压档 × 计价�
   ok(G('state._res.rows[0].pricingIssues').some((x) => x.includes('未含容量/需量电费')) && G('state._res.rows[0].pricingIssues').some((x) => x.includes('系统运行费未计入')), '适用条件提示两部制缺项与系统运行费缺项');
   // 切到冀北：输配电价与注3 线损率随主体变化
   // 与 boot.js 的 i-dstentity / i-dsttier / i-dstbilling 分支一致：先读其余输入，再按所选档带入输配电价；渲染后回写模拟 DOM
-  const pick = (patch) => { G(`readInputs();Object.assign(state,${JSON.stringify(patch)});{const vt=dstTariff();state.dstBilling=vt.billing;if(vt.net!=null)state.pNet=vt.net;}state.sel=0;state._res=solveState();renderCalc();`); syncDom(); };
+  const pick = (patch) => { G(`readInputs();Object.assign(state,${JSON.stringify(patch)});${'dstEntity' in patch ? 'state.pNetManual=false;' : ''}{const vt=dstTariff();state.dstBilling=vt.billing;if(vt.net!=null)state.pNet=vt.net;}state.sel=0;state._res=solveState();renderCalc();`); syncDom(); };
   pick({ dstEntity: 'HE_JB', dstTier: null });
   const jb = VT.HE.主体.find((e) => e.id === 'HE_JB');
   ok(G('state.pNet') === jb.档位.at(-1).两部制 && inp().dstInLossPct === jb.省内上网环节线损率, `冀北：输配电价 ${jb.档位.at(-1).两部制}、线损率 ${jb.省内上网环节线损率}%`);
@@ -607,6 +607,27 @@ console.log('══ 十四、受端到户：电网主体 × 电压档 × 计价�
   // 深圳：结构特殊、电价含线损
   G("state.to='GD';state.dstEntity='GD_SZ';state.dstTier=null;state._res=solveState();renderCalc();");
   ok(G('solveInput().dstInLossPct') === 0 && G("document.getElementById('sheet-body').innerHTML").includes('请手填受端输配电价'), '深圳电价已含线损（受端线损按 0），提示手填');
+  // P2：广东手填输配电价后切深圳，手改标记必须一并清除——同省换主体不触发 applyToProv 的换省判定，
+  // 旧值会被当成深圳的手填值继续参与计算（界面却只提示「请核对适用档」）。
+  G("state.dstEntity=null;state.dstTier=null;applyToProv();state.pNet=123.4;state.pNetManual=true;state._res=solveState();renderCalc();"); syncDom();
+  ok(G('state.pNet') === 123.4 && G('state.pNetManual') === true, '广东主体下手填输配电价 123.4 生效');
+  pick({ dstEntity: 'GD_SZ', dstTier: null });
+  ok(G('state.pNet') == null && !G('state.pNetManual') && G("document.getElementById('sheet-body').innerHTML").includes('请手填受端输配电价'),
+    '切到深圳主体后清除手改标记，不沿用广东的手填电价');
+  // M10：深圳电价已含上网环节线损费用——线损率只折算到户电量，省界及以前各项仍按节点交付电量实付
+  G("state.pNet=150;state.pNetManual=true;state.dstCapMode='none';state.dstSysOpFee=null;state._res=solveState();renderCalc();"); syncDom();
+  {
+    const sz = G('state._res.rows[0]'), rho = G('dstTariff().qtyLossPct'), qty = G('state.qty');
+    const up = ['gen', 'loss', 'send', 'trans', 'reg', 'originLoss'].reduce((a, k) => a + sz.yuan[k], 0);
+    ok(rho > 0 && Math.abs(sz.consumerQty - qty * (1 - rho / 100)) < 1e-9 && Math.abs(sz.amountQty - sz.consumerQty) < 1e-9,
+      `深圳：节点交付 ${qty} MWh 按 ${rho}% 折成到户 ${sz.consumerQty.toFixed(2)} MWh`);
+    ok(Math.abs(up - sz.border * qty) < 1e-6, '折量不改省界及以前的实付总额（上游金额 = 省界价 × 节点交付电量）',
+      `${up.toFixed(2)} ≠ ${(sz.border * qty).toFixed(2)}`);
+    ok(sz.yuan.inLoss === 0 && sz.comp.inLoss === 0, '电价已含线损：不单列受端上网环节线损费用');
+    ok(Math.abs(sz.yuan.total / sz.amountQty - sz.landed) < 1e-9
+      && Math.abs(sz.landed - (sz.border / (1 - rho / 100) + sz.comp.net + sz.comp.fund + sz.comp.cap + sz.comp.sysOp)) < 1e-9,
+      '金额与单价闭合：landed = 省界价/(1−ρ) + 受端各项');
+  }
   // 送端电站专属送出价：四川 锦屏官地（送江苏）
   G("Object.assign(state,PARAM_DEFAULTS);state.from='SC';state.to='JS';state.includeDstCost=false;state.showBad=true;applyBothProv();state._res=solveState();renderCalc();");
   const jinsu = () => G("state._res.rows.find(r=>r.edges.length===1&&r.edges[0].n==='锦苏直流')");
