@@ -337,9 +337,10 @@ function renderHeroResult(res){
     <div class="hero-sub">${stops.map(s=>esc(s.name)).join(' → ')}${landings.length?'　落点 '+landings.map(s=>esc(s.landing)).join('、'):''}</div>
   </div>`;
 }
-/* 价格组成：各项之和即最终价格（comp 与 landed 同口径，见 algo/cost.js）。为 0 的项不列，送端报价始终列出。 */
-const COMP_ITEMS=[['gen','送端报价','#185FA5'],['originLoss','送端省内网损','#378ADD'],['send','送出省输电费','#85B7EB'],['trans','跨省通道费','#EF9F27'],
-  ['reg','区域电网费','#5DCAA5'],['loss','网损折价','#F0997B'],['inLoss','受端上网线损','#AFA9EC'],['net','受端输配电价','#B4B2A9'],['fund','基金及附加','#D3D1C7'],['cap','容（需）量电费','#8E8AD6'],['sysOp','系统运行费','#7FA7A0']];
+/* 价格组成：各项之和即最终价格（comp 与 landed 同口径，见 algo/cost.js）。为 0 的项不列，送端报价始终列出。
+   颜色是设计令牌引用（src/tokens.css 的 --chart-*），只用于 style 属性，随主题变化。 */
+const COMP_ITEMS=[['gen','送端报价','var(--chart-gen)'],['originLoss','送端省内网损','var(--chart-origin-loss)'],['send','送出省输电费','var(--chart-send)'],['trans','跨省通道费','var(--chart-trans)'],
+  ['reg','区域电网费','var(--chart-reg)'],['loss','网损折价','var(--chart-loss)'],['inLoss','受端上网线损','var(--chart-in-loss)'],['net','受端输配电价','var(--chart-net)'],['fund','基金及附加','var(--chart-fund)'],['cap','容（需）量电费','var(--chart-cap)'],['sysOp','系统运行费','var(--chart-sys-op)']];
 function priceItems(r){
   return COMP_ITEMS.filter(([k])=>k==='gen'||Math.abs(r.comp[k])>1e-9).map(([k,label,color])=>({k,label,color,v:r.comp[k]}));
 }
@@ -402,7 +403,7 @@ function renderRouteList(res){
   }
   out+=`<div class="rlist-foot" style="margin-top:7px">
       <span>成本阈值</span>
-      <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:6px">
+      <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:var(--radius-inline)">
         ${[[0.03,'3%'],[0.05,'5%'],[0.10,'10%'],[0.20,'20%'],[9,'不限']].map(([v,t])=>
           `<option value="${v}" ${(state.degrade??0.10)==v?'selected':''}>${t}</option>`).join('')}
       </select>

@@ -409,7 +409,7 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const priceVersion = sha(fs.readFileSync(path.join(root, 'data/fixed-prices.json'), 'utf8').replace(/\r\n?/g, '\n')).slice(0, 16);
 
 // (a) Web：自包含单文件，离线可用
-// 内联顺序：常量 → 格式化 → 数据 → 状态 → 算法 → 界面 → 启动（boot 有顶层执行语句，必须最后）
+// 内联顺序：常量 → 格式化 → 数据 → 状态 → 算法 → 界面（theme 取令牌工具在最前）→ 启动（boot 有顶层执行语句，必须最后）
 const APP_FILES = [
   'src/app/config.js',
   'src/app/format.js',
@@ -419,6 +419,7 @@ const APP_FILES = [
   'src/app/algo/cost.js',
   'src/app/algo/paths.js',
   'src/app/algo/solve.js',
+  'src/app/ui/theme.js',
   'src/app/ui/calc.js',
   'src/app/ui/lib.js',
   'src/app/ui/map.js',

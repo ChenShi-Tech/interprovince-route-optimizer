@@ -20,7 +20,7 @@ const ok = (c, l, d) => { if (c) { pass++; console.log('  ✅ ' + l); } else { f
 const APP_FILES = [
   'src/app/config.js', 'src/app/format.js', 'src/app/data.js', 'src/app/state.js',
   'src/app/algo/network.js', 'src/app/algo/cost.js', 'src/app/algo/paths.js', 'src/app/algo/solve.js',
-  'src/app/ui/calc.js', 'src/app/ui/lib.js', 'src/app/ui/map.js', 'src/app/ui/ai.js', 'src/app/boot.js',
+  'src/app/ui/theme.js', 'src/app/ui/calc.js', 'src/app/ui/lib.js', 'src/app/ui/map.js', 'src/app/ui/ai.js', 'src/app/boot.js',
 ];
 
 console.log('══ 一、模块齐全 ══');
@@ -47,6 +47,7 @@ const FORBIDDEN = [
   [bare('RG'), 'RG（应由 env 传入）'],
   [/\bdocument\b|\bwindow\b|\blocalStorage\b/, '浏览器 API'],
   [/(?<![.\w$])(fmt|esc|num|tierTag)\(/, '界面格式化函数'],
+  [/(?<![.\w$])(tokenColor|inlineTokenVars)\(|var\(--/, '界面主题工具与设计令牌（ui/theme.js、src/tokens.css）'],
 ];
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 for (const f of APP_FILES.filter((x) => x.includes('/algo/'))) {
@@ -152,7 +153,8 @@ ok(mapSearchHits('不存在', ST7, CH7).stations.length + mapSearchHits('不存�
 // 区域归属调色板（批次 B 增补）：跳过元数据键、同名区域合并、颜色固定分配
 const p7 = regionPalette({ _note: '说明文本', BJ: '华北', SH: '华东', JS: '华东', GD: '南方' });
 ok(Object.keys(p7).length === 3, `元数据键跳过、同名区域合并（${Object.keys(p7).join(',')}）`);
-ok(Object.values(p7).every(c => /^#[0-9A-F]{6}$/i.test(c)), '颜色均为合法十六进制');
+ok(Object.values(p7).every(c => /^var\(--map-region-[1-8]\)$/.test(c)), '颜色均为设计令牌引用 var(--map-region-N)（取值见 src/tokens.css）');
+ok(new Set(Object.values(p7)).size === Object.keys(p7).length, '不同区域取到不同颜色');
 ok(regionPalette({ A: 'x', B: 'x' }).x === regionPalette({ C: 'x' }).x, '同名区域跨名单颜色稳定（返回值以区域名为键）');
 
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);

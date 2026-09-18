@@ -57,8 +57,10 @@ const mapSearchHits=(q,ST,CH)=>{
   return {stations,channels};
 };
 /* 区域归属上图（批次 B 增补）：区域→颜色调色板。按区域名排序后固定分配，
-   同一名单下颜色稳定（图例与节点一致）；跳过 _note 等元数据键。 */
-const REGION_COLORS=['#185FA5','#0F6E56','#B0651A','#8E8AD6','#993C1D','#5DCAA5','#7FA7A0','#854F0B'];
+   同一名单下颜色稳定（图例与节点一致）；跳过 _note 等元数据键。
+   颜色是设计令牌引用（src/tokens.css 的 --map-region-1…8），可直接写进 style；
+   地图 SDK / data: URI 需要真实颜色时由界面层 tokenColor() 解析（本文件保持纯函数、不碰 DOM）。 */
+const REGION_COLORS=['var(--map-region-1)','var(--map-region-2)','var(--map-region-3)','var(--map-region-4)','var(--map-region-5)','var(--map-region-6)','var(--map-region-7)','var(--map-region-8)'];
 const regionPalette=rgof=>{
   const names=[...new Set(Object.keys(rgof||{}).filter(k=>!k.startsWith('_')).map(k=>rgof[k]))].sort();
   const out={};

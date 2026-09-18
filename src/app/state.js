@@ -40,8 +40,8 @@ function uiConfirm(title,msg,okText,cancelText){
   _cfmOpen=true;
   return new Promise(res=>{
     const ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(20,24,32,.45);display:flex;align-items:center;justify-content:center;padding:28px';
-    ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.22)">
+    ov.style.cssText='position:fixed;inset:0;z-index:4000;background:var(--scrim-dialog);display:flex;align-items:center;justify-content:center;padding:28px';
+    ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:var(--card);border-radius:var(--radius-dialog);max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:var(--shadow-dialog)">
       <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">${esc(title)}</div>
       <div style="font-size:12.5px;color:var(--ink2);line-height:1.7;white-space:pre-line">${esc(msg)}</div>
       <div style="display:flex;gap:10px;margin-top:16px">

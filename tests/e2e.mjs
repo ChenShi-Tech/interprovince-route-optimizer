@@ -1808,12 +1808,15 @@ const tests = [
         const svg = document.querySelector('#map-view svg');
         const est = [...svg.querySelectorAll('[stroke-dasharray="2 4"]')].length;
         const region = [...svg.querySelectorAll('[stroke-dasharray="8 5"]')].length;
-        const selDash = [...svg.querySelectorAll('line, polyline')].filter(el => el.getAttribute('stroke') === '#185FA5' && el.getAttribute('stroke-dasharray')).length;
+        // 拓扑图配色走设计令牌（style="stroke:var(--map-route)"），按令牌名识别选中层
+        const selDash = [...svg.querySelectorAll('line, polyline')].filter(el => el.style.stroke === 'var(--map-route)' && el.getAttribute('stroke-dasharray')).length;
+        const selLines = [...svg.querySelectorAll('line, polyline')].filter(el => el.style.stroke === 'var(--map-route)').length;
         const legend = document.getElementById('v-map').innerText;
-        return { est, region, selDash, hasLegend: legend.includes('价格线型'), four: ['核定', '国网披露', '区域口径', '待核价'].every(t => legend.includes(t)) };
+        return { est, region, selDash, selLines, hasLegend: legend.includes('价格线型'), four: ['核定', '国网披露', '区域口径', '待核价'].every(t => legend.includes(t)) };
       });
       ok(r.hasLegend && r.four, '图例应含四档线型说明');
       ok(r.est > 0, `全网/候选层应存在 est 短虚线通道，实际 ${r.est} 处`);
+      ok(r.selLines > 0, `应能按令牌识别到选中方案线（实际 ${r.selLines} 条），否则下一条断言失去意义`);
       ok(r.selDash === 0, '选中方案线不得被 tier 线型干扰（spec）');
       set(`est 虚线 ${r.est} 处、region 长虚线 ${r.region} 处；选中层 0 处 dash；图例四档齐备`);
     },
@@ -1875,7 +1878,7 @@ const tests = [
         const s = SEC.find(x => x.id === id);
         const members = (s.edges || []).filter(n => CH.some(c => c.n === n)).length;
         return {
-          halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.getAttribute('stroke') === '#993C1D').length,
+          halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.style.stroke === 'var(--map-section)').length,
           strip: (document.getElementById('v-map').innerText || '').includes('断面高亮：'),
           members,
         };
@@ -1885,7 +1888,7 @@ const tests = [
       await page.selectOption('#i-mapsec', '');
       await page.waitForTimeout(300);
       const r2 = await page.evaluate(() => ({
-        halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.getAttribute('stroke') === '#993C1D').length,
+        halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.style.stroke === 'var(--map-section)').length,
         // 注意：下拉框首项文案「按断面高亮…」含相似字样，必须用带冒号的提示条标记判别
         strip: (document.getElementById('v-map').innerText || '').includes('断面高亮：'),
       }));
@@ -1930,7 +1933,8 @@ const tests = [
       await page.waitForTimeout(300);
       const r1 = await page.evaluate(() => {
         const rings = [...document.querySelectorAll('#map-view svg circle[fill="none"]')];
-        const colors = [...new Set(rings.map(c => c.getAttribute('stroke')))];
+        // 区域环颜色是令牌引用 var(--map-region-N)，按计算后的实际颜色去重
+        const colors = [...new Set(rings.map(c => getComputedStyle(c).stroke))];
         const legend = document.getElementById('v-map').innerText;
         return {
           n: rings.length, colors,

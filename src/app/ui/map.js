@@ -3,8 +3,10 @@
 let map=null,mapReady=false,polyLayer=null,mkLayer=null,lbLayer=null;
 let tdMap=null,tdReady=false,tdLayer=null;
 
-const dotSvg=f=>`data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='4.5' fill='${encodeURIComponent(f)}' stroke='%23ffffff' stroke-width='1.5'/%3E%3C/svg%3E`;
-const D_HOT=dotSvg('#185FA5'), D_ON=dotSvg('#0F6E56'), D_BASE=dotSvg('#8A8A85');
+/* 地图圆点图标：data: URI 里的 SVG 不认 CSS 变量，绘制时按当前主题把令牌解析成实际颜色再拼。
+   c 为令牌名（'--map-route'）或 'var(--x)'（区域调色板）。 */
+const dotSvg=c=>`data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='4.5' fill='${encodeURIComponent(tokenColor(c))}' stroke='${encodeURIComponent(tokenColor('--map-casing'))}' stroke-width='1.5'/%3E%3C/svg%3E`;
+const mapDots=()=>({hot:dotSvg('--map-route'),on:dotSvg('--map-end'),base:dotSvg('--map-dot-base')});
 
 /* ---------- 批次 B（grid-map P1）共用辅助 ---------- */
 /* 通道折线点列：[起点,...走廊中间点,终点]，proj 为投影函数；起止缺坐标返回 null。
@@ -42,26 +44,28 @@ function initMap(){
   if(typeof TMap==='undefined') return false;
   try{
     map=new TMap.Map('map-view',{center:new TMap.LatLng(34,108),zoom:4});
+    // 腾讯地图样式对象只认真实颜色字符串：初始化时按当前主题解析令牌（renderMap 每次重建地图，换主题后重绘即跟随）
+    const C=k=>tokenColor(k), D=mapDots();
     // 批次 B：tier 线型按（层×tier）建样式，语义与拓扑/天地图一致（design D5）
     const tierStyles={};
     ['gov','grid','region','est'].forEach(t=>{
       const st=tierStyle(t);
       const dash=st.dash?{dashArray:st.dash.split(' ').map(Number)}:{};
-      tierStyles['alt_'+t]=new TMap.PolylineStyle({color:'#EF9F27',width:Math.max(1.4,3*st.w),borderWidth:1,borderColor:'#ffffff',lineCap:'round',...dash});
-      tierStyles['base_'+t]=new TMap.PolylineStyle({color:'#C9C8C3',width:Math.max(0.7,1*st.w),borderWidth:0,lineCap:'round',...dash});
+      tierStyles['alt_'+t]=new TMap.PolylineStyle({color:C('--map-alt'),width:Math.max(1.4,3*st.w),borderWidth:1,borderColor:C('--map-casing'),lineCap:'round',...dash});
+      tierStyles['base_'+t]=new TMap.PolylineStyle({color:C('--map-base'),width:Math.max(0.7,1*st.w),borderWidth:0,lineCap:'round',...dash});
     });
     polyLayer=new TMap.MultiPolyline({map,styles:{
-      hot:new TMap.PolylineStyle({color:'#185FA5',width:6,borderWidth:2,borderColor:'#ffffff',lineCap:'round'}),
+      hot:new TMap.PolylineStyle({color:C('--map-route'),width:6,borderWidth:2,borderColor:C('--map-casing'),lineCap:'round'}),
       ...tierStyles},geometries:[]});
     mkLayer=new TMap.MultiMarker({map,styles:{
-      hot:new TMap.MarkerStyle({width:16,height:16,anchor:{x:8,y:8},src:D_HOT}),
-      on:new TMap.MarkerStyle({width:18,height:18,anchor:{x:9,y:9},src:D_ON}),
-      base:new TMap.MarkerStyle({width:9,height:9,anchor:{x:4.5,y:4.5},src:D_BASE})},geometries:[]});
+      hot:new TMap.MarkerStyle({width:16,height:16,anchor:{x:8,y:8},src:D.hot}),
+      on:new TMap.MarkerStyle({width:18,height:18,anchor:{x:9,y:9},src:D.on}),
+      base:new TMap.MarkerStyle({width:9,height:9,anchor:{x:4.5,y:4.5},src:D.base})},geometries:[]});
     lbLayer=new TMap.MultiLabel({map,styles:{
-      hot:new TMap.LabelStyle({color:'#0C447C',size:12,offset:{x:0,y:-15},alignment:'center'}),
-      st:new TMap.LabelStyle({color:'#0F6E56',size:11,offset:{x:0,y:-14},alignment:'center'}),
-      seq:new TMap.LabelStyle({color:'#ffffff',size:11,offset:{x:0,y:0},alignment:'center',backgroundColor:'#185FA5',padding:'2px 5px',borderRadius:9}),
-      base:new TMap.LabelStyle({color:'#9A9A95',size:10,offset:{x:0,y:-11},alignment:'center'})},geometries:[]});
+      hot:new TMap.LabelStyle({color:C('--map-label-on'),size:12,offset:{x:0,y:-15},alignment:'center'}),
+      st:new TMap.LabelStyle({color:C('--map-end'),size:11,offset:{x:0,y:-14},alignment:'center'}),
+      seq:new TMap.LabelStyle({color:C('--on-fill'),size:11,offset:{x:0,y:0},alignment:'center',backgroundColor:C('--map-route'),padding:'2px 5px',borderRadius:9}),
+      base:new TMap.LabelStyle({color:C('--map-label'),size:10,offset:{x:0,y:-11},alignment:'center'})},geometries:[]});
     mapReady=true; return true;
   }catch(e){ return false; }
 }
@@ -225,13 +229,14 @@ function drawMapTD(){
     tdMap.clearOverLays();
     const netOff=state.mapNet==='off';
     const v=visibleChannels(), seen=new Set();
+    const C=k=>tokenColor(k), D=mapDots();   // 天地图样式只认真实颜色：按当前主题解析令牌
     /* 断面高亮垫层（spec: grid-map 断面，与拓扑图同色同语义） */
     if(state.mapSec){
       const mem=new Set(secMemberIds(state.mapSec));
       v.list.forEach(c=>{
         if(!mem.has(c.id)||v.hot.has(c.id)) return;
         const ps=chanPts(c,(lng,lat)=>[lng,lat]);
-        if(ps) tdMap.addOverLay(new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:'#993C1D',weight:7,opacity:0.3}));
+        if(ps) tdMap.addOverLay(new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:C('--map-section'),weight:7,opacity:0.3}));
       });
     }
     // 底图连线：走廊 waypoints 折线化；tier 线型仅作用弱化层（dasharray 若 SDK 不支持则自然忽略，语义降级见 design D5）
@@ -242,9 +247,9 @@ function drawMapTD(){
       if(!ps) return;
       const st=tierStyle(c.tier);
       const dashArr=st.dash?st.dash.split(' ').map(Number):null;
-      const sty=isHot?{color:'#185FA5',weight:6,opacity:0.9}
-        :isAlt?{color:'#EF9F27',weight:Math.max(1.4,2*st.w),opacity:0.45,...(dashArr?{dasharray:dashArr}:{})}
-        :{color:'#C9C8C3',weight:Math.max(0.7,1*st.w),opacity:0.3,...(dashArr?{dasharray:dashArr}:{})};
+      const sty=isHot?{color:C('--map-route'),weight:6,opacity:0.9}
+        :isAlt?{color:C('--map-alt'),weight:Math.max(1.4,2*st.w),opacity:0.45,...(dashArr?{dasharray:dashArr}:{})}
+        :{color:C('--map-base'),weight:Math.max(0.7,1*st.w),opacity:0.3,...(dashArr?{dasharray:dashArr}:{})};
       const ln=new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),sty);
       try{ ln.addEventListener('click',()=>toggleChan(c.id)); }catch(e){}  // 事件 API 真机核实，失败仅失去点击
       tdMap.addOverLay(ln);
@@ -255,7 +260,7 @@ function drawMapTD(){
         [s.e.stFrom,s.e.stTo].forEach(st=>{
           if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
           const p=ST[st];
-          const mk=new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})});
+          const mk=new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D.hot,iconSize:new T.Point(14,14)})});
           try{ mk.addEventListener('click',()=>stationPop(st)); }catch(e){}
           tdMap.addOverLay(mk);
         });
@@ -272,7 +277,7 @@ function drawMapTD(){
       const ll=provLngLat(k); if(!ll||seen.has(k)) return; seen.add(k);
       const onRoute=v.routeNodes.has(k);
       const regColor=(tdRPal&&REGION_OF[k]&&!onRoute)?tdRPal[REGION_OF[k]]:null;
-      const iconUrl=onRoute?D_HOT:(regColor?dotSvg(regColor):D_BASE);
+      const iconUrl=onRoute?D.hot:(regColor?dotSvg(regColor):D.base);
       const size=onRoute?14:(regColor?11:9);
       tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl,iconSize:new T.Point(size,size)})}));
     });
@@ -293,7 +298,7 @@ function showMapFallback(){
   const fb=document.getElementById('fallback'); if(!fb) return;
   fb.style.display='block';
   const r=state._res&&state._res.rows;
-  let t='<div style="font-weight:600;color:#1F2328;margin-bottom:6px">底图未加载，已降级为网架清单</div>';
+  let t='<div style="font-weight:600;color:var(--ink);margin-bottom:6px">底图未加载，已降级为网架清单</div>';
   t+='<div style="margin-bottom:12px;line-height:1.7;font-size:11.5px">'+(state.mapProvider==='td'
     ?'天地图未加载：请确认密钥有效且网络可达 api.tianditu.gov.cn。'
     :'腾讯地图需运行环境支持；天地图需你自己的密钥。')+'</div>';
@@ -301,16 +306,16 @@ function showMapFallback(){
     const sel=Math.min(state.sel,r.length-1);
     t+=`<div style="font-weight:600;margin-bottom:6px">选中方案 #${sel+1}　${r[sel].nodes.map(N).join(' → ')}</div>`;
     r[sel].segs.forEach((s,i)=>{
-      t+=`<div style="padding:6px 0;border-bottom:.5px solid rgba(0,0,0,.06);line-height:1.6">
+      t+=`<div style="padding:6px 0;border-bottom:.5px solid var(--line2);line-height:1.6">
         <b>第 ${i+1} 段　${N(s.a)} → ${N(s.b)}</b><br>
         ${s.e.n}　${s.e.kv}　${s.t} 元/MWh　计费线损 ${s.billLossPct}%（物理估算 ${s.e.loss}%）<br>
-        <span style="color:#8A8A85">段入口 ${Math.round(s.inMW)} MW　占用 ${s.util!=null?(s.util*100).toFixed(0)+'%':'待补'}</span></div>`;
+        <span style="color:var(--ink3)">段入口 ${Math.round(s.inMW)} MW　占用 ${s.util!=null?(s.util*100).toFixed(0)+'%':'待补'}</span></div>`;
     });
   }
   t+='<div style="font-weight:600;margin:14px 0 6px">全部通道（'+CH.length+' 条）</div>';
   CH.forEach(c=>{
     const on=r&&r.some(row=>row.edges.some(e=>e.id===c.id))?' ●':'';
-    t+=`<div style="padding:3px 0;border-bottom:.5px solid rgba(0,0,0,.06)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
+    t+=`<div style="padding:3px 0;border-bottom:.5px solid var(--line2)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
   });
   fb.innerHTML=t;
 }
@@ -396,7 +401,7 @@ function topoSVG(){
       if(!mem.has(c.id)||v.hot.has(c.id)) return;
       const ps=chanPts(c,P);
       if(!ps) return;
-      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" stroke="#993C1D" stroke-width="5.5" opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>`;
+      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" style="stroke:var(--map-section)" stroke-width="5.5" opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>`;
     });
   }
   // 底图连线：全部通道（可点击=必经过滤；透明宽线仅作点击热区）。
@@ -410,13 +415,13 @@ function topoSVG(){
     const st=tierStyle(c.tier);
     const w=((isAlt?1.2:0.7)*st.w).toFixed(2);
     const dash=st.dash?` stroke-dasharray="${st.dash}"`:'';
-    const vis=`fill="none" stroke="${isAlt?'#EF9F27':'#D3D1C7'}" stroke-width="${w}" opacity="${isAlt?0.3:0.18}"${dash} stroke-linecap="round" stroke-linejoin="round"`;
+    const vis=`fill="none" style="stroke:var(${isAlt?'--map-alt':'--map-edge'})" stroke-width="${w}" opacity="${isAlt?0.3:0.18}"${dash} stroke-linecap="round" stroke-linejoin="round"`;
     if(ps.length===2){
       const d=`x1="${ps[0][0].toFixed(1)}" y1="${ps[0][1].toFixed(1)}" x2="${ps[1][0].toFixed(1)}" y2="${ps[1][1].toFixed(1)}"`;
-      edges+=`<line ${d} ${vis}/><line ${d} stroke="rgba(0,0,0,0)" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
+      edges+=`<line ${d} ${vis}/><line ${d} stroke="transparent" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
     }else{
       const pts=ptsAttr(ps);
-      edges+=`<polyline points="${pts}" ${vis}/><polyline points="${pts}" fill="none" stroke="rgba(0,0,0,0)" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
+      edges+=`<polyline points="${pts}" ${vis}/><polyline points="${pts}" fill="none" stroke="transparent" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
     }
   });
   // 选中路线：加粗并编号，段名标注上下交错；同时记录包围盒供视野聚焦（design D4）
@@ -427,13 +432,13 @@ function topoSVG(){
       if(!ps) return;
       ps.forEach(p=>{ fx0=Math.min(fx0,p[0]); fx1=Math.max(fx1,p[0]); fy0=Math.min(fy0,p[1]); fy1=Math.max(fy1,p[1]); });
       const pts=ptsAttr(ps);
-      segs+=`<polyline points="${pts}" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
-      segs+=`<polyline points="${pts}" fill="none" stroke="#185FA5" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="pointer-events:stroke"/>`;
+      segs+=`<polyline points="${pts}" fill="none" style="stroke:var(--map-casing)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
+      segs+=`<polyline points="${pts}" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="stroke:var(--map-route);pointer-events:stroke"/>`;
       const m1=ps[Math.floor((ps.length-1)/2)], m2=ps[Math.ceil((ps.length-1)/2)];
       const mx=(m1[0]+m2[0])/2, my=(m1[1]+m2[1])/2;
-      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" fill="#185FA5"/>`
-          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" fill="#ffffff" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`
-          + `<text x="${mx.toFixed(1)}" y="${(my+(i%2?17:-14)).toFixed(1)}" font-size="10" font-weight="600" fill="#0C447C" text-anchor="middle" paint-order="stroke" stroke="#ffffff" stroke-width="3">${esc(sg.e.n)}</text>`;
+      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" style="fill:var(--map-route)"/>`
+          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`
+          + `<text x="${mx.toFixed(1)}" y="${(my+(i%2?17:-14)).toFixed(1)}" font-size="10" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="3">${esc(sg.e.n)}</text>`;
     });
   }
   // 节点
@@ -455,12 +460,12 @@ function topoSVG(){
     const onRoute=v.routeNodes.has(k);
     const isEnd=selR&&(k===selR.nodes[0]||k===selR.nodes[selR.nodes.length-1]);
     const rad=isEnd?6:(onRoute?4.6:2.6);
-    const fill=isEnd?'#0F6E56':(onRoute?'#185FA5':'#B4B2A9');
-    nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" fill="${fill}" stroke="#ffffff" stroke-width="1.3"/>`;
-    if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad+2.8).toFixed(1)}" fill="none" stroke="${rPal[REGION_OF[k]]}" stroke-width="1.8" opacity="0.95"/>`;
+    const fill=isEnd?'--map-end':(onRoute?'--map-route':'--map-node');
+    nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" style="fill:var(${fill});stroke:var(--map-casing)" stroke-width="1.3"/>`;
+    if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad+2.8).toFixed(1)}" fill="none" style="stroke:${rPal[REGION_OF[k]]}" stroke-width="1.8" opacity="0.95"/>`;
     // 聚焦视野下，离线路径且出画的省名不再绘制（避免跨界半截字，spec: grid-map 聚焦）
     if(focused&&!onRoute&&(x<vbx0||x>vbx1||y<vby0||y>vby1)) return;
-    labels+=`<text x="${x.toFixed(1)}" y="${(y-rad-3).toFixed(1)}" font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" fill="${onRoute?'#0C447C':'#9A9A95'}" text-anchor="middle">${esc(N(k))}</text>`;
+    labels+=`<text x="${x.toFixed(1)}" y="${(y-rad-3).toFixed(1)}" font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" style="fill:var(${onRoute?'--map-label-on':'--map-label'})" text-anchor="middle">${esc(N(k))}</text>`;
   });
   // 选中路线的换流站
   let sts='';
@@ -470,8 +475,8 @@ function topoSVG(){
       [['from',sg.e.stFrom],['to',sg.e.stTo]].forEach(([side,st])=>{
         if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
         const [x,y]=P(ST[st].lng,ST[st].lat);
-        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#ffffff" stroke="#0F6E56" stroke-width="2" data-st="${st}" style="pointer-events:all"/>`
-           + `<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" font-size="10" font-weight="600" fill="#0F6E56" text-anchor="middle" data-st="${st}" style="pointer-events:all">${esc(ST[st].n)}</text>`;
+        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" stroke-width="2" data-st="${st}" style="fill:var(--map-casing);stroke:var(--map-end);pointer-events:all"/>`
+           + `<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" font-size="10" font-weight="600" text-anchor="middle" data-st="${st}" style="fill:var(--map-end);pointer-events:all">${esc(ST[st].n)}</text>`;
       });
     });
   }
@@ -483,7 +488,7 @@ function topoSVG(){
 
   return `<svg viewBox="${vb}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">
 <title>跨省电网拓扑图</title><desc>按站点经纬度投影的节点连线图，仅示拓扑不绘制行政区划边界。</desc>
-<rect x="-200" y="-200" width="${W+400}" height="${H+400}" fill="#F7F8FA"/>
+<rect x="-200" y="-200" width="${W+400}" height="${H+400}" style="fill:var(--map-ground)"/>
 ${edges}${segs}${nodes}${sts}${labels}
 </svg>`;
 }
@@ -507,7 +512,7 @@ function chanPop(id){
   const util=(seg&&seg.util!=null)?fmt(seg.util*100,0)+'%':null;
   const on=state.mustHave.length&&state.mustHave[0]===id;
   const basis={cap:'实际输送能力（非 ATC）',rated:'仅额定容量',estimate:'模型估算（非 ATC）'}[c.capBasis]||'';
-  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:9px;padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.75">
+  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:var(--radius-field);padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.75">
     <button class="btn ghost" style="position:absolute;top:8px;right:8px;width:auto;padding:2px 8px;font-size:11px" onclick="document.getElementById('map-pop').innerHTML=''">关闭</button>
     <b>${esc(c.n)}</b>　<span style="color:var(--ink3)">${esc(N(c.from))} → ${esc(N(c.to))}</span>　${tierTag(c.tier)}<br>
     <span style="color:var(--ink2)">${c.regional?'送出省参考价':'输电价'} <b>${c.t==null?'待补':fmt(c.t,1)+' 元/MWh'}</b>　物理线损 ${c.loss==null?'待补':fmt(c.loss,2)+'%'}</span><br>
@@ -530,7 +535,7 @@ function stationPop(st){
   const el=document.getElementById('map-pop'); if(!el||!ST[st]) return;
   const p=ST[st];
   const reg=p.p&&REGION_OF[p.p]?REGION_OF[p.p]:null;
-  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:9px;padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.6">
+  el.innerHTML=`<div style="position:relative;background:var(--blue-bg);border-radius:var(--radius-field);padding:8px 60px 8px 11px;margin-top:6px;font-size:11.5px;line-height:1.6">
     <button class="btn ghost" style="position:absolute;top:8px;right:8px;width:auto;padding:2px 8px;font-size:11px" onclick="document.getElementById('map-pop').innerHTML=''">关闭</button>
     <b>${esc(p.n)}</b>　<span style="color:var(--ink3)">${esc(PV[p.p]?PV[p.p].n:(p.p||''))}</span><br>
     <span style="color:var(--ink2)">${esc(p.a||'站址未采集')}</span>${reg?`<br><span style="color:var(--ink3)">区域归属：${esc(reg)}区域电网</span>`:''}</div>`;
@@ -574,15 +579,16 @@ function mapGotoChan(id){
    canvas 会被污染，故导出入口仅在拓扑图视图提供。 */
 function exportTopo(){
   const svgEl=document.querySelector('#map-view svg'); if(!svgEl) return;
-  const url=URL.createObjectURL(new Blob([svgEl.outerHTML],{type:'image/svg+xml'}));
+  // 拓扑图配色写的是 var(--令牌)：序列化成独立图片后页面样式表不再生效，先把用到的令牌按当前值内联到根元素
+  const url=URL.createObjectURL(new Blob([inlineTokenVars(svgEl.cloneNode(true)).outerHTML],{type:'image/svg+xml'}));
   const img=new Image();
   img.onload=()=>{
     try{
       const cv=document.createElement('canvas'); cv.width=660*2; cv.height=430*2;
       const ctx=cv.getContext('2d');
-      ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+      ctx.fillStyle=tokenColor('--card'); ctx.fillRect(0,0,cv.width,cv.height);
       ctx.drawImage(img,0,0,cv.width,cv.height);
-      ctx.fillStyle='rgba(0,0,0,.55)'; ctx.font='16px sans-serif';
+      ctx.fillStyle=tokenColor('--snapshot-caption'); ctx.font='16px sans-serif';
       ctx.fillText(`省间路径优选测算 · priceVersion ${String(PRICE_VERSION).slice(0,8)} · ${new Date().toLocaleString('zh-CN')}`,16,cv.height-14);
       cv.toBlob(b=>{
         if(!b) return;
@@ -678,17 +684,17 @@ function renderMap(){
   }
 
   out+=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
-      <span><i style="display:inline-block;width:16px;height:3px;background:#185FA5;vertical-align:middle;margin-right:5px"></i>选中方案</span>
-      <span><i style="display:inline-block;width:16px;height:3px;background:#EF9F27;vertical-align:middle;margin-right:5px"></i>其它候选</span>
-      <span><i style="display:inline-block;width:16px;height:3px;background:#D3D1C7;vertical-align:middle;margin-right:5px"></i>全网架</span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-route);vertical-align:middle;margin-right:5px"></i>选中方案</span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-alt);vertical-align:middle;margin-right:5px"></i>其它候选</span>
+      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-edge);vertical-align:middle;margin-right:5px"></i>全网架</span>
       <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapnet" ${state.mapNet!=='off'?'checked':''}>显示全网架</label></span>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--ink3);margin:0 0 8px;align-items:center">
       <span style="color:var(--ink2)">价格线型（弱化层）</span>
-      <span><i class="lg-line" style="border-top:2.5px solid #8A8A85"></i>核定</span>
-      <span><i class="lg-line" style="border-top:1.5px solid #8A8A85"></i>国网披露</span>
-      <span><i class="lg-line" style="border-top:2.5px dashed #8A8A85"></i>区域口径</span>
-      <span><i class="lg-line" style="border-top:2.5px dotted #8A8A85"></i>待核价</span>
+      <span><i class="lg-line" style="border-top:2.5px solid var(--ink3)"></i>核定</span>
+      <span><i class="lg-line" style="border-top:1.5px solid var(--ink3)"></i>国网披露</span>
+      <span><i class="lg-line" style="border-top:2.5px dashed var(--ink3)"></i>区域口径</span>
+      <span><i class="lg-line" style="border-top:2.5px dotted var(--ink3)"></i>待核价</span>
       <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
     </div>
     ${regionLegend}
@@ -727,7 +733,7 @@ function renderMap(){
     if(stale()) return; // 80ms 内用户已切换底图或页面重画则放弃本次注入，避免迟到回调污染新容器
     if(mode==='svg'){
       const box=document.getElementById('map-view');
-      if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='10px'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
+      if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='var(--radius-btn)'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
       const fb=document.getElementById('fallback'); if(fb) fb.style.display='none';
     } else if(mode==='qq'){
       loadTMap(ok=>{
@@ -770,7 +776,7 @@ function applyTk(){
       tkMsgGen++;   // 使在途启动探针的异步回写失效，「已保留」为常驻提示（PRD FR-2）
       m.innerHTML=state.tiandituKey
         ?'<span style="color:var(--ink2)">输入为空，已保留本机已存密钥（尾号 '+esc(state.tiandituKey.slice(-4))+'）。要换新密钥请粘贴后再点「应用密钥」；要停用天地图请点「清除密钥」。</span>'
-        :'<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>';
+        :'<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>';
     }
     return;
   }
@@ -797,9 +803,9 @@ function tkMsg(kind){
   const gen=++tkMsgGen;   // 新消息使一切在途异步回写失效
   if(kind==='ok'){ tdTileProbe(el,gen); return; }
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
-  if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
-  if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
-  if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
+  if(kind==='empty'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
+  if(kind==='drawfail'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
+  if(kind==='incomplete'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el,gen);
 }
 /* 瓦片级真校验（FR-2，PRD-体验问题修复）：fetch(no-cors) 对任何 HTTP 状态都 resolve，
@@ -817,11 +823,11 @@ function tdTileProbe(el,gen){
       +'/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default'
       +'&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=5&TILEROW=1&TILECOL=1&tk='+encodeURIComponent(tk);
     const live=()=>document.getElementById('tk-msg')===el&&gen===tkMsgGen;   // 重绘/新消息竞态防护
-    const failMsg=txt=>'<span style="color:#B3261E;font-weight:600">✗ '+txt+'</span>已保留地图与叠加物，可核对密钥后重试，或点上方「拓扑图」使用内置底图。';
+    const failMsg=txt=>'<span style="color:var(--error-text);font-weight:600">✗ '+txt+'</span>已保留地图与叠加物，可核对密钥后重试，或点上方「拓扑图」使用内置底图。';
     const img=new Image();
     img.onload=()=>{
       if(!live()) return;
-      if(img.naturalWidth>=256){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥有效，底图可用。</span>'; return; }
+      if(img.naturalWidth>=256){ el.innerHTML='<span style="color:var(--teal);font-weight:600">✓ 密钥有效，底图可用。</span>'; return; }
       el.innerHTML=failMsg('瓦片返回内容异常（未能解码为有效图片）。');
     };
     img.onerror=()=>{
@@ -841,7 +847,7 @@ function tdTileProbe(el,gen){
    fetch 失败＝传输层不通（代理/防火墙/DNS）。 */
 function tkFailDiagnose(el,gen){
   if(typeof location!=='undefined'&&location.protocol==='file:'){
-    el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 API 加载失败。</span>当前为离线包（file://）环境，请依次检查：①设备网络能否访问 api.tianditu.gov.cn（关闭飞行模式/代理）；②密钥是否有效（可在天地图开放平台「我的应用」核对）；③仍失败时点上方「拓扑图」使用内置底图。已降级为网架清单。';
+    el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 天地图 API 加载失败。</span>当前为离线包（file://）环境，请依次检查：①设备网络能否访问 api.tianditu.gov.cn（关闭飞行模式/代理）；②密钥是否有效（可在天地图开放平台「我的应用」核对）；③仍失败时点上方「拓扑图」使用内置底图。已降级为网架清单。';
     return;
   }
   if(!tdAttempted){ tkFailShow(el, tdFailKind, false); return; }  // 本次未发新请求：沿用上次诊断，不额外探测
@@ -855,9 +861,9 @@ function tkFailDiagnose(el,gen){
 function tkFailShow(el, kind, fresh){
   if(kind==='server'){
     el.innerHTML = (!fresh && Date.now()<tdCooldownUntil)
-      ? '<span style="color:#B3261E;font-weight:600">✗ 天地图风控拦截仍未解除。</span>反复重试会延长封禁，请安静等待约 '+Math.ceil((tdCooldownUntil-Date.now())/60000)+' 分钟后再点「应用密钥」。已降级为网架清单。'
-      : '<span style="color:#B3261E;font-weight:600">✗ 天地图服务端拦截了本次请求（临时风控封禁）。</span>静置 30 分钟以上再点「应用密钥」重试一次，期间勿反复点击。已降级为网架清单。';
+      ? '<span style="color:var(--error-text);font-weight:600">✗ 天地图风控拦截仍未解除。</span>反复重试会延长封禁，请安静等待约 '+Math.ceil((tdCooldownUntil-Date.now())/60000)+' 分钟后再点「应用密钥」。已降级为网架清单。'
+      : '<span style="color:var(--error-text);font-weight:600">✗ 天地图服务端拦截了本次请求（临时风控封禁）。</span>静置 30 分钟以上再点「应用密钥」重试一次，期间勿反复点击。已降级为网架清单。';
     return;
   }
-  el.innerHTML = '<span style="color:#B3261E;font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';
+  el.innerHTML = '<span style="color:var(--error-text);font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';
 }
