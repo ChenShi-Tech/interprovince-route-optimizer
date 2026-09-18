@@ -8,8 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 省间中长期交易的**交付成本与报价测算工具**（现货仅预留入口）。输入送端省、受端省、节点交付电量与送端报价，枚举候选输电路径，逐段拆解费用并按成本排序。
 
-- Web：`index.html` 自包含单文件、离线可用，线上 `https://interprovince-route.app.workbuddy.host/`
-- 安卓：`android/` WebView 壳；iOS：`ios/` 目前只有目录与路线图，Xcode 工程未创建
+- **以手机为主**：安卓 `android/` WebView 壳是主要形态；iOS `ios/` WebView 壳开发中（已有 Xcode 工程与 `ios-build` CI）。设计与验收一律先看 390px 手机宽度（见「界面与设计系统」）
+- Web：`index.html` 自包含单文件、离线可用，线上 `https://interprovince-route.app.workbuddy.host/`；与两端壳加载的是同一页面，作辅助
 - **是测算与比选辅助，不构成交易建议，不能替代交易系统。** 实际可用路径须在交易中心公布的路径集合内；本工具按全网拓扑枚举
 
 ## 常用命令
@@ -119,15 +119,34 @@ maxSourceQuote = (pDst − F)/A            // 别名 senderNet，语义是「可
 6. **842 号附件的单位是「元/千千瓦时」**，数值上等于 元/MWh，不要误按「分/千瓦时」再乘 10。
 7. **两栏布局（900–1279px）下 `.col-side` 必须 `grid-row:1/3`**，三栏断点（≥1280px）复位为 `1`；改 `.layout` 后跑 `tests/e2e.mjs` 的 `R-04`。
 
+## 界面与设计系统（移动端优先）
+
+**这是以手机为主的 app**：安卓 WebView 壳是主要形态，Web 只作辅助。完整规范见 `docs/12-设计系统与界面规范.md`，可视化设计系统（色板、组件预览、品牌书）见 <https://claude.ai/artifact/AnZvVZEak5xQW2uPqGuZMp>。两者冲突时，以规范文档和 `src/tokens.css` 为准。
+
+- **390px 先行。** 基础 CSS 就是手机形态，600 / 900 / 1280px 只向上覆盖；验收先看 390px 截图。
+- **只用令牌。** 颜色、阴影、圆角只在 `src/tokens.css` 写值，样式与脚本写 `var(--x)`。地图 SDK 样式、data: URI、canvas、快照这些不认变量的地方，在绘制时用 `ui/theme.js` 的 `tokenColor()` 取值，切主题后要重绘（`renderMap()`）。
+- **三套主题。** `<html data-theme>` 取 `clear`（默认，浅）/ `clear-dark` / `tech`（科技·调度大屏，固定深色）。页头「外观」切换，存 `iproute.v2.ui`；`<head>` 内联脚本首帧设定，避免闪白。新主题 = `src/tokens.css` 里一个覆盖块，**每个颜色令牌都要给值**；组件样式不改。
+- **可读性底线（守卫会检查三套主题）：**
+  - 文字 ≥4.5:1，输入框边框 ≥3:1；清晰浅色的 `map-label`（2.66:1）是唯一登记在案的例外。
+  - CSS 最小字号 10.5px。
+  - 可点区域 ≥44px，外观小的控件用透明伪元素扩大点击区。
+  - 状态不能只靠颜色表达。
+- **新字号、新颜色先进设计系统。** 先定语义名、三套主题都给值，再改守卫的白名单；不要为了让守卫变绿直接加值。
+- **改界面必须出截图。** 用 `tools/ui-shots.mjs` 截改前改后：纯重构必须 `--compare` 零像素差异；有意的改动要逐张看三套主题（`--theme clear|clear-dark|tech`）。
+- **文案规则**（详见规范第 9 节）：缺数显示「—」，绝不写 0；来源档次只用四个固定说法（`TIER`）；不用 emoji；免责声明原文不动。
+- **平台壳。** 安卓用 `values-night` 跟随系统明暗；app 内切风格时通过 `IPRouteShell.setSystemBars(hex, lightIcons)` 同步系统栏，这个桥**只允许改颜色**（页面会加载第三方地图脚本）。iOS 跟随系统，同名桥接待补（见 `ios/ROADMAP.md`）。
+- **底图限制。** 深色主题下，腾讯地图 / 天地图的底图本身仍是浅色（要改需在平台侧配个性化样式）；内置拓扑图完全跟随主题。
+
 ## 纪律（最高优先级）
 
 1. **不得编造费率数值。** 找不到就写 `null` 并记录已检索路径。一个编造的费率比一个缺失的费率危害大得多。容量同理——ATC 我国不公开，宁可标「未获取」。
 2. **价格只有一处来源**：`data/fixed-prices.json`，改完跑 `node tools/build.mjs`。
 3. **费率必须分档标注来源**，不得把国网报备价与发改委核定价混为一谈。
 4. **改动算法后必须跑基线**，`node tools/baseline-check.mjs` 全绿才算完成（条数以脚本输出为准）。基线只证明实现未漂移、不证明费率数值正确——校验前会用基线快照覆盖 `CH`；费率正确性靠 `audit-fees.mjs` / `audit-voltage-tariffs.mjs` 与一手原件。基线变更须 `node tools/baseline2.mjs --accept` 显式接受。
-5. **新功能开新 worktree + 新分支**，不在 `main` 工作区直接改：`git worktree add .worktrees/<名字> -b feat/<名字>`（`.worktrees/` 已在 `.gitignore`）。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs` 把分支写死为 `main`，会把未合并的改动推到远端。
+5. **新功能开新 worktree + 新分支**，不在 `main` 工作区直接改：`git worktree add .claude/worktrees/<分支名把/换成-> -b feat/<名字> origin/main`（`.claude/worktrees/` 已在 `.gitignore`；旧的 `.worktrees/` 约定作废，存量随各自 PR 合并自然消亡；该目录多会话共享，收尾只 `git worktree remove` 自己那一个）。多个 worktree 同时跑 e2e 时 8734 端口会冲突，用 `E2E_BASE=http://127.0.0.1:<私有端口>/` 指向自己的静态服务。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs` 把分支写死为 `main`，会把未合并的改动推到远端。
 6. **数据准确性优先于界面与新功能。** 数据分支阻塞时先审、先修、先合并，再动功能。
 7. **大改动完成后同步 Slack。** 功能落地、数据/费率更新、发版、重要修复、阶段收尾等大改动**完成且验证通过后**，向 Slack 频道 **#跨省电力小程序**（channel_id `C0C23DYR0S0`，私有频道，用 ID 直发）发一条通知：**list 列表、简洁，每条一句话说清干了什么**，中文，不等用户催。详见 `AGENTS.md`。
+8. **界面改动按设计系统纪律走**：只用令牌、390px 截图验收、三套主题过对比度，流程与 PR 自查清单见 `docs/12-设计系统与界面规范.md` 第 13–14 节；合并后同步设计系统 Artifact（在 Claude Code 里说「按最新代码重新同步设计系统」）。
 
 ## 底图与合规
 
@@ -157,6 +176,7 @@ ATC、省内重要输电通道清单与限额、交易路径集合、西藏基�
 | 文档 | 内容 |
 |---|---|
 | `docs/开发约定与操作手册.md` | ★ 接手必读：纪律、踩坑清单、推送机制 |
+| `docs/12-设计系统与界面规范.md` | ★ 改界面必读：令牌与三套主题、可读性底线、文案规则、平台壳、改界面标准流程与 PR 自查清单 |
 | `docs/10-跨省交易费用计算教程.md`（含 PDF） | ★ 业务侧必读：七层费用、统一公式、现货折算与出清，含可复算算例 |
 | `docs/03-数据接口说明.md` | ★ Web/端侧共用的数据契约与字段定义 |
 | `docs/09-算法模型与收费标准审计.md` | 公式来源、全国审查、可复算数字与不可认证范围 |

@@ -180,6 +180,16 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 - `PV[].fund` **可能为 `null`**（当前仅西藏）。消费方必须按「缺失」处理并提示用户，**不要静默当 0**——那会低估落地成本
 - 两端通过 `priceVersion`（`data/fixed-prices.json` 的内容哈希）比对版本，`dataHash` 校验完整性。**版本不一致时不要混用两端数据**
 
+## 界面与设计系统（移动端优先）
+
+> 本节与 CLAUDE.md「界面与设计系统」、AGENTS.md「界面红线」同一口径；完整规范见 `docs/12-设计系统与界面规范.md`，可视化设计系统见 <https://claude.ai/artifact/AnZvVZEak5xQW2uPqGuZMp>。
+
+- 这是以手机为主的 app：安卓 WebView 壳是主要形态，Web 只作辅助。所有界面先按 390px 宽度设计和验收。
+- `src/tokens.css` 是唯一允许写颜色、阴影、圆角字面值的地方，构建时注入模板的 `/*__TOKENS__*/`；样式与脚本只写 `var(--x)`，地图 SDK、data: URI、canvas 用 `ui/theme.js` 的 `tokenColor()`。
+- 三套主题：`clear`（默认）/ `clear-dark` / `tech`（科技·调度大屏，固定深色）。页头「外观」切换，存 `iproute.v2.ui`。安卓壳用 `values-night` 跟随系统明暗，app 内切换时通过 `IPRouteShell.setSystemBars` 同步系统栏（这个桥只能改颜色）。
+- 可读性底线：文字 ≥4.5:1、控件边框 ≥3:1、CSS 最小字号 10.5px、可点区域 ≥44px，`tools/test-design-tokens.mjs` 对三套主题逐一检查。
+- 改界面用 `tools/ui-shots.mjs` 截改前改后：纯重构必须零像素差异，有意改动要逐张看三套主题。
+
 ## 纪律（最高优先级）
 
 来自 `docs/开发约定与操作手册.md`，接手前必读。
@@ -189,7 +199,8 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 3. **费率必须分档标注来源**，不得把报备价与发改委核定价混为一谈。2024 年后新投运的金永、中衡、坤渝、庆东、宝合与吉泉、昭沂目前只有国网报备价（昭沂的还有被追溯清算的可能）。
 4. **改动算法后必须跑基线**，`node tools/baseline-check.mjs` 全绿才算完成（条数随数据修正变化，以脚本输出为准）。
    注意**基线只证明实现未漂移、不证明费率数值正确**（校验时会先用基线快照覆盖 CH）；费率/数据正确性靠 `audit-fees.mjs`、`audit-voltage-tariffs.mjs` 与一手来源核对。基线变更必须 `node tools/baseline2.mjs --accept` 显式接受，默认只读。
-5. **新功能开发必须开新 worktree + 新分支**，不在 `main` 工作区直接改。`git worktree add .worktrees/<名字> -b feat/<名字>`（`.worktrees/` 已在 `.gitignore`），做完合回 `main` 再发版。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs:22` 把分支写死为 `main`，会把未合并的改动直接推到远端。详见 `docs/开发约定与操作手册.md` 纪律 5。
+5. **新功能开发必须开新 worktree + 新分支**，不在 `main` 工作区直接改。`git worktree add .claude/worktrees/<分支名把/换成-> -b feat/<名字> origin/main`（`.claude/worktrees/` 已在 `.gitignore`；旧的 `.worktrees/` 约定作废，存量随 PR 合并自然消亡），做完合回 `main` 再发版。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs:22` 把分支写死为 `main`，会把未合并的改动直接推到远端。详见 `docs/开发约定与操作手册.md` 纪律 5。
+6. **界面改动守设计系统纪律**：只用令牌、390px 截图验收、三套主题过对比度，流程见 `docs/12-设计系统与界面规范.md` 第 13 节。
 
 ## Slack 工作简报（irp-work-bot）
 

@@ -27,6 +27,10 @@ jobs:
       - name: 双端数据一致性
         run: node tools/test-data-share.mjs
 
+      # 设计令牌守卫：颜色 / 圆角字面值只在 src/tokens.css、令牌引用有定义、字号在允许集合内、三套主题对比度达标
+      - name: 设计令牌守卫
+        run: node tools/test-design-tokens.mjs
+
       - name: 重新构建
         run: node tools/build.mjs
 
