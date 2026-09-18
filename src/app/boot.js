@@ -117,7 +117,7 @@ function guideStart(){
 function guideRender(){
   const ov=document.getElementById('guide-box'); if(!ov) return;
   const st=GUIDE_STEPS[_guideStep], last=_guideStep===GUIDE_STEPS.length-1;
-  ov.innerHTML=`<div role="dialog" aria-label="新手导览" style="pointer-events:auto;position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;background:var(--card);border:.5px solid var(--line);border-radius:var(--radius-dialog);box-shadow:var(--shadow-guide);padding:14px 15px 12px">
+  ov.innerHTML=`<div role="dialog" aria-label="新手导览" style="pointer-events:auto;position:absolute;left:10px;right:10px;bottom:calc(70px + env(safe-area-inset-bottom));max-width:460px;margin:0 auto;background:var(--card);border:var(--hairline) solid var(--line);border-radius:var(--radius-dialog);box-shadow:var(--shadow-guide);padding:14px 15px 12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <b style="font-size:13.5px">${esc(st.t)}</b>
       <span style="margin-left:auto;font-size:10.5px;color:var(--ink3);white-space:nowrap">${_guideStep+1} / ${GUIDE_STEPS.length}</span>

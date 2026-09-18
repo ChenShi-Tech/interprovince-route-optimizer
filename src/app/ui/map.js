@@ -306,7 +306,7 @@ function showMapFallback(){
     const sel=Math.min(state.sel,r.length-1);
     t+=`<div style="font-weight:600;margin-bottom:6px">选中方案 #${sel+1}　${r[sel].nodes.map(N).join(' → ')}</div>`;
     r[sel].segs.forEach((s,i)=>{
-      t+=`<div style="padding:6px 0;border-bottom:.5px solid var(--line2);line-height:1.6">
+      t+=`<div style="padding:6px 0;border-bottom:var(--hairline) solid var(--line2);line-height:1.6">
         <b>第 ${i+1} 段　${N(s.a)} → ${N(s.b)}</b><br>
         ${s.e.n}　${s.e.kv}　${s.t} 元/MWh　计费线损 ${s.billLossPct}%（物理估算 ${s.e.loss}%）<br>
         <span style="color:var(--ink3)">段入口 ${Math.round(s.inMW)} MW　占用 ${s.util!=null?(s.util*100).toFixed(0)+'%':'待补'}</span></div>`;
@@ -315,7 +315,7 @@ function showMapFallback(){
   t+='<div style="font-weight:600;margin:14px 0 6px">全部通道（'+CH.length+' 条）</div>';
   CH.forEach(c=>{
     const on=r&&r.some(row=>row.edges.some(e=>e.id===c.id))?' ●':'';
-    t+=`<div style="padding:3px 0;border-bottom:.5px solid var(--line2)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
+    t+=`<div style="padding:3px 0;border-bottom:var(--hairline) solid var(--line2)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
   });
   fb.innerHTML=t;
 }
@@ -711,9 +711,9 @@ function renderMap(){
     <div id="map-view" onclick="mapSvgClick(event)"></div><div id="fallback"></div><div id="map-pop"></div>`;
 
   if(selR){
-    out+=`<div style="margin-top:11px;padding-top:11px;border-top:.5px solid var(--line2)">
+    out+=`<div style="margin-top:11px;padding-top:11px;border-top:var(--hairline) solid var(--line2)">
       <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">选中方案 #${state.sel+1}　${esc(selR.nodes.map(N).join(' → '))}</div>
-      ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:.5px solid var(--line2);line-height:1.6">
+      ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:var(--hairline) solid var(--line2);line-height:1.6">
         <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.t)} 元/MWh　计费线损 ${fmt(s.billLossPct,2)}%（物理估算 ${fmt(s.e.loss,2)}%）
         <span style="color:var(--ink3)">｜入口 ${fmt(s.inMW,0)} MW　${s.util!=null?'占用 '+fmt(s.util*100,0)+'%':'容量待补'}</span>
       </div>`).join('')}

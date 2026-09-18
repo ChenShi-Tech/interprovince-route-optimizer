@@ -29,7 +29,8 @@
   --red-bg:#FCEBEB;
 
   /* ---------- 颜色 · 具名字面值（源码里反复出现的字面色） ---------- */
-  --on-fill:#FFFFFF;                    /* 实色填充上的字：主按钮、改动计数角标、提示气泡、地图序号 */
+  --on-fill:#FFFFFF;                    /* 实色填充上的字：主按钮、改动计数角标、地图序号 */
+  --field-bg:#FFFFFF;                   /* 输入框 / 下拉框 / 文本框的底（清晰浅色与卡片同为白） */
   --field-border:rgba(0,0,0,.16);       /* 输入框 / 下拉框 0.5px 边框 */
   --ghost-border:rgba(24,95,165,.35);   /* 幽灵按钮与页头「帮助」按钮的边框 */
   --hero-field-border:rgba(24,95,165,.45); /* 主报价输入框 1.5px 边框 */
@@ -37,6 +38,7 @@
   --nav-glass:rgba(255,255,255,.96);    /* 手机底部导航毛玻璃底 */
   --scrim:rgba(20,24,32,.42);           /* 参数弹层遮罩 */
   --tooltip-bg:rgba(31,35,40,.94);      /* 价格组成条提示气泡底 */
+  --tooltip-ink:#FFFFFF;                /* 价格组成条提示气泡文字（深色主题气泡改浅底，文字随之变深，不与 --on-fill 共用） */
   --sheet-grab:rgba(0,0,0,.15);         /* 底部弹层拖动条 */
   --explain-bg:#FCFCFB;                 /* 长段说明折叠容器（details.explain）底 */
   --issue-accent:#EF9F27;               /* 「适用条件与缺项」左侧色条 */
@@ -96,6 +98,15 @@
   --font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
   --font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
   --font-num:var(--font-sans);    /* 数字字体钩子：金额 / 电量 / 比例等数字位置都挂它，主题可单独换数字字体 */
+
+  /* ---------- 下拉箭头（data: URI 不认 CSS 变量，整条 url() 按主题各写一份；箭头色 = --ink3） ---------- */
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+
+  /* ---------- 主题结构钩子（清晰风格一律 none，外观不变；科技风格用它们表达网格底纹、卡片高光、数字发光） ---------- */
+  --num-glow:none;              /* 关键数字的 text-shadow：顶部结果大字 .hero-v、方案卡价格 .plan-price b */
+  --page-pattern:none;          /* body 的 background-image（页面底纹） */
+  --card-highlight:none;        /* .card / .hero / .picker / details.adv.boxed 的 box-shadow（卡片顶边内高光） */
+  --hero-field-glow:none;       /* 主报价输入框静止态的 box-shadow（聚焦态仍用 --focus-ring-hero） */
 
   /* ---------- 阴影与焦点环 ---------- */
   --focus-ring:0 0 0 3px rgba(24,95,165,.10);       /* 输入框聚焦外晕（与 blue 边框同时出现） */
