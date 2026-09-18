@@ -66,17 +66,171 @@ window._TMapSecurityConfig = {
      只有 src 被真正赋值时才发起请求；defer 作为兜底——万一被改回静态 src 也不会阻塞解析。 -->
 <script id="tmap-sdk" defer data-src="https://map.qq.com/api/gljs?v=1.exp"></script>
 <style>
+/* 设计令牌（:root 变量）由构建脚本从 src/tokens.css 注入到下一行；本样式表只引用 var(--x)，不写颜色 / 圆角字面值 */
+/* ==================== 设计令牌（design tokens） ====================
+   全站唯一允许出现颜色 / 阴影 / 圆角字面值的地方。构建时由 tools/build.mjs 注入
+   src/template.html 的 <style> 开头（占位符 __TOKENS__）。样式与界面脚本一律写 var(--x)，
+   tools/test-design-tokens.mjs 守住「别处不出现字面值、引用的令牌必须在此定义」。
+   令牌名与取值对齐设计系统 tokens.json；源码原有的 --ink / --line / --bg / --card / --blue… / --r 保持原名原值。
+   只有一套浅色主题：后续主题（深色、科技感）在 [data-theme] 下覆盖这里的值即可，不改组件样式。
+   ⚠ JS 里拿真实颜色字符串（腾讯地图 / 天地图样式对象、data: URI、canvas）用 ui/theme.js 的 tokenColor()。 */
 :root{
-  --ink:#1F2328; --ink2:#5F5E5A; --ink3:#8A8A85;
-  --line:rgba(0,0,0,.10); --line2:rgba(0,0,0,.06);
-  --bg:#F4F5F7; --card:#FFFFFF;
-  --blue:#185FA5; --blue-bg:#E6F1FB; --blue-ink:#0C447C;
-  --teal:#0F6E56; --teal-bg:#E1F5EE;
-  --amber:#854F0B; --amber-bg:#FAEEDA;
-  --coral:#993C1D; --coral-bg:#FAECE7;
-  --gray:#5F5E5A; --gray-bg:#F1EFE8;
-  --red:#A32D2D; --red-bg:#FCEBEB;
-  --r:12px;
+  /* ---------- 颜色 · 基础（源码 :root 原名原值） ---------- */
+  --ink:#1F2328;              /* 正文与关键数字 */
+  --ink2:#5F5E5A;             /* 次级文字：字段标签、分项名、说明句 */
+  --ink3:#8A8A85;             /* 第三级：提示、单位、元信息、未选中导航；对比度仅 3.5:1，别写必读内容 */
+  --line:rgba(0,0,0,.10);     /* 0.5px 发丝线：卡片外框、页头下沿、导航上沿 */
+  --line2:rgba(0,0,0,.06);    /* 卡片内部分隔：键值行、小标题下划线、段块外框 */
+  --bg:#F4F5F7;               /* 页面底色 */
+  --card:#FFFFFF;             /* 卡片、输入框、白底按钮与白色面 */
+  --blue:#185FA5;             /* 品牌主色：主按钮、选中态、焦点边框 */
+  --blue-bg:#E6F1FB;          /* 选中与结果的底 */
+  --blue-ink:#0C447C;         /* 蓝底上的文字、价格主数字、路线名 */
+  --teal:#0F6E56;             /* 通过 / 已核定 / 终点 */
+  --teal-bg:#E1F5EE;
+  --amber:#854F0B;            /* 提醒 / 口径改动 / 区域口径 */
+  --amber-bg:#FAEEDA;
+  --coral:#993C1D;            /* 界面未直接使用；网架图断面晕圈借用（--map-section） */
+  --coral-bg:#FAECE7;         /* 预留 */
+  --gray:#5F5E5A;             /* 中性标签文字，与 ink2 同值 */
+  --gray-bg:#F1EFE8;          /* 中性填充：指标块、公式块、口径摘要条、置灰字段 */
+  --red:#A32D2D;              /* 越限 / 错误 / 缺数 */
+  --red-bg:#FCEBEB;
+
+  /* ---------- 颜色 · 具名字面值（源码里反复出现的字面色） ---------- */
+  --on-fill:#FFFFFF;                    /* 实色填充上的字：主按钮、改动计数角标、提示气泡、地图序号 */
+  --field-border:rgba(0,0,0,.16);       /* 输入框 / 下拉框 0.5px 边框 */
+  --ghost-border:rgba(24,95,165,.35);   /* 幽灵按钮与页头「帮助」按钮的边框 */
+  --hero-field-border:rgba(24,95,165,.45); /* 主报价输入框 1.5px 边框 */
+  --header-glass:rgba(255,255,255,.94); /* 吸顶页头毛玻璃底 */
+  --nav-glass:rgba(255,255,255,.96);    /* 手机底部导航毛玻璃底 */
+  --scrim:rgba(20,24,32,.42);           /* 参数弹层遮罩 */
+  --tooltip-bg:rgba(31,35,40,.94);      /* 价格组成条提示气泡底 */
+  --sheet-grab:rgba(0,0,0,.15);         /* 底部弹层拖动条 */
+  --explain-bg:#FCFCFB;                 /* 长段说明折叠容器（details.explain）底 */
+  --issue-accent:#EF9F27;               /* 「适用条件与缺项」左侧色条 */
+  --timeline-line:#85B7EB;              /* 时间线专项工程段竖线 */
+  --region-line:#70B8AC;                /* 时间线区域网架段竖线 */
+  --region-border:#CEE5DF;              /* 区域共用网络卡外框 */
+  --region-bg:#F5FAF8;                  /* 区域共用网络卡与区域计费指标块底 */
+  --region-dash:#8FC3B5;                /* 「××区域网架」中心块虚线框 */
+  --region-arrow:#5E9E90;               /* 区域接入 ↔ 网架 ↔ 交付 之间的箭头 */
+  --region-card-border:#DEEBE6;         /* 区域计费白块外框 */
+  --error-text:#B3261E;                 /* 网架图底图状态行里的 ✗ 错误句 */
+  /* 以下为 tokens.json 之后源码新增的字面色（本阶段补名） */
+  --toast-close-bg:rgba(163,45,45,.12); /* 运行时错误提示条「关闭」按钮底（red 的淡色） */
+  --seg-divider:rgba(0,0,0,.07);        /* 时间线段卡内「取值依据」上方分隔线（比 line2 略深） */
+  --scrim-dialog:rgba(20,24,32,.45);    /* 应用内确认框（uiConfirm）遮罩，比参数弹层略深 */
+  --snapshot-caption:rgba(0,0,0,.55);   /* 拓扑图快照 PNG 底部的版本 / 时间水印文字 */
+
+  /* ---------- 颜色 · 价格组成（ui/calc.js COMP_ITEMS，按项固定） ---------- */
+  --chart-gen:var(--blue);        /* 送端报价 */
+  --chart-origin-loss:#378ADD;    /* 送端省内网损 */
+  --chart-send:#85B7EB;           /* 送出省输电费 */
+  --chart-trans:#EF9F27;          /* 跨省通道费 */
+  --chart-reg:#5DCAA5;            /* 区域电网费 */
+  --chart-loss:#F0997B;           /* 网损折价 */
+  --chart-in-loss:#AFA9EC;        /* 受端上网线损 */
+  --chart-net:#B4B2A9;            /* 受端输配电价 */
+  --chart-fund:#D3D1C7;           /* 基金及附加 */
+  --chart-cap:#8E8AD6;            /* 容（需）量电费 */
+  --chart-sys-op:#7FA7A0;         /* 系统运行费 */
+
+  /* ---------- 颜色 · 网架图（内置 SVG 拓扑图 / 腾讯地图 / 天地图） ---------- */
+  --map-route:var(--blue);        /* 选中方案线路与站点 */
+  --map-alt:#EF9F27;              /* 其它候选路线 */
+  --map-base:#C9C8C3;             /* 底图模式（腾讯 / 天地图）全网架背景线 */
+  --map-edge:#D3D1C7;             /* 内置拓扑图全网架连线与图例色块 */
+  --map-node:#B4B2A9;             /* 内置拓扑图：不在路线上的省份节点 */
+  --map-end:var(--teal);          /* 起止省份节点、换流站圆点与站名 */
+  --map-label:#9A9A95;            /* 非路线省份名称 */
+  --map-label-on:var(--blue-ink); /* 路线上的省份名、段名 */
+  --map-ground:#F7F8FA;           /* 内置拓扑图画布底 */
+  --map-fallback:#EDEFEF;         /* 地图容器在底图加载前 / 降级时的底色 */
+  /* 以下为 tokens.json 之后源码新增的网架图配色（本阶段补名） */
+  --map-casing:#FFFFFF;           /* 白色衬底：选中线白边、节点描边、站点圆心、段名文字描边、地图圆点描边 */
+  --map-dot-base:var(--ink3);     /* 底图模式：非途经省份圆点 */
+  --map-section:var(--coral);     /* 断面高亮垫层（成员通道晕圈） */
+  /* 区域着色调色板（format.js REGION_COLORS，按区域名排序后依次取用）；与既有令牌同色的直接复用 */
+  --map-region-1:var(--blue);
+  --map-region-2:var(--teal);
+  --map-region-3:#B0651A;
+  --map-region-4:var(--chart-cap);
+  --map-region-5:var(--coral);
+  --map-region-6:var(--chart-reg);
+  --map-region-7:var(--chart-sys-op);
+  --map-region-8:var(--amber);
+
+  /* ---------- 字体 ---------- */
+  --font-sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font-num:var(--font-sans);    /* 数字字体钩子：金额 / 电量 / 比例等数字位置都挂它，主题可单独换数字字体 */
+
+  /* ---------- 阴影与焦点环 ---------- */
+  --focus-ring:0 0 0 3px rgba(24,95,165,.10);       /* 输入框聚焦外晕（与 blue 边框同时出现） */
+  --focus-ring-hero:0 0 0 4px rgba(24,95,165,.14);  /* 主报价输入框聚焦外晕 */
+  --focus-ring-bar:0 0 0 2px #fff,0 0 0 3.5px rgba(31,35,40,.55); /* 价格组成条某段悬停 / 聚焦 */
+  --focus-ring-bad:0 0 0 3px rgba(163,45,45,.10);   /* 超限输入框（input.clamp-bad）红色外晕（新增） */
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.18);       /* 手机底部弹层 */
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.18);  /* ≥600px 右侧滑出弹层 */
+  --shadow-toast:0 4px 14px rgba(0,0,0,.14);        /* 运行时错误提示条 */
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.22);      /* 应用内确认框（新增） */
+  --shadow-guide:0 10px 34px rgba(0,0,0,.18);       /* 新手导览卡片（新增） */
+
+  /* ---------- 间距（名字即像素值；组件内部的 5/7/9/11px 保留原样，不取整） ---------- */
+  --space-4:4px;
+  --space-6:6px;
+  --space-8:8px;
+  --space-10:10px;
+  --space-12:12px;
+  --space-14:14px;
+  --space-16:16px;              /* 手机页面左右边距 */
+  --space-20:20px;              /* 600–899px 页面左右边距 */
+  --space-24:24px;              /* ≥900px 页面左右边距 */
+
+  /* ---------- 圆角（随层级递减：弹层 16 → 卡片 12 → 按钮 10 → 输入 9 → 行内 6 → 档次标 4） ---------- */
+  --radius-sheet:16px;          /* 参数弹层 */
+  --r:12px;                     /* 卡片、主卡、地图容器、时间线段卡、结果块、主报价输入框 */
+  --radius-btn:10px;            /* 按钮、路线卡、推荐卡、口径摘要条、区域计费块、拓扑图画布 */
+  --radius-field:9px;           /* 输入框、警示条、公式块、指标块、分段按钮、段块、折叠说明 */
+  --radius-compact:8px;         /* 参数弹层紧凑输入框、缺项提示 */
+  --radius-mini:7px;            /* 费率库小输入框、小号分段按钮、提示气泡、密钥显隐按钮 */
+  --radius-inline:6px;          /* 口径摘要白底片、组成条、原文引用块、表格内小输入 */
+  --radius-tag:4px;             /* 来源档次标 .tier、费率库小标 .lc-tag */
+  --radius-swatch:2px;          /* 图例与分项色块、拖动条、滚动条滑块 */
+  --radius-pill:999px;          /* 胶囊：徽标、chip、pill、名次标、路线名 */
+  /* 以下为 tokens.json 之外、源码里已有的单值圆角（本阶段补名） */
+  --radius-dialog:14px;         /* 应用内确认框、新手导览卡片 */
+  --radius-bar:5px;             /* 价格组成条（10px 高的整条胶囊） */
+  --radius-meter:3px;           /* 容量计量条（5px 高）、宽屏侧栏滚动条滑块 */
+  --radius-line:1px;            /* 时间线 2px 竖线的端头 */
+
+  /* ---------- 描边宽度 ---------- */
+  --hairline:.5px;              /* 默认边框：卡片、输入框、按钮、分隔线 */
+  --emphasis:1.5px;             /* 选中路线卡、主报价输入框、区域网架虚线框 */
+  --indicator:2px;              /* 时间线竖线、宽屏标签栏选中下划线 */
+  --issue-bar:3px;              /* 「适用条件与缺项」左侧色条 */
+
+  /* ---------- 层级 ---------- */
+  --z-map:0;                    /* 地图容器（contain:paint 自建层叠上下文） */
+  --z-header:20;                /* 吸顶页头 */
+  --z-nav:3000;                 /* 手机底部导航 */
+  --z-sheet:3500;               /* 参数弹层 */
+  --z-toast:3900;               /* 运行时错误提示 */
+
+  /* ---------- 布局宽度 ---------- */
+  --app-width-phone:480px;      /* 手机与窄屏内容列最大宽度 */
+  --sheet-width:400px;          /* ≥600px 右侧弹层宽度 */
+  --app-width-desktop:1320px;   /* ≥900px 内容最大宽度 */
+  --app-width-wide:1480px;      /* ≥1280px 内容最大宽度 */
+  --col-side:348px;             /* 两栏时左侧路线列表 */
+  --col-side-wide:360px;        /* 三栏时左侧路线列表 */
+  --col-ai:340px;               /* 三栏时右侧智能推荐 */
+
+  /* ---------- 断点（仅供查阅：@media 条件里不能用 var()，样式表中照写字面值） ---------- */
+  --bp-fold:600px;              /* 折叠屏展开 / 小平板 */
+  --bp-desktop:900px;           /* Web 辅助版两栏 */
+  --bp-wide:1280px;             /* 宽屏三栏 */
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -685,7 +839,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 09:14';
+const BUILD_TIME='2026-09-18 11:03';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器

@@ -16,7 +16,8 @@
  *   est    = 待补：价格待核、无文号可依的工程（界面显示「待补」），不得按已核定/已披露价使用
  *
  * 构建期 fail-fast（任一不过即 process.exit(1) 并说明原因）：
- *   ① 模板两个注入占位符（DATA / APP）各出现且仅出现 1 次、各自独占一行；
+ *   ① 模板三个注入占位符（TOKENS / DATA / APP）各出现且仅出现 1 次、各自独占一行；
+ *      TOKENS 注入 src/tokens.css（设计令牌 :root 块，全站唯一允许写颜色 / 圆角字面值的地方）；
  *   ② APP_FILES 与 tools/test-modules.mjs 的守卫清单逐项一致；
  *   ③ 注入串不含 String.replace 的替换陷阱（$& / $$ / $` / $'，M23）；
  *   ④ 内联脚本能被 vm 解析（语法检查）；
@@ -447,7 +448,7 @@ const appSource = APP_FILES.map((f) => {
 
 // ---- 模板占位符：各出现且仅出现 1 次，且各自独占一行（残留文字会变成悬空代码）----
 const tpl = fs.readFileSync(path.join(root, 'src/template.html'), 'utf8');
-for (const ph of ['/*__DATA__*/', '/*__APP__*/']) {
+for (const ph of ['/*__TOKENS__*/', '/*__DATA__*/', '/*__APP__*/']) {
   const n = tpl.split(ph).length - 1;
   if (n !== 1) failFast(`src/template.html 中 ${ph} 出现 ${n} 次（必须且只能出现 1 次）`);
   const onOwnLine = new RegExp('^[ \\t]*' + ph.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[ \\t]*$', 'm');
@@ -461,6 +462,16 @@ function assertNoReplaceDollar(s, label){
   if (m) failFast(`注入串 ${label} 含替换模式 ${JSON.stringify(m[0])}（String.replace 会改写它）；` +
     '请在数据/源码中改写该序列或为替换实现转义（$ → $$）后再构建');
 }
+// 设计令牌（src/tokens.css）：注入模板 <style> 开头的 /*__TOKENS__*/ 占位行
+const tokensPath = path.join(root, 'src/tokens.css');
+if (!fs.existsSync(tokensPath)) failFast('缺少设计令牌文件 src/tokens.css');
+const tokensCss = fs.readFileSync(tokensPath, 'utf8').replace(/\r\n?/g, '\n').trim();
+if (!/(^|\n):root\s*\{/.test(tokensCss)) failFast('src/tokens.css 中没有 :root{…} 令牌块');
+if (/<\/style/i.test(tokensCss)) failFast('src/tokens.css 含 </style>，注入后会提前闭合样式块');
+if (/\/\*__(TOKENS|DATA|APP)__\*\//.test(tokensCss)) failFast('src/tokens.css 含注入占位符字面量，会与模板占位符混淆');
+const tokensAt = tpl.indexOf('/*__TOKENS__*/');
+if (!(tokensAt > tpl.indexOf('<style>') && tokensAt < tpl.indexOf('</style>'))) failFast('src/template.html 中 /*__TOKENS__*/ 不在 <style> 块内');
+assertNoReplaceDollar(tokensCss, 'TOKENS');
 const injectedData = 'const DATA=' + json(payload) + ';';
 assertNoReplaceDollar(injectedData, 'DATA');
 assertNoReplaceDollar(appSource, 'APP');
@@ -468,6 +479,7 @@ assertNoReplaceDollar(BUILD_TIME, 'BUILD_TIME');
 assertNoReplaceDollar(priceVersion, 'PRICE_VERSION');
 
 const out = tpl
+  .replace('/*__TOKENS__*/', tokensCss)
   .replace('/*__DATA__*/', injectedData)
   .replace('/*__APP__*/', appSource)
   .replace('__BUILD_TIME__', BUILD_TIME)
@@ -479,7 +491,8 @@ const out = tpl
 const appSourceFinal = appSource
   .replace('__BUILD_TIME__', BUILD_TIME)
   .replace('__PRICE_VERSION__', priceVersion);
-if (out.includes('/*__DATA__*/') || out.includes('/*__APP__*/')) failFast('index.html 中仍残留注入占位符');
+if (out.includes('/*__TOKENS__*/') || out.includes('/*__DATA__*/') || out.includes('/*__APP__*/')) failFast('index.html 中仍残留注入占位符');
+if ((out.split(tokensCss).length - 1) !== 1) failFast('index.html 内联设计令牌与 src/tokens.css 不一致（替换被 $ 模式污染或占位符被改写）');
 if ((out.split(injectedData).length - 1) !== 1) failFast('index.html 内联数据与注入串不一致（替换被 $ 模式污染或占位符被改写）');
 if ((out.split(appSourceFinal).length - 1) !== 1) failFast('index.html 内联脚本与注入串不一致（替换被 $ 模式污染或占位符被改写）');
 if (out.includes('__PRICE_VERSION__') || out.includes('__BUILD_TIME__')) failFast('构建占位符未全部替换（__PRICE_VERSION__ / __BUILD_TIME__）');

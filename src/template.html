@@ -66,18 +66,8 @@ window._TMapSecurityConfig = {
      只有 src 被真正赋值时才发起请求；defer 作为兜底——万一被改回静态 src 也不会阻塞解析。 -->
 <script id="tmap-sdk" defer data-src="https://map.qq.com/api/gljs?v=1.exp"></script>
 <style>
-:root{
-  --ink:#1F2328; --ink2:#5F5E5A; --ink3:#8A8A85;
-  --line:rgba(0,0,0,.10); --line2:rgba(0,0,0,.06);
-  --bg:#F4F5F7; --card:#FFFFFF;
-  --blue:#185FA5; --blue-bg:#E6F1FB; --blue-ink:#0C447C;
-  --teal:#0F6E56; --teal-bg:#E1F5EE;
-  --amber:#854F0B; --amber-bg:#FAEEDA;
-  --coral:#993C1D; --coral-bg:#FAECE7;
-  --gray:#5F5E5A; --gray-bg:#F1EFE8;
-  --red:#A32D2D; --red-bg:#FCEBEB;
-  --r:12px;
-}
+/* 设计令牌（:root 变量）由构建脚本从 src/tokens.css 注入到下一行；本样式表只引用 var(--x)，不写颜色 / 圆角字面值 */
+/*__TOKENS__*/
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}

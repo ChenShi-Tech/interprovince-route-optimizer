@@ -59,6 +59,12 @@ console.log('\n══ 三、构建产物正确内联 ══');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 ok(!html.includes('/*__APP__*/'), '占位符 __APP__ 已被替换');
 ok(!html.includes('/*__DATA__*/'), '占位符 __DATA__ 已被替换');
+ok(!html.includes('/*__TOKENS__*/'), '占位符 __TOKENS__ 已被替换');
+{
+  const tokensCss = fs.readFileSync(path.join(root, 'src/tokens.css'), 'utf8').replace(/\r\n?/g, '\n').trim();
+  const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  ok(style.split(tokensCss).length - 1 === 1, 'src/tokens.css 原样内联在 <style> 中且只出现 1 次');
+}
 const marks = APP_FILES.map((f) => ({ f, at: html.indexOf(`/* ===== ${f} ===== */`) }));
 ok(marks.every((m) => m.at >= 0), `全部 ${APP_FILES.length} 个模块都已内联`,
   marks.filter((m) => m.at < 0).map((m) => m.f).join('、'));
