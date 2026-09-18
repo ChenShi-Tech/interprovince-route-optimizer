@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- API 27+：导航栏也可设浅底深色图标，与状态栏一起取清晰浅色的页头色。其余同 values/themes.xml。 -->
+    <!-- API 27+：导航栏也可设浅底深色图标，与状态栏一起取清晰浅色的页头色。其余同 values/themes.xml
+         （窗口底色不闪的条件也一样：app 内也是浅色时成立，否则靠 MainActivity.restoreSystemBars() 按上次记录改色）。 -->
     <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>

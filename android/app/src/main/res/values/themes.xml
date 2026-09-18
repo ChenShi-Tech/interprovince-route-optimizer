@@ -9,7 +9,10 @@
     <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
-        <!-- 窗口底色 = 页面底色（bg 令牌）：WebView 首帧绘制前不闪白块 -->
+        <!-- 窗口底色 = 清晰浅色的页面底色（bg 令牌）。WebView 背景透明，网页首帧前露出的就是它，所以只在
+             app 内的明暗也是浅色时不闪；app 内选了科技 / 深色时，由 MainActivity.restoreSystemBars() 在 setContentView
+             之前换成网页上次在浅色系统下同步的颜色（首次安装还没有记录，这一次仍会先露出浅色）。
+             系统的启动预览窗（进程起来前系统画的那一帧）只认这里，代码改不了。 -->
         <item name="android:windowBackground">@color/page_bg</item>
     </style>
 </resources>

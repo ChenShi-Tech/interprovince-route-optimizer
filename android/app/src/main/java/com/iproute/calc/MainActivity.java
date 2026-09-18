@@ -1,7 +1,11 @@
 package com.iproute.calc;
 
 import android.app.Activity;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -11,6 +15,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 
 import java.lang.ref.WeakReference;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -18,15 +23,22 @@ import java.util.regex.Pattern;
  * - setDomStorageEnabled 必须开：费率库本地修改、外观偏好等保存在 localStorage
  * - setTextZoom(100) 固定缩放：避免系统字体放大破坏移动端布局
  * - 主题：res/values*（浅色 / 深色 / API 27+）给出启动时的系统栏颜色；页面加载后由网页经 IPRouteShell
- *   按实际主题（清晰浅色 / 清晰深色 / 科技）再同步一次
+ *   按实际主题（清晰浅色 / 清晰深色 / 科技）再同步一次，壳把这次的颜色记下来，下次冷启动在首帧前先铺上（见 restoreSystemBars）
  */
 public class MainActivity extends Activity {
+
+    /** 系统栏颜色只接受不透明的 #RRGGBB */
+    static final Pattern HEX = Pattern.compile("^#[0-9A-Fa-f]{6}$");
+    /** 记系统栏颜色的 SharedPreferences 文件：每套系统明暗一份，只有「颜色串 + 图标深浅」两个值，不存别的 */
+    private static final String PREFS = "system_bars";
 
     private WebView web;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // 必须在 setContentView 之前：窗口第一次绘制时状态栏、导航栏与窗口底色已是网页上次同步的主题色
+        restoreSystemBars();
         web = new WebView(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -34,7 +46,11 @@ public class MainActivity extends Activity {
         s.setTextZoom(100);
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
-        // WebView 默认白底：改透明，首帧绘制前露出主题的 windowBackground（= 页面底色），深色模式不闪白
+        // WebView 默认白底：改透明，网页首帧绘制前露出的是窗口底色，而不是一块白。
+        // 窗口底色不闪的前提：① 主题（values / values-night 的 page_bg）与 app 内选的明暗一致，或者
+        // ② 网页曾在当前系统明暗下同步过系统栏，restoreSystemBars() 已把窗口底色换成那次的颜色。
+        // 两条都不满足时（首次安装、或刚在另一种系统明暗下改了外观），这一次冷启动仍会先露出主题底色，
+        // 直到 boot.js 的 applyTheme() 经 IPRouteShell 同步；此后恢复正常。
         web.setBackgroundColor(Color.TRANSPARENT);
         web.addJavascriptInterface(new SystemBarsBridge(this), "IPRouteShell");
         setContentView(web);
@@ -42,15 +58,44 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * 冷启动时按「当前系统明暗」那一份记录铺好系统栏与窗口底色；没有记录（首次安装）或记录损坏时沿用主题默认。
+     *
+     * 为什么按系统明暗分两份：默认外观「清晰 · 跟随系统」下，网页的颜色由系统明暗决定。只记一份的话，
+     * 白天记下白色，晚上系统转深色后冷启动会先铺白色、再被网页改成深色——正是这里要避免的闪屏。
+     * 分开记之后，每份记录对应「这种系统明暗下网页实际用的颜色」：选了科技 / 深色 / 浅色的用户，
+     * 两份最终都会是网页固定的那一种颜色。
+     *
+     * 仍会闪一下的情况：
+     * - 系统的启动预览窗（进程起来之前系统按 XML 主题画的那一帧，Android 12+ 是启动画面）只认 res/values*，
+     *   app 内选的主题和系统明暗不一致时，这一帧仍是主题色，壳在代码里改不了；
+     * - 某一份记录过期：在一种系统明暗下改了外观，另一种明暗下第一次冷启动仍按旧记录铺色，网页同步后即更新。
+     */
+    private void restoreSystemBars() {
+        SharedPreferences p = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String slot = slotOf(this);
+        String hex = p.getString(slot + ".color", null);
+        if (hex == null || !HEX.matcher(hex).matches()) return;
+        int color = Color.parseColor(hex);
+        getWindow().setBackgroundDrawable(new ColorDrawable(color));
+        applySystemBars(this, color, p.getBoolean(slot + ".lightIcons", true));
+    }
+
+    /** 当前系统明暗对应的记录名：night / day */
+    static String slotOf(Context c) {
+        int night = c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        return night == Configuration.UI_MODE_NIGHT_YES ? "night" : "day";
+    }
+
+    /**
      * 页面 → 壳的唯一桥（JS 名 IPRouteShell），只做一件事：改系统状态栏 / 导航栏的颜色与图标深浅。
+     * 附带把这次的颜色记到本机（只存颜色串与图标深浅，供下次冷启动在首帧前铺色），不存页面的任何其它内容。
      *
      * ⚠ 安全边界：addJavascriptInterface 注入的对象对页面里的所有脚本都可见——包括网架图按需加载的
      * 第三方地图脚本（腾讯地图 / 天地图）。所以这个类只暴露一个改颜色的方法：入参严格校验，
-     * 不读写文件、不打开页面或 Intent、不返回任何数据。不要往这里加别的能力；确有需要请另开受控通道，
-     * 并先评估第三方脚本可调用的风险。
+     * 不读文件、不打开页面或 Intent、不返回任何数据；写入的只有上面那两个值，第三方脚本调用最多让下次启动的
+     * 系统栏换个颜色。不要往这里加别的能力；确有需要请另开受控通道，并先评估第三方脚本可调用的风险。
      */
     static final class SystemBarsBridge {
-        private static final Pattern HEX = Pattern.compile("^#[0-9A-Fa-f]{6}$");
         private final WeakReference<Activity> ref;
 
         SystemBarsBridge(Activity activity) {
@@ -58,7 +103,7 @@ public class MainActivity extends Activity {
         }
 
         /**
-         * @param hex        系统栏颜色，只接受 #RRGGBB（不透明）；不合规直接忽略
+         * @param hex        系统栏颜色，只接受 #RRGGBB（不透明）；不合规直接忽略，也不记录
          * @param lightIcons true = 浅色图标（配深色底），false = 深色图标（配浅色底）
          */
         @JavascriptInterface
@@ -67,6 +112,11 @@ public class MainActivity extends Activity {
             final int color = Color.parseColor(hex);
             final Activity a = ref.get();
             if (a == null) return;
+            // SharedPreferences 可在任意线程写，apply() 异步落盘
+            a.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                    .putString(slotOf(a) + ".color", hex.toUpperCase(Locale.ROOT))
+                    .putBoolean(slotOf(a) + ".lightIcons", lightIcons)
+                    .apply();
             // JS 桥方法跑在 WebView 的后台线程上，改窗口必须回主线程
             a.runOnUiThread(() -> applySystemBars(a, color, lightIcons));
         }

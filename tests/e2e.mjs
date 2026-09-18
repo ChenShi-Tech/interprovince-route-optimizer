@@ -2072,7 +2072,7 @@ const tests = [
   {
     id: 'TH-02', section: '外观主题', title: '主题偏好刷新后保持，首帧即生效；「跟随系统」随系统明暗切换',
     steps: '选「科技」→ 刷新 → 检查首个脚本执行时的 data-theme；改回「清晰 · 跟随系统」→ 模拟系统深色 / 浅色',
-    expected: '刷新后 data-theme 仍为 tech，且在应用脚本运行前（DOMContentLoaded 之前）已设好；跟随系统时系统切深色 → clear-dark、切浅色 → clear',
+    expected: '刷新后 data-theme 仍为 tech，且在应用脚本运行前（DOMContentLoaded 之前）已设好，<meta name="theme-color"> 同时已是科技的 --system-bar；跟随系统时系统切深色 → clear-dark、切浅色 → clear',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.waitForSelector('.card.plan');
@@ -2081,13 +2081,20 @@ const tests = [
       // 记录首帧：<body> 一出现（此时只跑过 <head> 里的脚本，应用脚本还没执行）就读 data-theme
       await page.addInitScript(() => {
         new MutationObserver((m, o) => {
-          if (document.body) { window.__th0 = document.documentElement.getAttribute('data-theme'); o.disconnect(); }
+          if (document.body) {
+            window.__th0 = document.documentElement.getAttribute('data-theme');
+            const m = document.querySelector('meta[name="theme-color"]');
+            window.__meta0 = m && m.getAttribute('content');
+            o.disconnect();
+          }
         }).observe(document, { childList: true, subtree: true });
       });
       await page.reload(DCL);
       await page.waitForSelector('.card.plan');
       const t0 = await page.evaluate(() => window.__th0), t1 = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
       ok(t0 === 'tech' && t1 === 'tech', `刷新后应保持 tech（首帧 ${t0}，启动后 ${t1}）`);
+      const meta0 = await page.evaluate(() => window.__meta0);
+      ok(meta0 === '#070E1A', `首帧（应用脚本执行前）theme-color 应已是科技的 #070E1A，实际 ${meta0}`);
       await page.click('#btn-theme');
       await page.click('#theme-body [data-ui-style="clear"]');
       await page.click('#theme-body [data-ui-mode="system"]');
@@ -2105,7 +2112,7 @@ const tests = [
       const fixed = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
       await page.emulateMedia({ colorScheme: 'light' });
       ok(fixed === 'clear', `选定浅色后系统切深色不应跟随，实际 ${fixed}`);
-      set(`刷新保持 tech（首帧即 ${t0}）；跟随系统 深→${d} 浅→${l}；选定浅色后不跟随（${fixed}）`);
+      set(`刷新保持 tech（首帧即 ${t0}，theme-color ${meta0}）；跟随系统 深→${d} 浅→${l}；选定浅色后不跟随（${fixed}）`);
     },
   },
   {

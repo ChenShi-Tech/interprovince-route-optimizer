@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
-<!-- theme-color 是浏览器 / 系统状态栏色，只能写字面值（不认 CSS 变量）：这里是清晰浅色的初值，
-     启动后由 ui/theme.js 的 syncSystemBars() 按当前主题的 --system-bar 改写 -->
+<!-- theme-color 是浏览器 / 系统状态栏色，只能写字面值（不认 CSS 变量）：这里是清晰浅色的初值。
+     紧跟在样式表后面的内联脚本在首帧前就按当前主题的 --system-bar 改写；启动后 ui/theme.js 的 syncSystemBars() 再同步一次 -->
 <meta name="theme-color" content="#ffffff">
 <title>省间中长期交付成本与报价测算</title>
 <script>
@@ -996,6 +996,18 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
   .libgrid{gap:0 32px}
 }
 </style>
+<script>
+/* 首帧同步 <meta name="theme-color">：此处 data-theme 已由 <head> 前面的内联脚本设好、样式表也已解析，
+   直接读当前主题的 --system-bar 令牌（本段不写任何颜色字面值），是合法的 #RRGGBB 才写入。
+   不等应用脚本（在 <body> 末尾、体积大）：否则非默认主题要先以 #ffffff 露一下浏览器 / 系统状态栏。 */
+(function(){
+  try{
+    var v=getComputedStyle(document.documentElement).getPropertyValue('--system-bar').trim().toUpperCase();
+    var m=document.querySelector('meta[name="theme-color"]');
+    if(m&&/^#[0-9A-F]{6}$/.test(v)) m.setAttribute('content',v);
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 <div id="app">
@@ -1062,7 +1074,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 13:19';
+const BUILD_TIME='2026-09-18 13:27';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
