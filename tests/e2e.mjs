@@ -1615,7 +1615,7 @@ const tests = [
   {
     id: 'UX-05', section: '体验修复', title: 'FR-2 瓦片级探针状态机（mock Image 两分支）',
     steps: '切天地图，注入 T 桩与受控 Image 桩，分别触发探针 onload / onerror',
-    expected: 'onload(naturalWidth≥256) → 绿字「密钥有效」；onerror → 红字「瓦片请求被拒/网络不可达」；全程无「加载成功」假阳性',
+    expected: 'onload(naturalWidth≥256) → 绿字「密钥有效」；onerror → 自动切回内置拓扑图 + 红字降级说明（区分「密钥无效/被风控拦截」与「网络不可达」，grid-map-device-fixes D4 推翻 D-2 保留容器口径）；全程无「加载成功」假阳性',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-map');
@@ -1640,11 +1640,12 @@ const tests = [
       await page.waitForTimeout(100);
       ok((await page.locator('#tk-msg').innerText()).includes('密钥有效'), 'onload 分支应显示「密钥有效，底图可用」');
       await page.evaluate(() => { window.__imgOk = false; tkMsg('ok'); });
-      await page.waitForTimeout(250);
-      const msg = await page.locator('#tk-msg').innerText();
-      ok(msg.includes('瓦片请求被拒') || msg.includes('网络不可达'), `onerror 分支应红字定性，实际「${msg.slice(0, 50)}」`);
-      ok(!msg.includes('加载成功'), '不得再出现「加载成功」假阳性（清单 F2）');
-      set(`onload→密钥有效；onerror→「${msg.slice(0, 22)}…」；无假阳性`);
+      await page.waitForTimeout(400);
+      // grid-map-device-fixes D4（推翻 PRD D-2）：onerror 不再保留无底图叠加物，自动切回拓扑图 + 红字说明
+      ok(await page.evaluate(() => state.mapProvider) === 'svg', 'onerror 应自动降级回内置拓扑图');
+      const note = await page.evaluate(() => document.getElementById('v-map').innerText);
+      ok(note.includes('密钥无效或被风控拦截') && note.includes('已自动切回内置拓扑图'), `降级红字说明应在场，实际「${note.slice(0, 60)}」`);
+      set(`onload→密钥有效；onerror→自动降级 svg + 红字说明（密钥无效或被风控拦截）`);
     },
   },
   {
@@ -1951,6 +1952,221 @@ const tests = [
       const n2 = await page.evaluate(() => [...document.querySelectorAll('#map-view svg circle[fill="none"]')].length);
       ok(n2 === 0, `关闭后区域环应消失，实际 ${n2} 个`);
       set(`区域环 ${r1.n} 个 / ${r1.colors.length} 色；六区域图例+依据在场；浮层含归属；关闭恢复默认`);
+    },
+  },
+
+  /* ================= 真机修复（v1.2.0 真机验收反馈，change: grid-map-device-fixes） ================= */
+  {
+    id: 'MF-01', section: '真机修复', title: '页头一行化：360px 视口单行（D1）',
+    steps: '360px 视口打开应用；再在费率库修改一条费率后回页头',
+    expected: '标题/徽章/？按钮同行（bottom 差≤2px）且无横向溢出；徽章默认「公开数据」，改价后「费率已本地修改」仍单行',
+    viewport: { width: 360, height: 740 },
+    async run(page, set) {
+      const measure = () => page.evaluate(() => {
+        const bs = [document.querySelector('h1'), document.getElementById('verBadge'), document.getElementById('btn-help')].map(e => e.getBoundingClientRect());
+        return {
+          centers: bs.map(b => Math.round((b.top + b.bottom) / 2)), heights: bs.map(b => Math.round(b.height)),
+          badge: document.getElementById('verBadge').textContent,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          hdH: Math.round(document.querySelector('.hd-top').getBoundingClientRect().height),
+        };
+      });
+      // 单行判据：三元素垂直中心对齐（.hd-top align-items:center）、无换行（中心差≤3px 且各行高≤按钮高）、无横向溢出
+      const oneLine = m => new Set(m.centers).size === 1 || (Math.max(...m.centers) - Math.min(...m.centers) <= 3 && m.heights.every(h => h <= 40));
+      await page.goto(G, DCL);
+      const m = await measure();
+      ok(m.badge === '公开数据', `徽章默认文案应为「公开数据」，实际「${m.badge}」`);
+      ok(m.overflow <= 1, `360px 视口不应横向溢出，实际 ${m.overflow}px`);
+      ok(oneLine(m), `页头三元素应单行居中，centers=${m.centers} heights=${m.heights}`);
+      await page.click('#t-lib');
+      await page.evaluate(() => setCh(0, 't', 123.4));
+      await page.click('#t-calc');
+      const m2 = await measure();
+      ok(m2.badge === '费率已本地修改', `改价后徽章应为「费率已本地修改」，实际「${m2.badge}」`);
+      ok(m2.overflow <= 1 && oneLine(m2), `改价后页头仍应单行，centers=${m2.centers} heights=${m2.heights} 溢出=${m2.overflow}px`);
+      set(`默认「公开数据」单行（溢出 ${m.overflow}px）；改价后「费率已本地修改」仍单行`);
+    },
+  },
+  {
+    id: 'MF-02', section: '真机修复', title: '拓扑图触摸：平移/捏合/双击复位 + 拖动不误触（D2）',
+    steps: '合成 pointer 事件：单指拖动（>6px）、拖动同步派发 click、再普通点通道、双指捏合、双击',
+    expected: '拖动平移 viewBox 且不触发过滤；拖动后的 click 被吞、之后普通点击照常；捏合改变视野宽度；双击回到聚焦视野',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      const vb0 = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      const mkPtr = (t, id, x, y) => document.getElementById('map-view').dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 1 }));
+      // 单指拖动（位移 120px > 阈值 6px）→ 平移
+      await page.evaluate(() => {
+        const mk = (t, id, x, y) => document.getElementById('map-view').dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 1 }));
+        mk('pointerdown', 1, 300, 200); mk('pointermove', 1, 180, 200); mk('pointerup', 1, 180, 200);
+      });
+      await page.waitForTimeout(100);
+      const r1 = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: !!state.mapView, mh: state.mustHave.length }));
+      ok(r1.mv && r1.vb !== vb0, `单指拖动应平移视野：${vb0.slice(0, 20)}… → ${r1.vb.slice(0, 20)}…`);
+      ok(r1.mh === 0, '拖动不得触发通道必经过滤');
+      // 拖动结束后的 click（真实浏览器在 pointerup 同一任务内同步派发）应被吞掉
+      await page.evaluate(() => {
+        const mk = (t, id, x, y) => document.getElementById('map-view').dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 1 }));
+        mk('pointerdown', 1, 300, 200); mk('pointermove', 1, 200, 200); mk('pointerup', 1, 200, 200);
+        document.querySelector('#map-view svg [data-chan]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      await page.waitForTimeout(200);
+      ok((await page.evaluate(() => state.mustHave.length)) === 0, '拖动后的 click 应被吞掉，不触发过滤');
+      // 拖动结束后再普通点击 → 过滤照常生效（点击能力未被破坏）
+      const cid = await page.evaluate(() => document.querySelector('#map-view svg [data-chan]').getAttribute('data-chan'));
+      await page.evaluate(id => document.querySelector(`#map-view svg [data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), cid);
+      await page.waitForTimeout(300);
+      ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([cid]), '拖动后普通点击仍应触发必经过滤');
+      await page.evaluate(id => document.querySelector(`#map-view svg [data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), cid);
+      await page.waitForTimeout(300);
+      // 双指捏合（间距 200→120，因子 0.6 → 视野放宽）
+      const vbA = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      await page.evaluate(() => {
+        const mk = (t, id, x, y) => document.getElementById('map-view').dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: id === 1 }));
+        mk('pointerdown', 1, 200, 200); mk('pointerdown', 2, 400, 200);
+        mk('pointermove', 1, 240, 200); mk('pointermove', 2, 360, 200);
+        mk('pointerup', 1, 240, 200); mk('pointerup', 2, 360, 200);
+      });
+      await page.waitForTimeout(100);
+      const w = s => +s.split(' ')[2];
+      const vbB = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      ok(w(vbB) > w(vbA) * 1.2, `双指捏合应缩放视野：宽 ${w(vbA)} → ${w(vbB)}`);
+      // 双击复位回聚焦视野（= 初始 vb0）
+      await page.evaluate(() => document.getElementById('map-view').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true })));
+      await page.waitForTimeout(100);
+      const vbC = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: state.mapView }));
+      ok(vbC.mv === null && vbC.vb === vb0, `双击应复位到聚焦视野：${vbC.vb.slice(0, 24)}…`);
+      set(`平移（${vb0.slice(0, 16)}…→${r1.vb.slice(0, 16)}…）；拖动 click 被吞、普通点击照常；捏合宽 ${w(vbA)}→${w(vbB)}；双击复位`);
+    },
+  },
+  {
+    id: 'MF-03', section: '真机修复', title: '触摸视野保持与复位时机（D2）',
+    steps: '手动缩放后切 Tab 再回来；回测算页点另一张路线卡片再进网架图',
+    expected: '切 Tab 视野保持（重绘从 state.mapView 恢复）；选中方案变化后视野复位到聚焦且 mapView 清空',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.evaluate(() => topoViewSet({ x: 40, y: 30, w: 330, h: 215 }));
+      const vbZoom = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      await page.click('#t-calc');
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      ok((await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'))) === vbZoom, '切 Tab 回来视野应保持');
+      await page.click('#t-calc');
+      await page.locator('.rc').nth(1).click();   // 选中方案变化 → 复位
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      const vb2 = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: state.mapView }));
+      ok(vb2.vb !== vbZoom && vb2.mv === null, `选中方案变化后视野应复位：${vbZoom.slice(0, 20)}… → ${vb2.vb.slice(0, 20)}…`);
+      set(`切 Tab 视野保持（${vbZoom.slice(0, 20)}…）；点路线卡片后复位（${vb2.vb.slice(0, 20)}…）`);
+    },
+  },
+  {
+    id: 'MF-04', section: '真机修复', title: '缩放后导出快照所见即所得（D2）',
+    steps: '手动缩放后调用 exportTopo，拦截导出 SVG 源检查 viewBox',
+    expected: '导出序列化包含当前所见 viewBox（与画面一致）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.evaluate(() => topoViewSet({ x: 60, y: 40, w: 300, h: 196 }));
+      const vb = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      const src = await page.evaluate(() => new Promise(res => {
+        let got = '';
+        const origURL = URL.createObjectURL, origClick = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function () {};   // 不真下载（MAP-05 同款拦截）
+        URL.createObjectURL = b => { if (b.type === 'image/svg+xml') b.text().then(t => { got = t; }).catch(() => {}); return origURL(b); };
+        try { exportTopo(); } catch (e) { URL.createObjectURL = origURL; HTMLAnchorElement.prototype.click = origClick; return res('ERR:' + e); }
+        setTimeout(() => { URL.createObjectURL = origURL; HTMLAnchorElement.prototype.click = origClick; res(got); }, 2500);
+      }));
+      ok(typeof src === 'string' && src.startsWith('<svg'), '导出应序列化 SVG 源');
+      ok(src.includes(`viewBox="${vb}"`), `导出应包含当前所见 viewBox「${vb}」`);
+      set(`缩放后导出源含 viewBox=${vb}`);
+    },
+  },
+  {
+    id: 'MF-05', section: '真机修复', title: '清空搜索恢复路线视野（D3）',
+    steps: '搜索「锦屏」点命中聚焦后清空输入',
+    expected: '聚焦后视野收拢；清空后视野回到路线聚焦且搜索聚焦清除，sel/mustHave 不变',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      const vb0 = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      await page.fill('#map-q', '锦屏');
+      await page.waitForTimeout(150);
+      await page.locator('#map-search-out button', { hasText: '锦屏换流站' }).first().click();
+      await page.waitForTimeout(300);
+      const vb1 = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      ok(vb1 !== vb0, `聚焦应收拢视野：${vb0.slice(0, 20)}… → ${vb1.slice(0, 20)}…`);
+      await page.fill('#map-q', '');
+      await page.waitForTimeout(450);   // 清空触发 renderMap（80ms 延时 + SVG 注入）
+      const vb2 = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      ok(vb2 === vb0, `清空后应回到路线聚焦：${vb2.slice(0, 24)}… vs ${vb0.slice(0, 24)}…`);
+      ok((await page.evaluate(() => state.mapFocusLL)) === null, '清空后搜索聚焦应清除');
+      ok((await page.evaluate(() => state.sel)) === 0, '清空不得改变选中方案');
+      ok((await page.evaluate(() => state.mustHave.length)) === 0, '清空不得改变必经过滤');
+      set(`聚焦收拢后清空 → 回到路线聚焦；sel/mustHave 不变`);
+    },
+  },
+  {
+    id: 'MF-06', section: '真机修复', title: '无密钥进天地图视图：SDK 常驻也不画（D4）',
+    steps: '注入天地图 SDK 桩（模拟本页已常驻），无密钥切入天地图视图',
+    expected: '不绘制任何叠加物（SDK 桩零实例化），直接降级为网架清单并提示填密钥',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.evaluate(() => {
+        // 模拟 SDK 已在本页常驻（天地图 api 端点对无效 tk 仍下发 SDK 的真实行为）
+        let n = 0;
+        const Cls = function () { n++; this.centerAndZoom = () => {}; this.clearOverLays = () => {}; this.addOverLay = () => {}; };
+        window.__tdNew = () => n;
+        window.T = { Map: Cls, LngLat: function () {}, Point: function () {}, Icon: function () {}, Marker: Cls, Polyline: Cls, Label: Cls, Protocol: { value: 'https:' }, Domain: 'gov.cn' };
+        state.tiandituKey = ''; tdReady = false;
+      });
+      await page.locator('#v-map .seg.small button', { hasText: '天地图' }).click();
+      await page.waitForTimeout(400);
+      ok(await page.evaluate(() => state.mapProvider) === 'td', '应已切入天地图视图');
+      ok(await page.evaluate(() => window.__tdNew()) === 0, 'SDK 桩不得被实例化（无密钥一律不画）');
+      ok(await page.evaluate(() => document.getElementById('map-view').style.display === 'none'), '地图容器应隐藏');
+      ok(await page.evaluate(() => document.getElementById('fallback').style.display === 'block'), '应直接降级为网架清单');
+      const msg = await page.locator('#tk-msg').innerText();
+      ok(msg.includes('尚未填入密钥'), `应提示填入密钥，实际「${msg.slice(0, 40)}」`);
+      set('SDK 常驻桩零实例化；容器隐藏 + 网架清单 + 提示填密钥');
+    },
+  },
+  {
+    id: 'MF-07', section: '真机修复', title: '错误密钥瓦片探针失败：自动降级拓扑图（D4）',
+    steps: '注入 SDK 桩 + mock Image（onerror）+ fetch 立即 resolve；填入密钥点「应用密钥」',
+    expected: '探针 onerror 自动切回内置拓扑图并显示红字说明（区分原因），mapProvider=svg 持久化，不出现无底图叠加物画面',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.evaluate(() => {
+        const Cls = function () { this.centerAndZoom = () => {}; this.clearOverLays = () => {}; this.addOverLay = () => {}; };
+        window.T = { Map: Cls, LngLat: function () {}, Point: function () {}, Icon: function () {}, Marker: Cls, Polyline: Cls, Label: Cls, Protocol: { value: 'https:' }, Domain: 'gov.cn' };
+        window.__imgOk = false;
+        window.Image = class {
+          set src(v) { setTimeout(() => { if (window.__imgOk) { this.naturalWidth = 256; if (this.onload) this.onload(); } else if (this.onerror) this.onerror(); }, 10); }
+        };
+        window.fetch = () => Promise.resolve({ ok: true });
+      });
+      await page.locator('#v-map .seg.small button', { hasText: '天地图' }).click();
+      await page.waitForTimeout(300);
+      await page.fill('#i-tk', 'BADKEY0000');
+      await page.locator('#v-map .row3 button', { hasText: '应用密钥' }).click();
+      await page.waitForTimeout(500);
+      ok(await page.evaluate(() => state.mapProvider) === 'svg', '探针失败应自动切回内置拓扑图');
+      const note = await page.evaluate(() => document.getElementById('v-map').innerText);
+      ok(note.includes('密钥无效或被风控拦截') && note.includes('已自动切回内置拓扑图'), `降级红字说明应在场，实际「${note.slice(0, 80)}」`);
+      const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.map') || '{}'));
+      ok(saved.mapProvider === 'svg', '降级选择应持久化');
+      set('探针 onerror → 自动降级 svg + 红字说明（密钥无效或被风控拦截）；持久化');
     },
   },
 ];

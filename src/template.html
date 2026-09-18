@@ -86,8 +86,10 @@ header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdro
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
-/* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
-.help-link{border:.5px solid rgba(24,95,165,.35);background:#fff;color:var(--blue);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap}
+/* FR-3：页头常驻帮助入口，任意时刻可重看新手导览。
+   change: grid-map-device-fixes（D1）：文字按钮改 ？ 圆钮——36px 点按区满足手指点按
+   （spec: experience-fixes ≥32px 等效区域），视觉直径≈36px，窄屏与徽章、标题同行 */
+.help-link{flex:none;width:36px;height:36px;border:.5px solid rgba(24,95,165,.35);background:#fff;color:var(--blue);border-radius:50%;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 /* overflow-x 用 clip 而不是 hidden（M14）：hidden 会把计算值 overflow-y 变成 auto，main 随之
@@ -233,8 +235,11 @@ td b{font-weight:600}
    contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
 #map-view{contain:paint;position:relative;z-index:0}
 /* REQ-603+702：svg 拓扑模式容器高度随绘制纵横比自适应（viewBox 660×430），
-   仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则 */
-#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430}
+   仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则。
+   change: grid-map-device-fixes（D2）：拓扑模式接管触摸——touch-action:none 阻止浏览器
+   手势（滚动/双指缩放页面）与自定义捏合冲突；user-select:none 防拖动时选中 SVG 文字。
+   qq/td 模式不设 touch-action，保留底图原生手势。 */
+#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430;touch-action:none;user-select:none;-webkit-user-select:none}
 #fallback{display:none;padding:16px;font-size:12px;color:var(--ink2);overflow:auto}
 .empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
 .empty-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px}
@@ -640,8 +645,10 @@ details.adv.boxed>summary{font-size:12.5px}
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
       <div style="display:flex;align-items:center;gap:8px;flex:none">
-        <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
-        <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
+        <!-- change: grid-map-device-fixes（D1 页头一行化）：徽章默认文案缩短（公开价格 · 含历史与估算参数→公开数据），
+             帮助文字按钮改 ？ 圆钮——360px 视口三元素单行；lib.js setCh 的「费率已本地修改」更短，天然满足单行 -->
+        <span class="badge" id="verBadge">公开数据</span>
+        <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">？</button>
       </div>
     </div>
   </header>
