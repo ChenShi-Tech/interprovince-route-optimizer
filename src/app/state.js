@@ -1,17 +1,67 @@
 /* 应用状态与本地持久化。UI 层专用；算法层不引用本文件的任何内容。 */
+/* 参数面板里各项的默认值：初始状态与「恢复默认」共用；与之不同的项会在主卡口径摘要里标色计数。
+   送端省内网损默认另计、区域网损默认计入第三周期参考值（2026-09-17）：长三角跨省中长期实施细则（2026）第三十六条
+   规定落地侧价格含「送出省外送输电价格（含送出省外送输电网损）」与华东跨省输电网损，而 1077号附件1 注4 的送出价
+   不含线损、线损率单列。区域网损率仍是历史参考值，结果页保留待核实提示。 */
+const PARAM_DEFAULTS={
+  includeDstCost:false, sourceQuote:'plant', originLossMode:'separate',
+  includeRegion:true, regionChargeMode:'network', regionLossMode:'historical',
+  lossBearer:1, tradableOnly:false, occPct:0,
+  // 受端到户（费用边界=到户已列费用时生效）：电网主体 / 电压档别为 null 时取该省默认主体、最高电压档；
+  // 默认两部制 + 最高电压档即原 220kV 及以上两部制电量电价，旧口径不变
+  dstEntity:null, dstTier:null, dstBilling:'twopart', dstCapMode:'none', dstLoadFactor:null, dstSysOpFee:null,
+  srcStation:null,   // 送端电站专属送出价条目（1077号附件1 注4），null = 通用送出价
+};
+const PARAM_DEFAULTS_VER=2;   // 默认值口径版本：旧存档里自动存下的网损选项按新默认重置一次
 let state={
   from:'SC', to:'JS', qty:1000, hours:1,
-  pGen:320, pDst:450, pNet:112, fund:26.6,
-  lossBearer:1, K:6, maxHops:2, maxDetour:2.0, degrade:0.10, includeDstCost:true,
+  pGen:320, pNet:112, fund:26.6,
+  // 路径范围不再开放给用户：跳数取算法上限 MAX_HOPS（algo/solve.js），绕行不限，按价格从低到高排序
+  maxHops:10, maxDetour:null, degrade:0.10,
+  marketMode:'mlt',
+  pGenManual:false,
   sel:0, showBad:false, sortBy:'A', showAll:false,
-  includeRegion:true,
+  ...PARAM_DEFAULTS, regionLossRates:{},
+  tradeDate:new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}),
   // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
-  mustHave:[], compOpen:false,
+  mustHave:[],
   mapProvider:'svg', tiandituKey:''
 };
 let stored=null;
+/* 应用内确认框：原生 confirm() 在安卓 WebView（壳未设 WebChromeClient）与 iOS WKWebView
+   （未挂 WKUIDelegate）中都不显示、且恒按「取消」返回 false，故三端统一自绘。
+   返回 Promise<boolean>；已有弹框未关闭时再次调用直接按「取消」结算，避免叠层。 */
+let _cfmOpen=false;
+function uiConfirm(title,msg,okText,cancelText){
+  if(_cfmOpen) return Promise.resolve(false);
+  _cfmOpen=true;
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:4000;background:rgba(20,24,32,.45);display:flex;align-items:center;justify-content:center;padding:28px';
+    ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:#fff;border-radius:14px;max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:0 12px 40px rgba(0,0,0,.22)">
+      <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">${esc(title)}</div>
+      <div style="font-size:12.5px;color:var(--ink2);line-height:1.7;white-space:pre-line">${esc(msg)}</div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn ghost" data-r="0" style="flex:1">${esc(cancelText)}</button>
+        <button class="btn" data-r="1" style="flex:1;font-size:14px;padding:10px">${esc(okText)}</button>
+      </div></div>`;
+    const done=ok=>{ _cfmOpen=false; ov.remove(); document.removeEventListener('keydown',onKey); res(ok); };
+    const onKey=e=>{ if(e.key==='Escape') done(false); };
+    ov.addEventListener('click',e=>{
+      const b=e.target.closest('button[data-r]');
+      if(b) done(b.dataset.r==='1');
+      else if(e.target===ov) done(false);   // 点遮罩视为取消
+    });
+    document.addEventListener('keydown',onKey);
+    document.body.appendChild(ov);
+    ov.querySelector('button[data-r="1"]').focus();
+  });
+}
 /* ================= 存储 ================= */
+/* 存储故障可见化（spec: local-persistence）：写入失败（配额满/隐私模式）只置一次性标记，
+   由测算页渲染一条常驻提示，会话内不重复弹。渲染路径内禁止任何 setItem 调用（防循环）。 */
+let _storageBroken=false;
 function loadStored(){
   try{
     const a=localStorage.getItem(LS_LIB);
@@ -21,9 +71,18 @@ function loadStored(){
       // 否则由用户决定丢弃或暂留——静默使用旧覆盖会算出过期结果
       if(s.ch&&s.ch.length===CH.length){
         if(s.pv&&s.pv===PRICE_VERSION){ CH=s.ch; }
-        else if(confirm('本地费率修改基于旧版价格数据（priceVersion 不一致），继续使用可能算出过期结果。\n\n「确定」丢弃本地修改，恢复当前核定值；「取消」暂保留（费率库会提示核对）。')){
-          localStorage.removeItem(LS_LIB);
-        } else { CH=s.ch; state._libStale=true; }
+        else{
+          // REQ-602：priceVersion 不一致必须由用户决定丢弃或暂留。确认框是异步的，
+          // 先按保守口径暂留并置 _libStale（费率库会提示核对，等同原「取消」分支），
+          // 用户选「丢弃」再回滚核定值并重算
+          CH=s.ch; state._libStale=true;
+          uiConfirm('费率本地修改版本不一致','本地费率修改基于旧版价格数据（priceVersion 不一致），继续使用可能算出过期结果。','丢弃本地修改','暂保留').then(ok=>{
+            if(!ok) return;
+            localStorage.removeItem(LS_LIB);
+            CH=DATA.CH.map(c=>({...c})); state._libStale=false;
+            state._res=solveState(); renderCalc();
+          });
+        }
       }
     }
     const b=localStorage.getItem(LS_LAST);
@@ -31,19 +90,31 @@ function loadStored(){
       const s=JSON.parse(b);
       const sameBuild=(s._bt===BUILD_TIME);   // 价格数据版本变化时丢弃过期的本地价格改动
       delete s._bt;
+      // 旧版现货界面存档迁移到中长期节点交付口径，保留用户价格。
+      if(!s.marketMode){ s.marketMode='mlt'; s.includeDstCost=false; s.regionChargeMode='network'; }
+      if(Number.isFinite(s.pGen)) s.pGenManual=true;
+      // 已下线的输入（受端目标交付价、跳数/绕行、排序口径、交付日期）不从旧存档恢复，一律取固定口径
+      for(const k of ['pDst','pDstManual','maxHops','maxDetour','sortBy','tradeDate']) delete s[k];
+      // 旧版存档会把当时的默认网损选项一并存下，无法区分是否手选；默认口径版本变化时按新默认重置这两项
+      if(s._pdv!==PARAM_DEFAULTS_VER){ delete s.originLossMode; delete s.regionLossMode; }
+      delete s._pdv;
       Object.assign(state,s);
       state._stalePrice=!sameBuild;
     }
     const m=localStorage.getItem(LS_MAP); if(m) Object.assign(state,JSON.parse(m));
   }catch(e){}
 }
-function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,pv:PRICE_VERSION,at:BUILD_TIME})); state._libStale=false; }catch(e){} }
+function saveLib(){ try{localStorage.setItem(LS_LIB,JSON.stringify({ch:CH,pv:PRICE_VERSION,at:BUILD_TIME})); state._libStale=false; }catch(e){ _storageBroken=true; } }
 function saveLast(){
   try{
-    // tradableOnly（REQ-203）与 occPct（REQ-302）为会话内口径，按 PRD 不持久化
-    const s=Object.assign({},state,{_bt:BUILD_TIME});
-    delete s.tradableOnly; delete s.occPct;
+    // tradableOnly（REQ-203）与 occPct（REQ-302）为会话内口径，按 PRD 不持久化；
+    // 运行时产物同样不入档：_res 含 rows+byA/byB/byC 四份引用（JSON 序列化不去重，
+    // 最坏省对达 12MB，撞穿 localStorage 配额后所有持久化会静默失效），_ai 挂着同一份
+    // 结果，_libStale/_stalePrice 是会话内标志。启动时 boot 无条件重算 _res，剥离无消费方。
+    const s=Object.assign({},state,{_bt:BUILD_TIME,_pdv:PARAM_DEFAULTS_VER});
+    delete s.tradableOnly; delete s.occPct; delete s.tradeDate;
+    delete s._res; delete s._ai; delete s._libStale; delete s._stalePrice;
     localStorage.setItem(LS_LAST,JSON.stringify(s));
-  }catch(e){}
+  }catch(e){ _storageBroken=true; }
 }
-function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){} }
+function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){ _storageBroken=true; } }

@@ -22,7 +22,7 @@ const j = html.lastIndexOf('</' + 'script>');
 
 const store = {}, dom = {};
 const mk = (id) => (dom[id] ||= { id, innerHTML: '', hidden: false, style: {}, textContent: '', className: '',
-  classList: { toggle() {}, add() {}, remove() {} }, value: '' });
+  classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, value: '' });
 const ctx = { console: { log() {} },
   document: { getElementById: mk, addEventListener() {},
     createElement: () => ({ click() {}, style: {}, setAttribute() {} }),
@@ -43,8 +43,10 @@ const problems = [];
 const ok = (c, l, d) => { if (c) { pass++; } else { fail++; problems.push(l + (d ? '（' + d + '）' : '')); } };
 
 /** 把 renderCalc 的渲染结果回写进模拟 DOM —— 真实浏览器会自动做这件事 */
+/** 测算页 + 参数弹出面板正文（参数输入框在面板里） */
+const pageHtml = () => G("document.getElementById('v-calc').innerHTML") + G("document.getElementById('sheet-body').innerHTML");
 function syncDom() {
-  const h = G("document.getElementById('v-calc').innerHTML");
+  const h = pageHtml();
   for (const m of h.matchAll(/id="(i-[a-z]+)"[^>]*value="([^"]*)"/g)) mk(m[1]).value = m[2];
   for (const m of h.matchAll(/<select id="(i-[a-z]+)"[\s\S]*?<\/select>/g)) {
     const sel = m[0].match(/<option value="([^"]*)" selected/);
@@ -64,21 +66,28 @@ function change(id, val) {
 }
 
 function boot(from, to) {
-  G(`state.from='${from}';state.to='${to}';state.showAll=true;state.maxHops=2;state.degrade=0.10;applyBothProv();state._res=solve(state, algoData());renderCalc();`);
+  G(`state.from='${from}';state.to='${to}';state.showAll=true;state.maxHops=MAX_HOPS;state.maxDetour=null;state.degrade=0.10;applyBothProv();state._res=solve(state, algoData());renderCalc();`);
   syncDom();
 }
 
 console.log('══ 一、切换受端省：自动按核定值核准（不需手动再点）══');
 boot('SC', 'JS');
+// 受端输配电价 / 基金输入框只在「到户已列费用」口径下渲染
+G('state.includeDstCost=true;state._res=solve(state, algoData());renderCalc();'); syncDom();
 for (const [code, name] of [['SX', '山西'], ['XJ', '新疆'], ['SH', '上海'], ['GX', '广西']]) {
   change('i-to', code);
   const net = G('state.pNet'), fund = G('state.fund');
   ok(net === PV[code].net && fund === PV[code].fund,
     `受端切换为${name}后自动核准`, `得到 ${net}/${fund}，应为 ${PV[code].net}/${PV[code].fund}`);
-  const rendered = G("document.getElementById('v-calc').innerHTML");
+  const rendered = pageHtml();
   ok(rendered.includes(`id="i-pnet" type="number" value="${PV[code].net}"`),
     `输入框同步显示${name}的核定值 ${PV[code].net}`);
   ok(rendered.includes(name), `取值依据区显示${name}`);
+}
+G('state.includeDstCost=false;state._res=solve(state, algoData());renderCalc();'); syncDom();
+{
+  const h = pageHtml();
+  ok(h.includes('id="i-dstcost"') && !h.includes('id="i-pnet"') && !h.includes('id="i-fund"'), '省间交易节点口径下不渲染受端输配电价与基金输入框');
 }
 
 console.log('══ 二、切换送端省：只更新送端，不动受端 ══');
@@ -103,8 +112,21 @@ change('i-region', '0');
 ok(G('state.includeRegion') === false, '区域电网费开关生效');
 change('i-degrade', '0.03');
 ok(Math.abs(G('state.degrade') - 0.03) < 1e-9, '成本阈值改 3% 生效', `得到 ${G('state.degrade')}`);
-change('i-hops', '3');
-ok(G('state.maxHops') === 3, '跳数上限改 3 生效');
+{
+  const h = G("document.getElementById('v-calc').innerHTML");
+  ok(['i-hops', 'i-detour', 'i-pdst', 'i-date'].every((id) => !h.includes(`id="${id}"`)), '跳数、绕行、受端目标交付价、交付日期输入均已移除');
+  ok(!h.includes('setSort('), '排序口径按钮已移除，固定按价格从低到高');
+  ok(G('state.maxHops') === G('MAX_HOPS') && G('MAX_HOPS') === 10 && G('state.maxDetour') === null && G('state.sortBy') === 'A', '跳数固定取上限 10、绕行不限、按价格排序');
+  const rows = G('state._res.rows');
+  ok(rows.every((r, k) => !k || r.feasible !== rows[k - 1].feasible || r.landed >= rows[k - 1].landed - 1e-9), '路线列表按价格从低到高排列');
+  // 旧存档里的跳数、绕行、目标交付价、交付日期、排序口径不得覆盖固定口径
+  store['iproute.v2.last'] = JSON.stringify({ from: 'SC', to: 'JS', maxHops: 2, maxDetour: 1.5, pDst: 999, pDstManual: true, tradeDate: '2026-08-02', sortBy: 'C', _bt: 'x' });
+  G('loadStored();');
+  ok(G('state.maxHops') === 10 && G('state.maxDetour') === null && G('state.pDst') === undefined && G('state.sortBy') === 'A' && G('state.tradeDate') !== '2026-08-02',
+    '旧存档中已下线的输入不会恢复');
+  G('saveLast();');
+  ok(!('tradeDate' in JSON.parse(store['iproute.v2.last'])), '交付日期不再持久化');
+}
 
 console.log('══ 四、手工覆盖受保护且可恢复 ══');
 boot('SC', 'JS');
@@ -150,18 +172,19 @@ for (const [f, t] of [['SC', 'JS'], ['YN', 'GD'], ['GS', 'SD'], ['SX', 'JS']]) {
 }
 G('state.includeDstCost=false;state._res=solve(state, algoData());renderCalc();');
 const hEx = G("document.getElementById('v-calc').innerHTML");
-ok(hEx.includes('送到受端省界'), '界面标签切换为「送到受端省界」');
+ok(hEx.includes('省界价格'), '界面标签切换为「省界价格」');
 ok(hEx.includes('已按口径排除'), '费用表标注受端省内费用已排除');
 ok(!hEx.includes('<td>受端省网输配电价</td>'), '费用表不再列出受端输配电价行');
 G('state.includeDstCost=true;state._res=solve(state, algoData());renderCalc();');
 const hIn = G("document.getElementById('v-calc').innerHTML");
-ok(hIn.includes('元/MWh 落地') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
+ok(hIn.includes('到户已列费用小计') && hIn.includes('<td>受端省网输配电价</td>'), '切回后恢复完整落地价口径');
 
 console.log('══ 七、行进方向、区域电网费与含线损计费口径 ══');
 {
   const RGOF = G('REGION_OF'), RG = G('RG');
   const ENV = "({REGION_OF:DATA.RGOF||{},RG:DATA.RG,includeRegion:true})";
-  G('state.showBad=true;state.includeRegion=true;state.includeDstCost=true;');
+  // 本节手算公式按「区域网损不计入、送端省内网损不另计」口径核对，与界面默认值解耦
+  G("state.showBad=true;state.includeRegion=true;state.includeDstCost=true;state.regionChargeMode='buyer';state.regionLossMode='exclude';state.originLossMode='included';");
 
   // ① 通行方向由数据逐条给定：锦苏为单向送电直流，德宝为双向互济直流
   const jsCh = G("CH.find(c=>c.n==='锦苏直流')"), db = G("CH.find(c=>c.n==='德宝直流')");
@@ -193,10 +216,10 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
   const r5 = G('state._res');
   const js = !r5.err && r5.rows.find((x) => x.edges[0].n === '锦苏直流');
   ok(!!js && Math.abs(js.comp.reg - RG['华东'] * 1000) < 1e-9 && js.regTransit === 0, `四川→江苏 经锦苏直流计买方区域华东电量电价 ${RG['华东'] * 1000}，无过境区域费`);
-  G("state.from='NM';state.to='BJ';state.maxHops=1;applyBothProv();state._res=solve(state, algoData());");
+  G("state.from='NM';state.to='BJ';state.maxHops=2;applyBothProv();state._res=solve(state, algoData());");
   const r6 = G('state._res');
-  const mj = !r6.err && r6.rows.find((x) => x.edges[0].n === '蒙京联络线');
-  ok(!!mj && Math.abs(mj.comp.reg - RG['华北'] * 1000) < 1e-9, `内蒙古→北京 同区域经蒙京联络线只计一次华北电量电价 ${RG['华北'] * 1000}`);
+  const mj = !r6.err && r6.rows.find((x) => x.edges.some((e) => e.n === '京冀联络线'));
+  ok(!!mj && Math.abs(mj.comp.reg - RG['华北'] * 1000) < 1e-9, `内蒙古→北京 同区域（蒙西—河北 + 京冀）只计一次华北电量电价 ${RG['华北'] * 1000}`);
   G("state.includeRegion=false;state._res=solve(state, algoData());");
   const r6b = G('state._res');
   ok(!r6b.err && r6b.rows.every((x) => x.comp.reg === 0), '不计入区域电网费时全部为 0');
@@ -209,7 +232,9 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
     if (r.err) continue;
     for (const x of r.rows) {
       const buyer = RGOF[t];
-      const expect = (RG[buyer] || 0) * 1000 + x.segs.filter((s) => s.e.regional && RGOF[s.b] !== buyer).reduce((a, s) => a + (RG[RGOF[s.b]] || 0) * 1000 * s.qOut, 0);
+      const exits = new Map();
+      for(const s of x.segs) if(s.e.regional && RGOF[s.b] !== buyer) exits.set(RGOF[s.b],s);
+      const expect = (RG[buyer] || 0) * 1000 + [...exits.values()].reduce((a,s)=>a+(RG[RGOF[s.b]]||0)*1000*s.qOut,0);
       checked++;
       if (Math.abs(x.comp.reg - expect) > 1e-6) bad++;
     }
@@ -220,12 +245,12 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
   G("state.from='CQ';state.to='SC';state.maxHops=1;state.maxDetour=9;applyBothProv();state._res=solve(state, algoData());");
   const r3 = G('state._res');
   const cs = !r3.err && r3.rows.find((x) => x.edges[0].n === '川渝联络线');
-  ok(!!cs && link.tRev !== link.t && cs.segs[0].t === link.tRev,
-    `重庆→四川 反向经川渝联络线，输电价取重庆送出省价格 ${cs && cs.segs[0].t}（存储方向四川为 ${link.t}）`);
+  ok(!!cs && link.tRev !== link.t && cs.segs[0].sf0 === link.tRev && cs.segs[0].t === 0,
+    `重庆→四川 反向经川渝联络线，输电价取重庆送出省价格 ${cs && cs.segs[0].sf0}（存储方向四川为 ${link.t}）`);
   G("state.from='SC';state.to='CQ';state._res=solve(state, algoData());");
   const r3b = G('state._res');
   const sc = !r3b.err && r3b.rows.find((x) => x.edges[0].n === '川渝联络线');
-  ok(!!sc && sc.segs[0].t === link.t, `四川→重庆 正向经川渝联络线，输电价取四川送出省价格 ${link.t}`);
+  ok(!!sc && sc.segs[0].sf0 === link.t && sc.segs[0].t === 0, `四川→重庆 正向经川渝联络线，输电价取四川送出省价格 ${link.t}`);
 
   // ④ 计费口径（规则 4.3.1 / 3.3.2）：所有段输电费 = t × 段后电量；含线损段不再收网损
   G("state.from='NX';state.to='ZJ';state.maxHops=1;applyBothProv();state._res=solve(state, algoData());");
@@ -246,7 +271,7 @@ console.log('══ 七、行进方向、区域电网费与含线损计费口径
   const js2 = !r7.err && r7.rows.find((x) => x.edges[0].n === '锦苏直流');
   ok(!!js2 && js2.comp.inLoss === 0 && Math.abs(js2.landed - js.border) < 1e-9, '只算到省界时不计受端上网环节线损，落地价 = 省界价');
   G("state.includeDstCost=true;");
-  ok(!!js && Math.abs(js.yuan.total / js.qty - js.landed) < 1e-6, '费用总额 ÷ 电量 = 落地单价（改口径后仍自洽）');
+  ok(!!js && Math.abs(js.yuan.total / js.consumerQty - js.landed) < 1e-6, '费用总额 ÷ 终端电量 = 到户单价（改口径后仍自洽）');
   // ⑥ 容量制工程：辛洹线边际 0，云霄取输电权报价下限
   const xh = G("CH.find(c=>c.n==='辛洹线')"), yx = G("CH.find(c=>c.n==='云霄直流')");
   ok(!!xh && xh.t === 0 && !!yx && yx.t === 25.6 && xh.bidir && yx.bidir, '辛洹线 t=0、云霄直流 t=25.6（输电权报价下限），均为双向');
@@ -256,7 +281,9 @@ console.log('══ 八、智能推荐：只在可行路线里选、密钥缺失
 {
   G("state.from='SC';state.to='SH';state.maxHops=6;state.maxDetour=9;state.showBad=true;state.sel=0;applyBothProv();state._res=solve(state, algoData());state._ai=null;renderCalc();");
   const h0 = G("document.getElementById('v-calc').innerHTML");
-  ok(h0.includes('智能推荐') && h0.includes('id="i-ai-prompt"') && h0.includes('让模型推荐'), '测算页含智能推荐卡片、输入框与按钮');
+  ok(G('AI_ENABLED') === false && !h0.includes('id="i-ai-prompt"') && !h0.includes('class="col-ai"') && h0.includes('class="layout no-ai"'), '智能推荐卡片暂时隐藏，布局退为两列');
+  const card0 = G('renderAI(state._res)');
+  ok(card0.includes('智能推荐') && card0.includes('id="i-ai-prompt"') && card0.includes('让模型推荐'), '推荐卡片渲染逻辑保留（改回 AI_ENABLED 即恢复）');
   const res = G('state._res');
   const feasible = res.rows.filter((r) => r.feasible).length;
   const digest = G('aiRouteDigest(state._res)');
@@ -290,11 +317,11 @@ console.log('══ 八、智能推荐：只在可行路线里选、密钥缺失
   ok(ai && ai.result && ai.result.recs.length === 1 && ai.result.recs[0].idx === 1 && ai.result.recs[0].reason === '线损更低',
     `无效 id 与越限路线被剔除，只保留可行候选（保留 ${ai && ai.result ? ai.result.recs.length : 0} 条）`);
   ok(ai && ai.result && ai.result.summary === '总体判断' && ai.result.caveats === '请核实', '围栏包裹的 JSON 也能解析，summary / caveats 原样保留');
-  const h1 = G("document.getElementById('v-calc').innerHTML");
+  const h1 = G('renderAI(state._res)');
   ok(h1.includes('推荐 1') && h1.includes('线损更低') && h1.includes('onclick="pick(1)"'), '推荐结果渲染为可点击的路线卡片');
   // 参数变化后旧推荐不再显示
   G("state.to='JS';applyBothProv();state._res=solve(state, algoData());renderCalc();");
-  const h2 = G("document.getElementById('v-calc').innerHTML");
+  const h2 = G('renderAI(state._res)');
   ok(!h2.includes('推荐 1') && h2.includes('智能推荐'), '重新测算后旧推荐结果失效，卡片仍在');
   // 接口报错
   ctx.fetch = async () => ({ ok: false, status: 401, text: async () => 'invalid key' });
@@ -340,19 +367,249 @@ console.log('══ 九、通道组件：把直流作为组件来筛方案 ═�
   const r3 = G('state._res');
   ok(!!r3.err && r3.availChannels && r3.availChannels.length > 0, '组件组合筛空时给出提示，仍返回组件清单');
   const h3 = G("document.getElementById('v-calc').innerHTML");
-  ok(h3.includes('通道组件') && h3.includes('toggleComp(') && h3.includes('清除全部组件'),
-    '筛空时界面仍渲染组件选择器与「清除全部组件」，用户不会被困住');
+  ok(h3.includes('id="i-chan"') && h3.includes('全部通道（不限）'), '筛空时界面仍渲染通道下拉（可选「全部通道」取消），用户不会被困住');
 
-  // 交互：点选 / 清除
-  G('state.mustHave=[];state._res=solve(state, algoData());renderCalc();');
+  // 界面为单选下拉：多选存档收敛为一条；换省对后不在候选里的通道自动取消
+  G(`state.mustHave=['${dc.id}','${second.id}'];state._res=solveState();`);
+  ok(G('state.mustHave.length') === 1 && G('state.mustHave[0]') === dc.id, '界面只保留一条已选通道（单选）');
+  G('state.mustHave=[];state._res=solveState();renderCalc();');
   const h2 = G("document.getElementById('v-calc').innerHTML");
-  ok(h2.includes('通道组件') && h2.includes('chip dc') && h2.includes('必经组件'), '测算页渲染组件选择器，直流 chip 带 dc 样式');
+  const selHtml = (h2.match(/<select id="i-chan"[\s\S]*?<\/select>/) || [''])[0];
+  ok(selHtml.includes('<optgroup label="直流 / 专项工程') && selHtml.includes('<option value="" selected>全部通道（不限）'), '测算页顶部渲染通道下拉，直流分组在前，默认不限');
+  ok(!h2.includes('toggleComp(') && !h2.includes('class="comp-box"'), '通道 chip 选择器已移除');
+  const best = G('channelBest(state._res)');
+  const dcOpts = [...selHtml.split('<optgroup label="交流')[0].matchAll(/<option value="([^"]+)"/g)].map((m) => m[1]);
+  ok(dcOpts.length > 1 && dcOpts.every((id, k) => !k || (best[id] ?? Infinity) >= (best[dcOpts[k - 1]] ?? Infinity)), `直流通道按经过它的最低价升序（${dcOpts.length} 条）`);
+  const rowsAll = G('state._res.rows');
+  // 专项工程 / 直流的最低价与合并后的方案列表一致；区域网架内联络线的方案可能已被合并，最低价只会更低或相等
+  const minOf = (id) => Math.min(...rowsAll.filter((r) => r.feasible && r.edges.some((e) => e.id === id)).map((r) => r.landed));
+  const chMap = Object.fromEntries((G('state._res.availChannels') || []).map((c) => [c.id, c]));
+  ok(Object.entries(best).every(([id, p]) => { const m = minOf(id); return chMap[id] && chMap[id].type === 'DC' ? Math.abs(p - m) < 1e-9 : (m === Infinity || p <= m + 1e-9); }), '下拉标注的通道最低价与方案列表一致');
   ok(h2.includes('<details class="explain"><summary>候选与可行的定义'), '可选路线的口径说明默认折叠');
-  ok(h2.includes('<details class="explain"><summary>政策口径与取值依据'), '价格与口径的政策说明默认折叠');
-  G(`toggleComp('${dc.id}')`);
-  ok(G('state.mustHave.length') === 1 && G('state._res.mustHave.length') === 1, '点选组件后立即重算并带上筛选条件');
-  G('clearComp()');
-  ok(G('state.mustHave.length') === 0 && G('state._res.mustHave.length') === 0, '清除全部组件后恢复全量候选');
+  ok(h2.includes('<details class="explain"><summary>政策与取值依据</summary>'), '政策与取值依据默认折叠');
+  ok(h2.lastIndexOf('政策与取值依据') > h2.lastIndexOf('class="layout'), '政策与取值依据位于整页最下方');
+  ok(!h2.includes('market-entries') && !h2.includes('省间现货 · 待拓展'), '中长期 / 现货入口按钮已移除');
+  // 选择通道：重算并带上筛选条件；已选时最低价仍按全量候选计算
+  G(`state.mustHave=['${dc.id}'];state.sel=0;state._res=solveState();renderCalc();`);
+  ok(G('state._res.mustHave.length') === 1 && G('state._res.rows').every((r) => r.edges.some((e) => e.id === dc.id)), '选定通道后只列出经过它的方案');
+  ok(JSON.stringify(G('channelBest(state._res)')) === JSON.stringify(best), '选定通道后各通道最低价不变（按全量候选）');
+  ok(/<select id="i-chan" class="on">/.test(G("document.getElementById('v-calc').innerHTML")), '已选通道时下拉高亮');
+  G('state.mustHave=[];state._res=solveState();');
+  ok(G('state._res.mustHave.length') === 0, '选回「全部通道」后恢复全量候选');
+  // 换省对：已选通道不在新候选里时自动取消
+  G(`state.mustHave=['${dc.id}'];state.from='GS';state.to='HN';applyBothProv();state._res=solveState();`);
+  const inGsHn = (G('state._res.availChannels') || []).some((c) => c.id === dc.id);
+  ok(inGsHn ? G('state.mustHave.length') === 1 : (G('state.mustHave.length') === 0 && !G('state._res.err')), '换省对后已选通道不可用时自动取消，不会筛成空结果');
+  G("state.mustHave=[];state.from='SC';state.to='SH';applyBothProv();state._res=solveState();");
+}
+
+console.log('══ 十、顶部结果、价格组成、区域落点与说明折叠 ══');
+{
+  G("state.from='XJ';state.to='SH';state.mustHave=[];state.showBad=false;state.showAll=false;state.sel=0;state.includeDstCost=false;state.includeRegion=true;state.regionChargeMode='network';applyBothProv();state._res=solve(state, algoData());renderCalc();");
+  const res = G('state._res'), r = res.rows[0];
+  const h = G("document.getElementById('v-calc').innerHTML");
+  // ① 送端报价是主输入，结果在页面最上方
+  const iPgen = h.indexOf('id="i-pgen"'), iHero = h.indexOf('class="hero-res'), iList = h.indexOf('class="col-side"');
+  ok(iPgen > 0 && iHero > iPgen && iList > iHero && h.includes('class="hero-price"'), '送端报价大输入框与测算结果位于路线列表之前');
+  ok(h.includes(`<div class="hero-v">${r.landed.toFixed(2)}<small>`), `顶部显示最低价 ${r.landed.toFixed(2)} 元/MWh`);
+  // ② 价格组成：各项之和等于最终价格
+  const items = G('priceItems(state._res.rows[0])');
+  ok(Math.abs(items.reduce((a, x) => a + x.v, 0) - r.landed) < 1e-6, `价格组成 ${items.length} 项之和等于最终价格`);
+  ok(items[0].k === 'gen' && items.every((x) => x.k === 'gen' || Math.abs(x.v) > 1e-9), '送端报价恒列首位，零值项不列');
+  ok(h.includes('class="cmp-item tot"') && items.every((x) => h.includes(x.label)), '顶部价格组成逐项列出并给出合计');
+  let bad = 0, n = 0;
+  for (const [f, t] of [['SC', 'JS'], ['NX', 'ZJ'], ['GS', 'HN'], ['SX', 'JS']]) for (const dst of [false, true]) {
+    G(`state.from='${f}';state.to='${t}';state.includeDstCost=${dst};applyBothProv();state._res=solve(state, algoData());`);
+    for (const row of G('state._res.rows')) { n++; if (Math.abs(G('priceItems')(row).reduce((a, x) => a + x.v, 0) - row.landed) > 1e-6) bad++; }
+  }
+  ok(n > 0 && bad === 0, `${n} 条路线（两种费用边界）价格组成均闭合`, bad ? `${bad} 条不闭合` : '');
+  // ③ 区域共用网络只写区域与物理落点（锁定吉泉直流方案：新疆 → 安徽落点 → 华东区域网架 → 上海）
+  G("state.from='XJ';state.to='SH';state.includeDstCost=false;applyBothProv();state.mustHave=[CH.find(c=>c.n==='吉泉直流').id];state.sel=0;state._res=solveState();renderCalc();");
+  const r0 = G('state._res.rows[0]');
+  ok(r0.edges[0].n === '吉泉直流' && G("routeDisplayBlocks(state._res.rows[0]).length") === 2, '锁定吉泉直流：吉泉直流 + 华东区域网架', r0.nodes.join('>'));
+  const stops = G('routeStops(state._res.rows[0])');
+  ok(stops.map((x) => x.name).join('>') === '新疆>华东区域' && stops[1].landing === '安徽', '路线显示为「新疆 → 华东区域」、落点安徽', JSON.stringify(stops));
+  const h3 = G("document.getElementById('v-calc').innerHTML");
+  const head = (h3.match(/<div class="hd-route">([\s\S]*?)<\/div>/) || [])[1] || '';
+  ok(head.includes('新疆') && head.includes('华东区域') && !head.includes('江苏') && !head.includes('安徽'), '方案标题不列区域内经过的省份');
+  ok(/<div class="hd-landing">落点 <b>安徽<\/b>/.test(h3), '方案标题下注明落点安徽');
+  ok(G('routeVia(state._res.rows[0])') === '经华东区域（落点安徽）', '路线卡片摘要只写区域与落点');
+  ok(G('routeLead(state._res.rows[0])') === '吉泉直流', '路线卡片标题为核心通道');
+  // 同一区域经背靠背衔接时合并；多区域时逐个保留落点
+  G("state.from='SC';state.to='JS';applyBothProv();state._res=solve(state, algoData());");
+  const cross = G("state._res.rows.find(x=>x.nodes.join('>')==='SC>CQ>HB>HA>HE>SX>JS')");
+  const multi = cross ? G('routeStops')(cross) : [];
+  ok(!cross || multi.map((x) => x.name + (x.landing ? '@' + x.landing : '')).join('>') === '四川>华中区域>华北区域@河北>江苏',
+    '四川→江苏 跨区路线：华中区域内经渝鄂背靠背合并，华北区域注明落点河北', multi.map((x) => x.name + (x.landing ? '@' + x.landing : '')).join('>'));
+  G("state.from='XJ';state.to='SH';applyBothProv();state.mustHave=[CH.find(c=>c.n==='吉泉直流').id];state._res=solveState();state.sel=0;renderCalc();");
+  // ④ 解释说明文字全部折叠：去掉 <details> 后不得残留说明段落
+  let vis = h3; let prev;
+  do { prev = vis; vis = vis.replace(/<details[^>]*>(?:(?!<details)[\s\S])*?<\/details>/g, ''); } while (vis !== prev);
+  ok(!/class="(note|comp-tip|route-explainer|region-rule|region-members)"/.test(vis), '测算页可见区域不含未折叠的说明文字',
+    (vis.match(/class="(note|comp-tip|route-explainer|region-rule|region-members)"[^<]*<?[^<]*/g) || []).slice(0, 3).join(' | '));
+  ok(!/<details class="warn" open>/.test(h3), '适用条件与缺项默认折叠');
+  // ⑤ 选项文字精简
+  const sheet3 = G("document.getElementById('sheet-body').innerHTML");
+  ok(sheet3.includes('>不含省内输电费<') && sheet3.includes('>含省内费用<') && sheet3.includes('>途经区域各计一次<') && sheet3.includes('>另计受端区域<'), '送端报价边界与区域费范围选项已精简');
+  // ⑥ 敏感性扫描改为展开时计算
+  ok(/<details class="adv boxed" id="d-sens" ontoggle="[^"]*fillSensitivity/.test(h3) && !h3.includes('最优切换'), '价差敏感性默认不计算，展开时再填充');
+  const sens = G('sensitivityTable()');
+  ok(sens.includes('<table>') && (sens.match(/<tr/g) || []).length === 37, '敏感性扫描表 36 档');
+}
+
+console.log('══ 十一、参数弹出面板：主卡摘要、即时重算、恢复默认 ══');
+{
+  G("state.from='XJ';state.to='SH';state.mustHave=[];state.sel=0;Object.assign(state,PARAM_DEFAULTS);applyBothProv();state._res=solveState();renderCalc();"); syncDom();
+  const v = G("document.getElementById('v-calc').innerHTML"), sh = G("document.getElementById('sheet-body').innerHTML");
+  const ids = ['i-dstcost', 'i-sourcequote', 'i-originloss', 'i-region', 'i-regioncharge', 'i-regionloss', 'i-bearer', 'i-tradable', 'i-zyocc'];
+  ok(ids.every((id) => sh.includes(`id="${id}"`)) && ids.every((id) => !v.includes(`id="${id}"`)), '全部参数移入弹出面板，测算页主屏不再铺开参数');
+  ok(v.includes('id="btn-params"') && v.indexOf('class="cfg-bar"') < v.indexOf('class="cmp"') && v.indexOf('class="cfg-bar"') > v.indexOf('class="hero-res'), '主卡在结果下方给出口径摘要与「参数」按钮');
+  ok(!/id="btn-params"[^>]*>[\s\S]*?<b>\d+<\/b><\/button>/.test(v) && !v.includes('<span class="chg">'), '默认参数时摘要不标色、按钮无角标');
+  ok(v.includes('费用边界 省间交易节点') && v.includes('报价边界 不含省内输电费'), '摘要恒显示费用边界与报价边界');
+  const r0 = G('state._res.rows[0]');
+  ok(G("document.getElementById('sheet-price').innerHTML").startsWith(r0.landed.toFixed(2)), '面板顶部实时显示当前价格');
+  // 面板里改参数：沿用 change 分支即时重算，主卡摘要标色计数
+  change('i-bearer', '0.5');
+  change('i-regionloss', 'exclude');
+  const v2 = G("document.getElementById('v-calc').innerHTML");
+  ok(G('state.lossBearer') === 0.5 && G('state.regionLossMode') === 'exclude', '面板内修改参数后状态更新');
+  ok(G('state._res.rows[0].landed') !== r0.landed && G("document.getElementById('sheet-price').innerHTML").startsWith(G('state._res.rows[0].landed').toFixed(2)), '修改后即时重算，面板价格同步');
+  ok((v2.match(/<span class="chg">/g) || []).length === 2 && /<b>2<\/b><\/button>/.test(v2) && v2.includes('网损承担 两端各半') && v2.includes('区域网损 不计入'), '改动项在摘要中标色，按钮角标为 2');
+  // 打开 / 关闭
+  G('openParams()');
+  ok(G('_sheetOpen') === true, '点「参数」打开面板');
+  G('closeParams()');
+  ok(G('_sheetOpen') === false, '点「完成」/ 遮罩 / Esc 关闭面板');
+  // 恢复默认：参数回默认，受端核定值还原，省份与报价不动
+  G("state.includeDstCost=true;state.pNet=1;state.pGen=333;state.pGenManual=true;state.tradableOnly=true;state.occPct=30;state._res=solveState();renderCalc();");
+  G('resetParams()');
+  ok(Object.entries(G('PARAM_DEFAULTS')).every(([k, val]) => G('state')[k] === val), '恢复默认后参数全部回到默认值');
+  ok(G('state.pNet') === PV.SH.net && G('state.pGen') === 333 && G('state.from') === 'XJ' && G('state.to') === 'SH', '恢复默认不改省份与送端报价，受端输配电价回到核定值');
+  const v3 = G("document.getElementById('v-calc').innerHTML");
+  ok(!v3.includes('<span class="chg">') && v3.indexOf('id="d-capfee"') > v3.indexOf('class="layout'), '恢复后摘要不再标色；容量电费测算位于方案之后');
+  G('state.pGenManual=false;applyBothProv();');
+}
+
+console.log('══ 十二、网损默认口径与方案 / 区域卡片 ══');
+{
+  ok(G('PARAM_DEFAULTS.originLossMode') === 'separate' && G('PARAM_DEFAULTS.regionLossMode') === 'historical', '默认送端省内网损另计、区域网损计入第三周期参考值');
+  // 旧存档（无默认口径版本号）里的网损选项按新默认重置一次；新存档保留用户选择
+  store['iproute.v2.last'] = JSON.stringify({ from: 'XJ', to: 'SH', originLossMode: 'included', regionLossMode: 'exclude', _bt: 'x' });
+  G('loadStored();');
+  ok(G('state.originLossMode') === 'separate' && G('state.regionLossMode') === 'historical', '旧存档的网损选项按新默认重置');
+  store['iproute.v2.last'] = JSON.stringify({ from: 'XJ', to: 'SH', originLossMode: 'included', regionLossMode: 'exclude', _bt: 'x', _pdv: G('PARAM_DEFAULTS_VER') });
+  G('loadStored();');
+  ok(G('state.originLossMode') === 'included' && G('state.regionLossMode') === 'exclude', '带当前版本号的存档保留用户选择');
+  G("Object.assign(state,PARAM_DEFAULTS);state.from='XJ';state.to='SH';state.mustHave=[];state.sel=0;state.showBad=false;applyBothProv();state._res=solveState();renderCalc();");
+  // 默认口径下四川→江苏最低价回到锦苏直流（区域网损计入后绕行路线不再更便宜）
+  G("state.from='SC';state.to='JS';applyBothProv();state._res=solveState();");
+  ok(G("state._res.rows[0].edges.map(e=>e.n).join('+')") === '锦苏直流', '默认口径下四川→江苏最低价为锦苏直流直达', G("state._res.rows[0].edges.map(e=>e.n).join('+')"));
+  // 锁定吉泉直流方案检查卡片（全网补录后新疆→上海最优为经西北网架的灵绍直流）
+  G("state.from='XJ';state.to='SH';applyBothProv();state.mustHave=[CH.find(c=>c.n==='吉泉直流').id];state._res=solveState();renderCalc();");
+  const h = G("document.getElementById('v-calc').innerHTML"), r = G('state._res.rows[0]');
+  const plan = (h.match(/<div class="card plan">[\s\S]*?<div class="plan-actions">/) || [''])[0];
+  ok(/<div class="plan-price"><b>[\d.]+<\/b>/.test(plan) && plan.indexOf('class="plan-price"') > plan.indexOf('class="hd-route"'), '方案价格放大并排在路线之后');
+  const tips = [...plan.matchAll(/<i tabindex="0" style="[^"]*" data-tip="([^"]+)"><\/i>/g)].map((m) => m[1]);
+  ok(tips.length === G('priceItems(state._res.rows[0]).length') && tips[0].startsWith('送端报价 '), `价格组成条 ${tips.length} 段，悬停显示分项名称与金额`);
+  ok(!plan.includes('皖苏联络线') && !plan.includes('苏沪联络线') && !plan.includes('交流联络线'), '方案卡片不再列出或告警区域网架内的联络线');
+  ok(plan.includes('<span class="chip">2 段</span>'), '段数按方案自有通道与区域网架计（吉泉直流 + 华东区域网架 = 2 段）');
+  ok(/<span class="rl-cmp" id="region-comparison"[^>]*>区域网损<span class="">不计 <b>[\d.]+<\/b><\/span><span class="on">第三周期 <b>[\d.]+<\/b>/.test(plan), '区域网损对照压成一行并标出当前情景');
+  const tl = (h.match(/<div class="card route-timeline">[\s\S]*?<details class="adv boxed" id="d-detail">/) || [''])[0];
+  ok(tl.includes('<strong>华东区域网架</strong>') && !h.includes('交流网架'), '区域卡片写「华东区域网架」');
+  ok(!tl.includes('皖苏联络线') && !tl.includes('苏沪联络线') && !tl.includes('region-interfaces'), '区域卡片不再展开区域内联络线');
+  ok(h.includes('区域网架参考接口，不单独计费'), '区域内联络线仅保留在完整明细逐段溯源中并标注');
+  ok(['<summary>完整明细</summary>', '<summary>价差敏感性</summary>', '<summary>容量电费测算</summary>', '<summary>政策与取值依据</summary>'].every((t) => h.includes(t)), '底部折叠标题已简化');
+  ok(G("document.getElementById('sheet-body').innerHTML").includes('<option value="separate" selected>另计</option><option value="included" >不另计</option>'), '送端省内网损选项为「另计 / 不另计」');
+  G('state.mustHave=[];state._res=solveState();');
+}
+
+console.log('══ 十三、选到无可行方案的通道后可回退 ══');
+{
+  // 找一条「候选里有、但经过它的方案全部越限」的通道
+  let dead = null;
+  for (const qty of [1000, 3000, 6000, 9000]) {
+    G(`Object.assign(state,PARAM_DEFAULTS);state.from='XJ';state.to='SH';state.mustHave=[];state.sel=0;state.showBad=false;state.qty=${qty};applyBothProv();state._res=solveState();`);
+    if (G('state._res.err')) continue;
+    const best = G('channelBest(state._res)');
+    dead = (G('state._res.availChannels') || []).find((c) => best[c.id] == null);
+    if (dead) break;
+  }
+  ok(!!dead, `存在经过它的方案全部越限的通道（${dead ? dead.n : '无'}）`);
+  if (dead) {
+    G(`state.mustHave=['${dead.id}'];state.sel=0;state._res=solveState();renderCalc();`);
+    const res = G('state._res'), h = G("document.getElementById('v-calc').innerHTML");
+    ok(!!res.err && res.allInfeasible === true && (res.availChannels || []).length > 0 && res.mustHave.length === 1, '全部越限时仍返回通道清单与筛选条件');
+    ok(h.includes('id="i-chan"') && h.includes(`<option value="${dead.id}" selected>`), '顶部通道下拉仍在并保持选中，可改选');
+    ok(h.includes('onclick="clearChannel()"') && h.includes('显示越限方案</button>'), '错误卡给出「取消通道筛选」与「显示越限方案」');
+    G('clearChannel()');
+    ok(G('state.mustHave.length') === 0 && !G('state._res.err'), '取消通道筛选后恢复正常结果');
+    G(`state.mustHave=['${dead.id}'];state._res=solveState();state.showBad=true;state.sel=0;state._res=solveState();`);
+    ok(!G('state._res.err') && G('state._res.rows.length') > 0, '改看越限方案后可见该通道的方案');
+    G('state.mustHave=[];state.showBad=false;state.qty=1000;state._res=solveState();');
+  }
+}
+
+console.log('══ 十四、受端到户：电网主体 × 电压档 × 计价方式，容需量与系统运行费，送端专属送出价 ══');
+{
+  const VT = G('DATA.VT'), SRCX = G('DATA.SRCX');
+  ok(VT && Object.keys(VT).filter((k) => k[0] !== '_').length === 30 && SRCX, '构建载荷含受端分电压输配电价（30 省）与送端电站专属送出价');
+  const inp = () => G('solveInput()');
+  G("Object.assign(state,PARAM_DEFAULTS);state.from='SX';state.to='HE';state.mustHave=[];state.sel=0;state.showBad=true;state.includeDstCost=true;state.pGenManual=false;applyBothProv();state._res=solveState();renderCalc();"); syncDom();
+  // 默认：河北南网 · 220千伏及以上 · 两部制 = 原默认输配电价
+  ok(G('state.pNet') === G('PV.HE.net') && G('dstTariff().tier.档别') === '220千伏及以上' && G('dstTariff().billing') === 'twopart', '默认主体、最高电压档、两部制，输配电价与原口径一致');
+  const base = G('state._res.rows[0]');
+  ok(inp().dstInLossPct === G('PV.HE.inLoss') && inp().dstBilling === 'twopart', '默认主体线损率与省默认一致');
+  const sheet0 = G("document.getElementById('sheet-body').innerHTML"), v0 = G("document.getElementById('v-calc').innerHTML");
+  ok(sheet0.includes('id="i-dstentity"') && sheet0.includes('>冀北电网<') && sheet0.includes('id="i-dsttier"') && sheet0.includes('id="i-dstbilling"') && sheet0.includes('id="i-dstsysop"'), '参数面板渲染主体 / 电压档 / 计价方式 / 系统运行费');
+  ok(v0.includes('class="cfg-warn"') && v0.includes('两部制未含容量/需量电费'), '两部制未计容需量电费时主卡醒目提示');
+  ok(G('state._res.rows[0].pricingIssues').some((x) => x.includes('未含容量/需量电费')) && G('state._res.rows[0].pricingIssues').some((x) => x.includes('系统运行费未计入')), '适用条件提示两部制缺项与系统运行费缺项');
+  // 切到冀北：输配电价与注3 线损率随主体变化
+  // 与 boot.js 的 i-dstentity / i-dsttier / i-dstbilling 分支一致：先读其余输入，再按所选档带入输配电价；渲染后回写模拟 DOM
+  const pick = (patch) => { G(`readInputs();Object.assign(state,${JSON.stringify(patch)});{const vt=dstTariff();state.dstBilling=vt.billing;if(vt.net!=null)state.pNet=vt.net;}state.sel=0;state._res=solveState();renderCalc();`); syncDom(); };
+  pick({ dstEntity: 'HE_JB', dstTier: null });
+  const jb = VT.HE.主体.find((e) => e.id === 'HE_JB');
+  ok(G('state.pNet') === jb.档位.at(-1).两部制 && inp().dstInLossPct === jb.省内上网环节线损率, `冀北：输配电价 ${jb.档位.at(-1).两部制}、线损率 ${jb.省内上网环节线损率}%`);
+  // 10kV 两部制 → 单一制
+  pick({ dstEntity: 'HE', dstTier: '1~10（20）千伏', dstBilling: 'twopart' });
+  const t10 = VT.HE.主体[0].档位.find((t) => t.档别 === '1~10（20）千伏');
+  ok(G('state.pNet') === t10.两部制, `河北 10kV 两部制 ${t10.两部制}`);
+  const r10 = G('state._res.rows[0]');
+  ok(Math.abs((r10.landed - base.landed) - (t10.两部制 - VT.HE.主体[0].档位.at(-1).两部制)) < 1e-6, '换电压档只改变输配电价项，到户价差等于电价差');
+  pick({ dstBilling: 'single' });
+  ok(G('state.pNet') === t10.单一制 && !G("document.getElementById('v-calc').innerHTML").includes('class="cfg-warn"'), `单一制 ${t10.单一制}，不再提示容需量缺项`);
+  // 两部制 + 按需量分摊，负荷率 60%
+  pick({ dstBilling: 'twopart', dstCapMode: 'demand', dstLoadFactor: 60 });
+  const capExp = t10.需量电价 * 12 / (8.76 * 0.6);
+  const rc = G('state._res.rows[0]');
+  ok(Math.abs(rc.comp.cap - capExp) < 1e-9 && Math.abs(rc.landed - r10.landed - capExp) < 1e-6, `需量 ${t10.需量电价} 元/kW·月、负荷率 60% → ${capExp.toFixed(2)} 元/MWh 计入到户价`);
+  ok(!G("document.getElementById('v-calc').innerHTML").includes('class="cfg-warn"') && G('priceItems(state._res.rows[0])').some((x) => x.k === 'cap'), '计入容需量电费后提示消失，价格组成含该项');
+  ok(Math.abs(rc.yuan.total / rc.amountQty - rc.landed) < 1e-6, '金额与单价闭合（含新增两项）');
+  // 系统运行费手填
+  pick({ dstSysOpFee: 12.5 });
+  const rs = G('state._res.rows[0]');
+  ok(Math.abs(rs.comp.sysOp - 12.5) < 1e-12 && Math.abs(rs.landed - rc.landed - 12.5) < 1e-6 && !rs.pricingIssues.some((x) => x.includes('系统运行费未计入')), '系统运行费手填计入，缺项提示消失');
+  // 省界口径下两项不计
+  G('state.includeDstCost=false;state._res=solveState();');
+  ok(G('state._res.rows[0].comp.cap') === 0 && G('state._res.rows[0].comp.sysOp') === 0, '省间交易节点口径不计容需量与系统运行费');
+  // 换受端省：主体 / 档别回到默认
+  G("state.includeDstCost=true;state.dstEntity='HE_JB';state.dstTier='35千伏';state.to='JS';state.dstEntity=null;state.dstTier=null;applyToProv();state._res=solveState();");
+  ok(G('state.pNet') === G('PV.JS.net'), '换受端省后回到该省默认主体与最高电压档');
+  // 深圳：结构特殊、电价含线损
+  G("state.to='GD';state.dstEntity='GD_SZ';state.dstTier=null;state._res=solveState();renderCalc();");
+  ok(G('solveInput().dstInLossPct') === 0 && G("document.getElementById('sheet-body').innerHTML").includes('请手填受端输配电价'), '深圳电价已含线损（受端线损按 0），提示手填');
+  // 送端电站专属送出价：四川 锦屏官地（送江苏）
+  G("Object.assign(state,PARAM_DEFAULTS);state.from='SC';state.to='JS';state.includeDstCost=false;state.showBad=true;applyBothProv();state._res=solveState();renderCalc();");
+  const jinsu = () => G("state._res.rows.find(r=>r.edges.length===1&&r.edges[0].n==='锦苏直流')");
+  const g0 = jinsu();
+  const idx = G("srcStations().findIndex(x=>x.范围==='锦屏官地（送江苏）')");
+  ok(idx >= 0 && G("document.getElementById('sheet-body').innerHTML").includes('id="i-srcstation"'), '四川送端提供电站专属送出价选项');
+  G(`state.srcStation='${idx}';state._res=solveState();renderCalc();`);
+  const g1 = jinsu();
+  ok(g1.segs[0].sf0 === 30.4 && g1.cOriginLoss === 0 && g1.exportLossPct === 0, '锦屏官地（送江苏）：送出价 30.4、不计送端省内网损');
+  ok(g1.landed < g0.landed && g1.pricingIssues.some((x) => x.includes('锦屏官地（送江苏）') && x.includes('额度')), `锦苏直流省界价 ${g0.landed.toFixed(2)} → ${g1.landed.toFixed(2)}，并提示须确认额度`);
+  G("state.from='NM';state.srcStation=null;");
+  ok(G('srcStations().length') === 0, '原文无数值的送出价条目（蒙西送华北）不提供选择');
+  G("Object.assign(state,PARAM_DEFAULTS);state.from='SC';state.to='JS';applyBothProv();state._res=solveState();");
 }
 
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);

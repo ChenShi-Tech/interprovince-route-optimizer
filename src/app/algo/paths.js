@@ -20,15 +20,19 @@ function enumPaths(adj,src,dst,maxHops,cap,weightOf){
   const ord={};
   for(const k in adj) ord[k]=adj[k].slice().sort((a,b)=>weightOf(a,k)-weightOf(b,k));
   (function dfs(u){
-    if(out.length>=cap){ hitCap=true; return; }
-    if(u===dst){ out.push({nodes:nodes.slice(),edges:edges.slice()}); return; }
+    if(hitCap) return;
+    if(u===dst){
+      if(out.length===cap){ hitCap=true; return; }
+      out.push({nodes:nodes.slice(),edges:edges.slice()}); return;
+    }
     if(edges.length>=maxHops) return;
     for(const nb of ord[u]||[]){
       if(visited.has(nb.to)) continue;
+      if(nb.e.originOnly && u!==src) continue;   // 点对网电厂送出工程只能作首段，不作过境通道
       visited.add(nb.to); nodes.push(nb.to); edges.push(nb.e);
       dfs(nb.to);
       edges.pop(); nodes.pop(); visited.delete(nb.to);
-      if(out.length>=cap){ hitCap=true; return; }
+      if(hitCap) return;
     }
   })(src);
   out.hitCap=hitCap;

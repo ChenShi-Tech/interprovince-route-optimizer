@@ -9,7 +9,7 @@
 node android/build-apk.mjs        # 构建 index.html → 拷入 assets → gradle assembleDebug
 ```
 
-产物：`android/app/build/outputs/apk/debug/app-debug.apk`（同时复制一份 `android/省间路径优选-v1.0-debug.apk` 便于分发）。
+产物：`android/app/build/outputs/apk/debug/app-debug.apk`（本机自测用；对外分发的包由发版流水线产出，见下节）。
 
 工具链位置：`~/android-toolchain/`（便携版 JDK 17 + Gradle 8.7 + Android SDK，免安装、免管理员，
 `build-apk.mjs` 自动探测并注入 `JAVA_HOME`，不依赖系统环境变量）。
@@ -21,11 +21,52 @@ node android/build-apk.mjs        # 构建 index.html → 拷入 assets → grad
 3. `sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"`；
 4. 修改 `local.properties` 的 `sdk.dir` 指向本机 SDK。
 
+## 发版自动打包（南洋 CI）
+
+对外分发的 APK **只在发布 GitHub Release 时打包**，普通提交与合并请求不打包。
+工作流 `.github/workflows/android-release.yml`，跑在南洋自托管 runner `irp-nanyang-1`（label `irp-linux`）。
+
+发版步骤：
+
+1. 发版提交里改 `android/app/build.gradle`：`versionName` 与标签一致（去掉 `v`），`versionCode` +1，合入 `main`；
+2. 发布 Release，标签 `vX.Y.Z`：`gh release create vX.Y.Z --target main --title "…" --notes "…"`
+   （网页上只保存草稿不触发，点「Publish release」才触发；勾了「Set as a pre-release」也不触发）；
+3. 工作流依次：标签与 `versionName` 一致性 → 工具链检查 → 标签提交须已在 `main` 上 → Release 状态与附件查重 → 构建 + 7 组测试 → 打包 → 签名核验 →
+   把 `iproute-vX.Y.Z-debug.apk` 与 `.sha256` 挂到该 Release；
+4. 失败后补打包：Actions → android-release → Run workflow，填已发布的标签；
+   勾选 `dry_run` 则只打包、在运行摘要里给出签名指纹，不改动 Release 附件（验证流水线或核对签名时用）。
+
+注意：
+
+- **不要再在本机打包后手动上传**——Release 上已有同名附件时 CI 会中止不出包，且各机器的 debug 签名密钥不同。
+- **签名连续性**：仓库变量 `ANDROID_SIGNER_SHA256` 设为约定签名证书的 SHA-256 指纹后，签名对不上的 APK 会被拦下不上传
+  （手机上已装旧版的无法覆盖升级，只能卸载重装并丢失本地数据）；未设置时只告警。
+  指纹写 apksigner 输出的 64 位十六进制即可，keytool 的大写带冒号写法也兼容。
+- ⚠️ **v1.1.0～v1.1.5 是协作者本机 debug 密钥签的，与南洋密钥不同。** 签名方案拍板并设好上面的变量之前不要发新版；
+  若决定改用新密钥，首个 CI 版本的 Release 说明里必须写明「已装用户需卸载重装（本地费率修改、地图与模型密钥会丢）」。
+- **预发布不出包**：标记为 pre-release 的 Release 不触发打包，手动补打包也不会往预发布上传；预发布转为正式版时会触发打包，未触发就手动补打包。
+  标签只支持 `vX.Y.Z`，rc 之类的标签在手动补打包时会报格式错误。
+- 标签必须打在已合入 `main` 的提交上（`--target main`）；打在未合并的功能分支提交上会被拦下，防止未审查的代码作为正式包发出。
+- **不做覆盖式上传**：Release 已有同名附件（含上次上传到一半留下的）时直接中止，防止上传失败把原附件弄丢。
+  确需替换：先勾 `dry_run` 跑一次核对签名，再在 Release 页面删除 `iproute-vX.Y.Z-debug.apk` 与 `.sha256`，最后正常重跑。
+- **凡上传必须 7 组测试齐全**：测试文件缺失只在 `dry_run` 下告警跳过（用于核对早期标签），正式发版和手动重跑上传都会中止。
+- 用 `GITHUB_TOKEN` 在别的工作流里创建的 Release 不会触发本工作流（GitHub 防递归），发版须由人发布。
+
+runner 网络：南洋**直连 `github.com` 与 `nodejs.org` 不通**（走本机 clash 才通），工作流在 job 级注入仓库变量 `RUNNER_HTTPS_PROXY`
+（现为 `http://127.0.0.1:7890`）作为 `https_proxy`/`http_proxy`，checkout 与 setup-node 才能下载。代理只加在 job 级，
+runner 服务本身不设代理——给服务设全局代理会在代理故障时连带击穿控制面、runner 掉线。变量置空即回到直连（用于 GitHub 云端机器）。
+注意 `/etc/environment` 给登录会话设了代理，所以手动 `sudo -u irp-runner -i` 测试时是走代理的，与服务环境不同，别据此判断直连可用。
+
+runner 前置条件：南洋工具链位于 runner 用户 `irp-runner` 的 `~/android-toolchain/`（Temurin JDK 17 + Gradle 8.7 +
+SDK `platform-tools` / `platforms;android-34` / `build-tools;34.0.0`），签名密钥为该用户的 `~/.android/debug.keystore`；
+另需系统 `PATH` 里有 GitHub CLI `gh`（南洋现为 `/usr/bin/gh`，上传附件用，重建 runner 时别漏装）。工作流在构建前逐项检查，缺了直接报错。
+重装按上面「在新机器上重建工具链」前三步以 `irp-runner` 身份执行；SDK 路径由工作流注入 `ANDROID_HOME`，无需 `local.properties`。
+
 ## 安装到手机
 
 APK 为 debug 签名（首次构建自动生成于 `~/.android/debug.keystore`），可直接侧载：
-把 `省间路径优选-v1.0-debug.apk` 发到手机（钉钉/微信/数据线），点开安装（需允许"安装未知应用"）。
-无 adb 依赖；如已开 USB 调试也可 `adb install android/省间路径优选-v1.0-debug.apk`。
+从 GitHub Release 下载 `iproute-vX.Y.Z-debug.apk`（本机自测则用 `app-debug.apk`）发到手机（钉钉/微信/数据线），
+点开安装（需允许"安装未知应用"）。无 adb 依赖；如已开 USB 调试也可 `adb install iproute-vX.Y.Z-debug.apk`。
 
 ### 真机验收要点
 

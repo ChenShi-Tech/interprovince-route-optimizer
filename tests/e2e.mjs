@@ -116,15 +116,24 @@ const tests = [
     expected: '费用总额变为原 3 倍；落地单价不变',
     async run(page, set) {
       await page.goto(G, DCL);
-      const t1 = await page.evaluate(() => state._res.rows[0].yuan.total);
-      const p1 = await page.evaluate(() => state._res.rows[0].landed);
+      // 修正(2026-09-17)：电量放大 3 倍可能让原最优路线越限沉底（如 SC>ZJ>JS 在 3000MW 下超容）,
+      // rows[0] 随之换路线,旧断言「前后 rows[0] 相比」会误报非线性。改为锁定同一条路线对比。
+      const base = await page.evaluate(() => {
+        const r = state._res.rows[0];
+        return { key: r.nodes.join('>'), total: r.yuan.total, landed: r.landed };
+      });
       await page.fill('#i-qty', '3000');
       await page.locator('#i-qty').blur();
-      const t2 = await page.evaluate(() => state._res.rows[0].yuan.total);
-      const p2 = await page.evaluate(() => state._res.rows[0].landed);
-      ok(Math.abs(t2 - t1 * 3) < 1, `总额应 ${t1 * 3}，实际 ${t2}`);
-      ok(p1 === p2, `单价应不变 ${p1} vs ${p2}`);
-      set(`总额 ${t1}→${t2}（×3）；单价保持 ${p1} 元/MWh`);
+      const after = await page.evaluate((key) => {
+        state.showBad = true;   // 原路线可能越限沉底,纳入越限方案保证可追踪
+        state._res = solve(state, algoData());
+        const r = state._res.rows.find(x => x.nodes.join('>') === key);
+        if (!r) throw new Error('原最优路线在候选集中消失');
+        return { total: r.yuan.total, landed: r.landed };
+      }, base.key);
+      ok(Math.abs(after.total - base.total * 3) < 1, `同路线总额应 ${base.total * 3}，实际 ${after.total}`);
+      ok(after.landed === base.landed, `单价应不变 ${base.landed} vs ${after.landed}`);
+      set(`同一路线(${base.key})总额 ${base.total.toFixed(0)}→${after.total.toFixed(0)}（×3）；单价保持 ${base.landed} 元/MWh`);
     },
   },
   {
@@ -142,7 +151,8 @@ const tests = [
         const tr = [...document.querySelectorAll('#d-detail tr')].find(t => t.textContent.includes('网损折价'));
         return tr ? tr.textContent.replace(/\s+/g, ' ').trim() : '(未找到行)';
       });
-      ok(/^网损折价（受端承担部分）\s*0\.0/.test(row), `网损行单价应显示 0.0，实际「${row.slice(0, 50)}」`);
+      // 修正(2026-09-17)：计费明示后网损行文案含「，含线损段不另收」后缀（Dphys≠D 的段）,正则放宽括号内文案
+      ok(/^网损折价（受端承担部分[^）]*）\s*0\.0/.test(row), `网损行单价应显示 0.0，实际「${row.slice(0, 50)}」`);
       const landed = await page.evaluate(() => state._res.rows[0].landed);
       set(`lossBearer=0；comp.loss=0；网损行显示 0；落地单价 ${landed} 元/MWh`);
     },
@@ -203,13 +213,14 @@ const tests = [
 
   /* ================= 交互 ================= */
   {
-    id: 'I-01', section: '交互', title: '省份下拉：30 省齐全 + 同省互斥禁用',
+    id: 'I-01', section: '交互', title: '省份下拉：省份齐全 + 同省互斥禁用',
     steps: '检查出发地下拉选项数；检查目的地中「四川」是否禁用',
-    expected: '选项 30 个；目的地中与出发地相同的省份 disabled',
+    expected: '选项数与省级参数表一致；目的地中与出发地相同的省份 disabled',
     async run(page, set) {
       await page.goto(G, DCL);
       const n = await page.locator('#i-from option').count();
-      ok(n === 30, `应 30 个省份选项，实际 ${n}`);
+      const exp = await page.evaluate(() => Object.keys(DATA.PV).length);
+      ok(n === exp, `省份下拉应含全部 ${exp} 个省份（含 2026-09-17 补录的海南），实际 ${n}`);
       const dis = await page.evaluate(() => { const o = [...document.getElementById('i-to').options].find(o => o.value === 'SC'); return o && o.disabled; });
       ok(dis === true, '目的地中四川应被禁用');
       set(`下拉 30 项；目的地中四川 disabled=${dis}`);
@@ -252,7 +263,7 @@ const tests = [
     },
   },
   {
-    id: 'I-04', section: '交互', title: '「恢复检索原始值」confirm 弹窗（取消/确认）',
+    id: 'I-04', section: '交互', title: '「恢复检索原始值」应用内确认框（取消/确认）',
     steps: '先改 CH[0].t=123；点恢复→取消；再点恢复→确认',
     expected: '取消：值不变；确认：恢复为 DATA.CH 原始值',
     async run(page, set) {
@@ -260,16 +271,19 @@ const tests = [
       await page.click('#t-lib');
       await page.evaluate(() => { CH[0].t = 123; });
       const btn = page.locator('button', { hasText: '恢复检索原始值' });
-      let msg = '';
-      page.once('dialog', async d => { msg = d.message(); await d.dismiss(); });
+      const dlg = page.locator('[role="dialog"]');
       await btn.click();
-      ok(msg.includes('恢复为检索原始值'), `confirm 文案异常：「${msg}」`);
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      const msg = await dlg.innerText();
+      ok(msg.includes('恢复为检索原始值'), `确认框文案异常：「${msg}」`);
+      await dlg.locator('button', { hasText: '取消' }).click();
       ok(await page.evaluate(() => CH[0].t) === 123, '取消后应保持 123');
-      page.once('dialog', async d => { msg = d.message(); await d.accept(); });
       await btn.click();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      await dlg.locator('button', { hasText: '恢复原始值' }).click();
       const restored = await page.evaluate(() => CH[0].t === DATA.CH[0].t);
       ok(restored, '确认后应恢复原始值');
-      set(`confirm「${msg.slice(0, 18)}…」；取消保持 123；确认后恢复 ${await page.evaluate(() => DATA.CH[0].t)}`);
+      set(`应用内确认框「${msg.slice(0, 18)}…」；取消保持 123；确认后恢复 ${await page.evaluate(() => DATA.CH[0].t)}`);
     },
   },
   {
@@ -501,6 +515,148 @@ const tests = [
     },
   },
 
+  /* ================= 运行时健壮性（harden-web-runtime） ================= */
+  {
+    id: 'HR-01', section: '运行时健壮性', title: '存储写入失败→可见提示+去重+功能不受影响',
+    steps: '把 setItem 替换为抛错版本，触发重算与方案切换',
+    expected: '测算页出现恰好一条存储故障提示；多次失败不重复弹条；测算与切换照常、无未捕获异常',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        window.__origSetItem = Storage.prototype.setItem;
+        Storage.prototype.setItem = function () { throw new Error('HR01 模拟配额超限'); };
+      });
+      await page.selectOption('#i-hops', '3');
+      await page.waitForTimeout(150);
+      const r1 = await page.evaluate(() => ({
+        warnN: [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length,
+        rows: state._res.rows.length,
+      }));
+      ok(r1.warnN === 1, `存储故障提示应恰好 1 条，实际 ${r1.warnN}`);
+      ok(r1.rows > 0, `存储故障下测算应正常，实际 ${r1.rows} 条`);
+      await page.locator('.rc').nth(1).click();
+      await page.selectOption('#i-hops', '4');
+      await page.waitForTimeout(150);
+      const r2 = await page.evaluate(() => [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length);
+      ok(r2 === 1, `多次写入失败后提示仍应 1 条，实际 ${r2}`);
+      await page.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
+      set(`提示恰好 1 条（多次失败去重，防渲染循环）；故障下重算 ${r1.rows} 条、切方案正常`);
+    },
+  },
+  {
+    id: 'HR-02', section: '运行时健壮性', title: '重渲染保持折叠态（完整明细 + 无 id 说明面板）',
+    steps: '展开「完整明细」与任一口径说明面板，改价格、切跳数触发重算',
+    expected: '重建后两者仍为展开态（修复前完整明细会被收回）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        document.getElementById('d-detail').open = true;
+        const ex = document.querySelector('details.explain'); if (ex) ex.open = true;
+      });
+      await page.fill('#i-pgen', '333');
+      await page.locator('#i-pgen').blur();
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.getElementById('d-detail').open), '改价格后完整明细应保持展开');
+      const ex1 = await page.evaluate(() => { const d = document.querySelector('details.explain'); return d ? d.open : null; });
+      await page.selectOption('#i-hops', '3');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.getElementById('d-detail').open), '切跳数后完整明细应保持展开');
+      const ex2 = await page.evaluate(() => [...document.querySelectorAll('details.explain')].some(d => d.open));
+      ok(ex2 === true, `无 id 说明面板展开态应保持，实际 ${ex2}`);
+      set(`d-detail 保持展开；说明面板 open=${ex1}→${ex2}`);
+    },
+  },
+  {
+    id: 'HR-03', section: '运行时健壮性', title: '错误态往返不发生错位恢复',
+    steps: '展开完整明细后切到无连通路径省对（错误态），再切回',
+    expected: '错误态正常渲染空态卡片；切回后 d-detail 按 id 恢复展开，无错位、无异常',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => { document.getElementById('d-detail').open = true; });
+      await page.selectOption('#i-from', 'BJ');
+      await page.selectOption('#i-hops', '1');
+      await page.waitForTimeout(150);
+      const err = await page.evaluate(() => ({ empty: !!document.querySelector('.empty'), dets: document.querySelectorAll('#v-calc details').length }));
+      ok(err.empty, '应进入错误空态');
+      await page.selectOption('#i-from', 'SC');
+      await page.waitForTimeout(150);
+      const back = await page.evaluate(() => ({
+        detailOpen: document.getElementById('d-detail').open,
+        cards: document.querySelectorAll('.rc').length,
+      }));
+      ok(back.cards > 0, '应恢复正常结果态');
+      ok(back.detailOpen, '切回后完整明细应按 id 恢复展开');
+      set(`错误态面板 ${err.dets} 个（数量守卫分支）；切回后卡片 ${back.cards} 张、d-detail 按 id 恢复展开`);
+    },
+  },
+  {
+    id: 'HR-04', section: '运行时健壮性', title: '最坏参数下持久化记录 < 2KB',
+    steps: '西藏→江苏、6 段、绕行不限（候选逾百条）后触发保存',
+    expected: 'iproute.v2.last 低于 2048 字节且不含求解结果（修复前最坏约 12MB）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      await page.evaluate(() => {
+        const setv = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
+        setv('i-from', 'XZ'); setv('i-to', 'JS'); setv('i-hops', '6'); setv('i-detour', '9');
+      });
+      await page.waitForTimeout(200);
+      const r = await page.evaluate(() => {
+        const raw = localStorage.getItem('iproute.v2.last') || '';
+        return { bytes: raw.length, hasRes: raw.includes('_res'), n: state._res.total };
+      });
+      ok(r.n > 50, `最坏省对候选应 >50 条，实际 ${r.n}`);
+      ok(r.bytes < 2048, `持久化记录应 <2KB，实际 ${r.bytes}B`);
+      ok(!r.hasRes, '持久化记录不得包含 _res 求解结果');
+      set(`候选 ${r.n} 条；记录 ${r.bytes}B（修复前最坏约 12MB）；含 _res=${r.hasRes}`);
+    },
+  },
+  {
+    id: 'HR-05', section: '运行时健壮性', title: '全局错误兜底：提示条去重计数且不吞控制台',
+    steps: '注入两次相同未捕获异常与一次不同异常',
+    expected: '提示条出现且相同错误合并为 ×2；不同错误单列；pageerror 事件照常触发（控制台留痕）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.rc');
+      const errs = [];
+      page.on('pageerror', e => errs.push(String(e)));
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
+      await page.waitForTimeout(250);
+      let box = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return b ? b.innerText : ''; });
+      ok(box.includes('hr05-重复错误'), `提示条应含错误摘要，实际「${box.slice(0, 60)}」`);
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
+      await page.waitForTimeout(250);
+      const dup = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return (b ? b.innerText : '').includes('×2'); });
+      ok(dup, '相同错误第二次应合并为 ×2 而非新增一条');
+      await page.evaluate(() => setTimeout(() => { throw new Error('hr05-另一错误'); }, 0));
+      await page.waitForTimeout(250);
+      const both = await page.evaluate(() => { const b = document.getElementById('gerr-box'); return b ? b.innerText : ''; });
+      ok(both.includes('hr05-另一错误'), '不同错误应单独显示');
+      const n = errs.filter(e => e.includes('hr05')).length;
+      ok(n >= 3, `pageerror 应照常触发 ≥3 次（不吞控制台），实际 ${n}`);
+      set(`提示条含 2 类错误（重复项合并 ×2）；pageerror 触发 ${n} 次未被吞`);
+    },
+  },
+  {
+    id: 'HR-06', section: '运行时健壮性', title: '费率库整页重建保持卡片展开态',
+    steps: '展开第一张通道卡片后切到测算再切回费率库',
+    expected: '切回后第一张通道卡仍为展开态（此前 renderLib 整页替换会收起）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.locator('.libcard summary').first().click();
+      ok(await page.evaluate(() => document.querySelector('.libcard').open), '前置：卡片应已展开');
+      await page.click('#t-calc');
+      await page.click('#t-lib');
+      await page.waitForTimeout(150);
+      ok(await page.evaluate(() => document.querySelector('.libcard').open), '切回费率库后第一张通道卡应保持展开');
+      set('通道卡展开态跨 Tab 往返保持');
+    },
+  },
+
   /* ================= 响应式 ================= */
   {
     id: 'R-01', section: '响应式', title: '手机竖屏 375×667（iPhone SE）',
@@ -634,7 +790,8 @@ const tests = [
         await page.click('#t-lib');
         await page.locator('button', { hasText: /^省级参数/ }).click();
         const card = page.locator('.libcard').first();
-        await card.locator('summary').click();
+        // harden-web-runtime 后展开态跨 Tab 保持：二次循环进来的卡片可能已展开，盲点 summary 会把它收起，改为「收起才展开」
+        if ((await card.getAttribute('open')) === null) await card.locator('summary').click();
         const r = await card.evaluate(() => {
           const inputs = [...document.querySelectorAll('.libcard .lib-io input')].slice(0, 3);
           const labels = [...document.querySelectorAll('.libcard .lib-io label')].slice(0, 3);
@@ -801,48 +958,55 @@ const tests = [
   },
   {
     id: 'RQ-602', section: 'PRD-IPRO', title: 'REQ-602：本地价格覆盖 priceVersion 校验',
-    steps: '预置旧版本地费率覆盖（pv=0000）后加载页面，自动「确定」丢弃',
-    expected: '出现提示并丢弃旧覆盖，CH 恢复当前核定值（64 条且内容非占位）',
+    steps: '预置旧版本地费率覆盖（pv=0000）后加载页面，应用内确认框点「丢弃本地修改」',
+    expected: '出现应用内提示并丢弃旧覆盖，CH 恢复当前核定值（条数与 DATA.CH 一致且内容非占位）',
     async run(page, set) {
-      await page.addInitScript(() => {
-        window.__dialogSeen = false;
+      // 覆盖存档的通道条数必须与当前 CH 一致，否则 state.js 的版本校验分支会被整段跳过
+      // （state.js：if (s.ch && s.ch.length === CH.length)）。故先取实际条数再预置。
+      await page.goto(G, DCL);
+      const NCH = await page.evaluate(() => DATA.CH.length);
+      await page.addInitScript((n) => {
         localStorage.setItem('iproute.v2.lib', JSON.stringify({
           pv: '0000dead', at: 'old',
-          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+          ch: Array.from({ length: n }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
         }));
-      });
-      page.on('dialog', d => { page.__dialogSeen = true; d.accept(); });
+      }, NCH);
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
-      const seen = page.__dialogSeen === true;
+      const dlg = page.locator('[role="dialog"]');
+      await dlg.waitFor({ state: 'visible', timeout: 5000 });
+      const tip = await dlg.innerText();
+      ok(tip.includes('priceVersion') && tip.includes('不一致'), `应有旧版本提示（应用内确认框），实际「${tip.slice(0, 30)}」`);
+      await dlg.locator('button', { hasText: '丢弃本地修改' }).click();
+      await page.waitForTimeout(200);
       const ch = await page.evaluate(() => ({ n: CH.length, first: CH[0].n, stale: !!state._libStale }));
-      ok(seen, '应弹出旧版本提示（confirm）');
-      ok(ch.n === 64 && !String(ch.first).includes('占位'), `旧覆盖应被丢弃恢复核定值，实际 CH[0].n=${ch.first}`);
-      set(`提示出现=${seen}；本地覆盖已丢弃，CH 恢复核定值（${ch.n} 条）`);
+      ok(ch.n === NCH && !String(ch.first).includes('占位') && !ch.stale, `旧覆盖应被丢弃恢复核定值（应 ${NCH} 条），实际 CH[0].n=${ch.first} stale=${ch.stale}`);
+      set(`应用内提示出现（priceVersion 不一致）；丢弃后 CH 恢复核定值（${ch.n} 条）`);
     },
   },
   {
     id: 'RQ-602b', section: 'PRD-IPRO', title: 'REQ-602b：保留旧版价格覆盖时费率库出现核对横幅',
-    steps: '预置旧版本地费率覆盖后加载，confirm 选「取消」暂保留，进入费率库；再点「恢复检索原始值」',
-    expected: '费率库顶部出现「旧版价格数据」核对横幅；恢复原始值后横幅消失',
+    steps: '预置旧版本地费率覆盖后加载，应用内确认框选「暂保留」，进入费率库；再点「恢复检索原始值」',
+    expected: '费率库顶部出现「旧版价格数据」核对横幅；应用内确认恢复后横幅消失',
     async run(page, set) {
-      await page.addInitScript(() => {
-        window.__keepSeen = false;
+      // 覆盖存档的通道条数必须与当前 CH 一致，否则 state.js 的版本校验分支会被整段跳过
+      // （state.js：if (s.ch && s.ch.length === CH.length)）。故先取实际条数再预置。
+      await page.goto(G, DCL);
+      const NCH = await page.evaluate(() => DATA.CH.length);
+      await page.addInitScript((n) => {
         localStorage.setItem('iproute.v2.lib', JSON.stringify({
           pv: '0000dead', at: 'old',
-          ch: Array.from({ length: 64 }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
+          ch: Array.from({ length: n }, (_, i) => ({ id: 'X' + i, n: '占位通道' + i, from: 'SC', to: 'JS', type: 'DC', kv: '±0kV', loss: 0, t: 1, tRaw: 1, sendFee: 0, cap: null, capRated: null, capActual: null, capBasis: 'unknown', capSrc: '', priceType: 'energy', capPrice: null, capEq: null, tier: 'est', doc: '', eff: '', bill: '', tax: true, incLoss: false, excerpt: '', hist: [], tradable: true, status: '', note: '', sourceIssue: null, fn: '', lenKm: null, stFrom: null, stTo: null, regional: false, dirNote: '', docTitle: '', docVersion: null, pubDate: '', sourceIssue2: null })),
         }));
-      });
-      let acceptNext = false;   // 第一个弹框=加载时旧版提示（dismiss=暂保留），第二个=resetLib 确认（accept）
-      page.on('dialog', async d => {
-        page.__keepSeen = true;
-        if (acceptNext) { acceptNext = false; await d.accept(); } else { await d.dismiss(); }
-      });
+      }, NCH);
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      const dlg = page.locator('[role="dialog"]');
+      await dlg.waitFor({ state: 'visible', timeout: 5000 });
+      const tip = await dlg.innerText();
+      ok(tip.includes('priceVersion') && tip.includes('不一致'), '应弹出旧版本提示（应用内确认框）');
+      await dlg.locator('button', { hasText: '暂保留' }).click();
+      await page.waitForTimeout(150);
       const kept = await page.evaluate(() => ({ stale: !!state._libStale, first: CH[0].n }));
-      ok(page.__keepSeen === true, '应弹出旧版本提示（confirm）');
-      ok(kept.stale && String(kept.first).includes('占位'), '「取消」后应暂保留旧覆盖（_libStale=true）');
+      ok(kept.stale && String(kept.first).includes('占位'), '「暂保留」后应保留旧覆盖（_libStale=true）');
       await page.click('#t-lib');
       await page.waitForTimeout(150);
       const banner = await page.evaluate(() => {
@@ -850,8 +1014,9 @@ const tests = [
         return w ? w.textContent.trim().slice(0, 40) : '';
       });
       ok(banner.includes('旧版价格数据'), `费率库应出现核对横幅，实际「${banner}」`);
-      acceptNext = true;
       await page.locator('#v-lib button', { hasText: '恢复检索原始值' }).click();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      await dlg.locator('button', { hasText: '恢复原始值' }).click();
       await page.waitForTimeout(200);
       const after = await page.evaluate(() => ({ stale: !!state._libStale, banner: [...document.querySelectorAll('#v-lib .warn')].some(x => x.textContent.includes('旧版价格数据')) }));
       ok(!after.stale && !after.banner, '恢复原始值后横幅应消失');
@@ -1079,23 +1244,34 @@ const tests = [
     },
   },
   {
-    id: 'RQ-703', section: 'PRD-IPRO', title: 'REQ-703：底图切换不可用时弹框反馈',
-    steps: '非代理环境点击「腾讯地图」',
-    expected: '弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），不再静默',
+    id: 'RQ-703', section: 'PRD-IPRO', title: 'REQ-703：底图切换不可用时应用内弹框反馈',
+    steps: '非代理环境点击「腾讯地图」，应用内确认框分别走「保持内置拓扑图」与「改用天地图」',
+    expected: '应用内弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），确定后切到天地图',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.waitForSelector('.rc');
-      let dialogMsg = '';
-      page.on('dialog', async d => { dialogMsg = d.message(); await d.dismiss(); });
-      await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
-        await page.evaluate(() => go('map'));
-        await page.locator('#v-map button', { hasText: '腾讯地图' }).click();
-      });
+      const dlg = page.locator('[role="dialog"]');
+      const clickQQ = async () => {
+        await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
+          await page.evaluate(() => go('map'));
+          await page.locator('#v-map button', { hasText: '腾讯地图' }).click();
+        });
+      };
+      await clickQQ();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      const msg = await dlg.innerText();
+      ok(msg.includes('腾讯地图') && msg.includes('不可用'), `应弹框说明，实际「${msg.slice(0, 30)}」`);
+      await dlg.locator('button', { hasText: '保持内置拓扑图' }).click();
       await page.waitForTimeout(200);
       const r = await page.evaluate(() => ({ p: state.mapProvider, on: document.querySelector('#v-map .seg.small button.on')?.textContent }));
-      ok(dialogMsg.includes('腾讯地图') && dialogMsg.includes('不可用'), `应弹框说明，实际「${dialogMsg.slice(0, 30)}」`);
       ok(r.p === 'svg' && r.on === '拓扑图', '取消后应保持拓扑图');
-      set(`弹框="${dialogMsg.slice(0, 24)}…"；provider=${r.p}（原 svg）`);
+      await clickQQ();
+      await dlg.waitFor({ state: 'visible', timeout: 3000 });
+      await dlg.locator('button', { hasText: '改用天地图' }).click();
+      await page.waitForTimeout(200);
+      const r2 = await page.evaluate(() => ({ p: state.mapProvider, on: document.querySelector('#v-map .seg.small button.on')?.textContent }));
+      ok(r2.p === 'td' && r2.on === '天地图', '确定后应切到天地图');
+      set(`应用内弹框="腾讯地图不可用…"；保持→${r.p}；改用→${r2.p}`);
     },
   },
 ];

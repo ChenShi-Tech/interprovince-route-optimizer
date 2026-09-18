@@ -18,3 +18,11 @@ npm-debug.log*
 
 # 功能开发的 worktree（见 docs/开发约定与操作手册.md 纪律 5）
 .worktrees/
+.claude/worktrees/
+
+# 本次浏览器验证使用的依赖符号链接
+node_modules
+
+# 远端既有本地工具目录约定
+openspec/
+.zcode/

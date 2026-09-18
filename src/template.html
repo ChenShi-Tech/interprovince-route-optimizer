@@ -4,7 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
 <meta name="theme-color" content="#ffffff">
-<title>省间路径优选测算 v2</title>
+<title>省间中长期交付成本与报价测算</title>
+<script>
+/* 全局错误兜底（spec: runtime-error-feedback）：head 最先安装，先于腾讯地图脚本，
+   捕获启动期第三方脚本错误。提示按消息去重并计数（上限 4 条）；不吞错误——
+   onerror 返回 false、rejection 不 preventDefault，控制台照常留痕。 */
+(function(){
+  var items={}, order=[];
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function flush(){
+    if(!document.body){ document.addEventListener('DOMContentLoaded',flush,{once:true}); return; }
+    var box=document.getElementById('gerr-box');
+    if(!order.length){ if(box) box.remove(); return; }
+    if(!box){ box=document.createElement('div'); box.id='gerr-box';
+      box.style.cssText='position:fixed;left:10px;right:10px;bottom:64px;z-index:3900;display:flex;flex-direction:column;gap:6px';
+      document.body.appendChild(box); }
+    box.innerHTML=order.map(function(k){
+      return '<div style="background:#FCEBEB;color:#A32D2D;border-radius:10px;padding:8px 10px;font-size:11.5px;line-height:1.55;box-shadow:0 4px 14px rgba(0,0,0,.14);display:flex;gap:8px;align-items:flex-start">'
+        +'<div style="flex:1;word-break:break-all">⚠ 运行时错误'+(items[k]>1?' ×'+items[k]:'')+'：<code>'+esc(k)+'</code></div>'
+        +'<button data-gerr-close style="border:0;background:rgba(163,45,45,.12);color:#A32D2D;border-radius:6px;padding:3px 8px;font-size:11px;flex:none;cursor:pointer">关闭</button></div>';
+    }).join('');
+  }
+  function report(m){
+    m=String(m==null?'未知错误':(m&&m.message)||m).slice(0,160);
+    if(items[m]==null){ items[m]=1; order.push(m); if(order.length>4){ var drop=order.shift(); delete items[drop]; } }
+    else items[m]++;
+    flush();
+  }
+  window.onerror=function(m){ report(m); return false; };
+  window.addEventListener('unhandledrejection',function(e){ report(e.reason); });
+  document.addEventListener('click',function(ev){
+    if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
+  });
+})();
+</script>
 <script type="text/javascript">
 window._TMapSecurityConfig = {
   serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
@@ -32,12 +65,23 @@ header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdro
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap}
-main{flex:1;padding:14px 16px 96px;overflow-x:hidden}
+/* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
+   声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
+main{flex:1;padding:14px 16px 8px;overflow-x:hidden}
+/* 末尾卡片的外边距属于尾部留白，由页脚间距接管。
+   深层选择器：各 Tab 内容末尾的 margin 在任意嵌套层泄漏会导致
+   「声明文字与导航的距离」随 Tab 不同（测算 .sub 8px / 费率库卡片 12px），
+   统一在每一层清零后，声明文字上间距恒等于 .disclaim 的 padding-top */
+main section>:last-child,main section :last-child{margin-bottom:0}
+/* z-index 3000：地图图层（含 canvas/WebView 层叠上下文）不得盖住固定导航（底栏遮挡修复） */
 nav{position:fixed;bottom:0;left:0;right:0;z-index:3000;background:rgba(255,255,255,.96);backdrop-filter:saturate(180%) blur(12px);border-top:.5px solid var(--line);display:flex;padding:6px 0 max(6px,env(safe-area-inset-bottom));max-width:480px;margin:0 auto}
 nav button{flex:1;background:none;border:0;padding:6px 0;font-size:11px;color:var(--ink3);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
 nav button.on{color:var(--blue)}
 nav .ic{width:20px;height:20px;display:block}
 nav button.on .ic path,nav button.on .ic circle,nav button.on .ic rect{stroke:var(--blue)}
+/* REQ-307：页脚定位声明，三 Tab 共用。底部内边距 = 固定导航条高度(≈64px) + 4px 呼吸隙，
+   含 safe-area 适配（与 nav 的 max(6px,env(safe-area-inset-bottom)) 对应） */
+.disclaim{padding:6px 16px calc(68px + env(safe-area-inset-bottom));text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6}
 .card{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
 .card.tight{padding:12px}
 .sec-title{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -51,6 +95,14 @@ textarea{resize:vertical;min-height:64px;line-height:1.5;font-size:13px}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238A8A85' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
 input[type=number]{font-variant-numeric:tabular-nums}
 input:disabled{cursor:not-allowed}
+/* 密钥输入框：掩码显示 + 右侧小眼睛切换可见性（toggleTkVis 在 ui/map.js） */
+.tk-wrap{position:relative}
+.tk-wrap input{padding-right:38px}
+.tk-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;
+  border:0;background:none;cursor:pointer;padding:6px;color:var(--ink3);
+  display:flex;align-items:center;justify-content:center;border-radius:7px}
+.tk-eye:hover{background:var(--gray-bg);color:var(--ink2)}
+.tk-eye svg{width:18px;height:18px;display:block;pointer-events:none}
 /* 该字段在当前口径下不参与计算：置灰但保留在 DOM 中（readInputs 仍按 id 读取） */
 label.f.off span{color:var(--ink3)}
 label.f.off input{background:var(--gray-bg);color:var(--ink3)}
@@ -64,10 +116,11 @@ label.f.off input{background:var(--gray-bg);color:var(--ink3)}
 .btn:active{opacity:.85}
 .btn.ghost{background:#fff;color:var(--blue);border:.5px solid rgba(24,95,165,.35);font-weight:500;font-size:13px;padding:9px}
 details.adv{border-top:.5px solid var(--line2);margin-top:12px;padding-top:11px}
-details.adv summary{font-size:12px;color:var(--blue);cursor:pointer;list-style:none;font-weight:500}
-details.adv summary::-webkit-details-marker{display:none}
-details.adv summary::before{content:"+ ";font-weight:600}
-details.adv[open] summary::before{content:"− "}
+/* 只作用于本层 summary（子选择器）：后代选择器会让嵌套的 details.explain 随外层展开显示成「−」 */
+details.adv>summary{font-size:12px;color:var(--blue);cursor:pointer;list-style:none;font-weight:500}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::before{content:"+ ";font-weight:600}
+details.adv[open]>summary::before{content:"− "}
 details.adv .inner{padding-top:11px}
 .note{font-size:11.5px;color:var(--ink3);line-height:1.6;margin:8px 0 0}
 /* 长段说明文字的折叠容器：默认收起只留一行可点的标题，免得正文被注释淹没。
@@ -108,19 +161,8 @@ details.explain .note:last-child{margin-bottom:0}
 .chip.bad{background:var(--red-bg);color:var(--red)}
 .chip.info{background:var(--blue-bg);color:var(--blue-ink)}
 .chip.warn{background:var(--amber-bg);color:var(--amber)}
-/* 通道组件：可点选的 chip —— 灰＝普通、蓝底＝直流、反白＝已选（必经）。
-   区域限高滚动，免得候选通道多时把路线列表挤下去。 */
-.comp-box{margin:0 0 9px;border-top:.5px solid var(--line2);padding-top:9px}
-.comp-hd{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;font-weight:600;color:var(--ink2)}
-.comp-hd em{font-style:normal;font-weight:400;font-size:10.5px;color:var(--ink3);text-align:right}
-.comp-tip{font-size:10.5px;color:var(--ink3);line-height:1.5;margin:4px 0 0}
-.chips.comps{max-height:118px;overflow-y:auto;margin-top:8px;padding-right:2px}
-.chips.comps::-webkit-scrollbar{width:5px}
-.chips.comps::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
-button.chip{font-family:inherit;cursor:pointer;border:.5px solid rgba(0,0,0,.08);line-height:1.5}
-button.chip.dc{background:var(--blue-bg);color:var(--blue-ink)}
-button.chip.on{background:var(--blue);color:#fff;border-color:var(--blue)}
-button.chip em{font-style:normal;font-size:9.5px;opacity:.7;margin-left:4px}
+/* 通道下拉（单选）：选定具体通道时高亮，提示当前已按通道筛选 */
+.chan select.on{border-color:var(--blue);background-color:var(--blue-bg);color:var(--blue-ink)}
 table{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
 th,td{padding:6px 4px;text-align:right;border-bottom:.5px solid var(--line2);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
@@ -158,6 +200,8 @@ td b{font-weight:600}
 #map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430}
 #fallback{display:none;padding:16px;font-size:12px;color:var(--ink2);overflow:auto}
 .empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
+.empty-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px}
+.empty-acts .btn{width:auto;padding:9px 16px}
 .mc{background:var(--gray-bg);border-radius:9px;padding:8px 10px}
 .mc .l{font-size:10.5px;color:var(--ink3);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mc .v{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
@@ -195,6 +239,85 @@ td b{font-weight:600}
 .bar-params span{display:block;font-size:10.5px;color:var(--ink3);margin-bottom:5px;font-weight:500}
 .bar-params input,.bar-params select{padding:9px 10px;font-size:15px;font-weight:600}
 .bar-params select{padding-right:26px}
+/* 顶部主卡：线路与电量 → 送端报价（主输入，放大）与测算结果 → 价格组成。
+   .picker / .bar-params 嵌入主卡时去掉各自的卡片外观 */
+.hero{background:var(--card);border:.5px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:10px}
+.hero .picker,.hero .bar-params{background:none;border:0;border-radius:0;padding:0;margin:0}
+.hero .bar-params{grid-template-columns:1fr 1fr;margin-top:10px}
+.hero .chan{margin-top:10px;min-width:0}
+.hero-main{display:grid;gap:10px;margin-top:12px;padding-top:12px;border-top:.5px solid var(--line2)}
+.hero-price{display:block;min-width:0}
+.hero-price span,.hero-lb{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink2);font-weight:500;margin-bottom:6px}
+.hero-price input{font-size:34px;font-weight:700;letter-spacing:-.5px;padding:12px 14px;border-radius:12px;border:1.5px solid rgba(24,95,165,.45);line-height:1.2}
+.hero-price input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(24,95,165,.14)}
+.hero-res{background:var(--blue-bg);border-radius:12px;padding:10px 14px 11px;min-width:0}
+.hero-res.empty-res{background:var(--gray-bg)}
+.hero-tag{font-size:10.5px;font-weight:600;color:var(--blue-ink);background:#fff;padding:1px 7px;border-radius:999px}
+.hero-v{font-size:34px;font-weight:700;letter-spacing:-.6px;color:var(--blue-ink);font-variant-numeric:tabular-nums;line-height:1.2}
+.hero-v small{font-size:12px;font-weight:500;color:var(--ink2);margin-left:4px;letter-spacing:0}
+.hero-sub{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.5;word-break:break-all}
+.cmp{margin-top:12px}
+.cmp-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:600;color:var(--ink2)}
+.cmp-hd em{font-style:normal;font-weight:400;font-size:10.5px;color:var(--ink3)}
+.cmp-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0 10px;background:var(--gray-bg)}
+.cmp-bar i{display:block;height:100%}
+.cmp-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.cmp-item{background:var(--gray-bg);border-radius:9px;padding:7px 10px;min-width:0}
+.cmp-item .l{font-size:11px;color:var(--ink2);display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmp-item .l i{flex:0 0 auto;width:8px;height:8px;border-radius:2px}
+.cmp-item .v{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1.3}
+.cmp-item .p{font-size:10px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.cmp-item.tot{background:var(--blue-bg)}
+.cmp-item.tot .l,.cmp-item.tot .v{color:var(--blue-ink);font-weight:700}
+/* 费用口径与参数：紧凑网格，每项只占一格，不再整行铺满 */
+.pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 10px;margin-bottom:10px}
+.pgrid label.f{display:flex;flex-direction:column;justify-content:flex-end;margin:0;min-width:0}
+.pgrid label.f span{display:flex;align-items:baseline;gap:6px;font-size:11.5px;margin-bottom:4px;white-space:nowrap}
+.pgrid input,.pgrid select{font-size:13px;padding:7px 9px;border-radius:8px}
+.pgrid select{padding-right:26px;background-position:right 8px center}
+.p-reset{color:var(--blue);font-weight:500;cursor:pointer;font-size:11px}
+/* 主卡口径摘要：面板收起后仍能看到当前口径；与默认值不同的项标色，按钮角标为改动项数 */
+.cfg-bar{display:flex;align-items:center;gap:10px;margin-top:10px;padding:7px 8px 7px 11px;background:var(--gray-bg);border-radius:10px}
+.cfg-sum{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:5px;font-size:11.5px;color:var(--ink2);line-height:1.5}
+.cfg-sum span{background:#fff;border-radius:6px;padding:1px 7px;max-width:100%;overflow-wrap:anywhere}
+.cfg-sum span.chg{background:var(--amber-bg);color:var(--amber);font-weight:600}
+.btn.cfg-btn{flex:none;width:auto;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;font-size:13px;font-weight:600;background:#fff}
+.cfg-btn svg{width:15px;height:15px;display:block}
+.cfg-btn b{min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:var(--amber);color:#fff;font-size:10.5px;line-height:17px;text-align:center}
+/* 参数弹出面板 */
+.sheet{position:fixed;inset:0;z-index:3500;visibility:hidden;pointer-events:none;transition:visibility 0s linear .25s}
+.sheet.open{visibility:visible;pointer-events:auto;transition:visibility 0s}
+.sheet-mask{position:absolute;inset:0;background:rgba(20,24,32,.42);opacity:0;transition:opacity .25s}
+.sheet.open .sheet-mask{opacity:1}
+.sheet-panel{position:absolute;left:0;right:0;bottom:0;max-height:82vh;display:flex;flex-direction:column;background:var(--card);border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.18);transform:translateY(100%);transition:transform .25s ease}
+.sheet.open .sheet-panel{transform:none}
+.sheet-grab{flex:none;width:36px;height:4px;border-radius:2px;background:rgba(0,0,0,.15);margin:8px auto 0}
+.sheet-hd{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:8px 16px 10px;border-bottom:.5px solid var(--line2)}
+.sheet-title{font-size:15px;font-weight:700}
+.sheet-price{font-size:19px;font-weight:700;color:var(--blue-ink);font-variant-numeric:tabular-nums;margin-top:1px}
+.sheet-price small{font-size:11px;font-weight:500;color:var(--ink3);margin-left:4px}
+.sheet-x{flex:none;border:0;background:var(--gray-bg);color:var(--ink2);width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer}
+.sheet-body{flex:1;min-height:0;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.sheet-body .pgrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:0}
+.sheet-ft{flex:none;display:grid;grid-template-columns:1fr 2fr;gap:10px;padding:10px 16px max(12px,env(safe-area-inset-bottom));border-top:.5px solid var(--line2)}
+.sheet-ft .btn{padding:11px;font-size:14px}
+body.sheet-open{overflow:hidden}
+@media (min-width:600px){
+  .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:16px 0 0 16px;transform:translateX(100%);box-shadow:-8px 0 30px rgba(0,0,0,.18)}
+  .sheet-grab{display:none}
+  .sheet-hd{padding-top:16px}
+}
+.tsub{font-size:10.5px;color:var(--ink3);white-space:normal}
+/* 参数面板分组小标题；到户缺项醒目提示 */
+.psub{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;color:var(--ink2);margin:14px 0 8px;padding-bottom:5px;border-bottom:.5px solid var(--line2)}
+.psub:first-child{margin-top:0}
+.psub em{font-style:normal;font-weight:400;font-size:10.5px;color:var(--ink3);text-align:right}
+.p-calc{font-style:normal;font-weight:600;color:var(--blue-ink);font-size:11px}
+.p-note{font-size:11.5px;color:var(--amber);background:var(--amber-bg);border-radius:8px;padding:6px 10px;margin:0 0 8px;line-height:1.5}
+.cfg-warn{margin-top:8px;font-size:12px;color:var(--amber);background:var(--amber-bg);border-radius:9px;padding:7px 11px;line-height:1.5}
+.cfg-warn a{color:var(--blue);font-weight:600;cursor:pointer;white-space:nowrap}
+.policy-foot{margin:4px 0 0}
+.policy-foot details.explain{background:var(--card);margin:0}
 /* 智能推荐 */
 .ai-bar{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px}
 .ai-bar .btn{padding:10px;font-size:13.5px}
@@ -215,7 +338,7 @@ td b{font-weight:600}
 .ai-rec-why{font-size:11.5px;color:var(--ink2);line-height:1.55;margin-top:6px;padding-top:6px;border-top:.5px dashed var(--line2)}
 details.adv.boxed{border:.5px solid var(--line);border-radius:var(--r);background:var(--card);padding:11px 14px;margin-bottom:10px}
 details.adv.boxed .inner{padding-top:12px}
-details.adv.boxed summary{font-size:12.5px}
+details.adv.boxed>summary{font-size:12.5px}
 .rlist{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch}
 .rlist::-webkit-scrollbar{height:4px}
 .rlist::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
@@ -232,30 +355,121 @@ details.adv.boxed summary{font-size:12.5px}
 .rlist-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:10.5px;color:var(--ink3);margin-top:4px}
 .tg{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
 .tg input{width:auto;margin:0;padding:0}
-.hd-route{font-size:16px;font-weight:700;color:var(--blue-ink);line-height:1.35;margin-bottom:8px;word-break:break-all}
-.hd-route .arw{color:var(--ink3);font-weight:400;margin:0 4px;font-size:13px}
-.lines{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:10px}
-.ln{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
+/* 方案卡片：路线（左）+ 价格（右，突出）→ 价格组成条（悬停 / 聚焦显示分项）→ 关键指标 → 标签与区域网损对照 */
+.plan-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.plan-no{font-size:12.5px;font-weight:700;color:var(--ink2)}
+.plan-st{font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.plan-st.ok{background:var(--teal-bg);color:var(--teal)}
+.plan-st.bad{background:var(--red-bg);color:var(--red)}
+.plan-main{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.plan-route{min-width:0;flex:1}
+.hd-route{font-size:21px;font-weight:700;color:var(--blue-ink);line-height:1.3;word-break:break-all}
+.hd-route .arw{color:var(--ink3);font-weight:400;margin:0 6px;font-size:16px}
+.hd-route .rg{color:var(--teal)}
+.plan-sub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:6px}
+.hd-landing{font-size:12.5px;color:var(--ink2)}
+.hd-landing b{color:var(--ink);font-weight:600}
+.lines{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.ln{font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--blue-bg);color:var(--blue-ink);white-space:nowrap}
 .ln.ac{background:var(--teal-bg);color:var(--teal)}
 .plus{font-size:10px;color:var(--ink3)}
+.plan-price{flex:none;text-align:right}
+.plan-price b{display:block;font-size:30px;font-weight:750;letter-spacing:-.6px;color:var(--blue-ink);font-variant-numeric:tabular-nums;line-height:1.1}
+.plan-price small{display:block;font-size:11px;color:var(--ink3);margin-top:3px;white-space:nowrap}
+.pbar{display:flex;gap:2px;height:12px;margin:14px 0 2px}
+.pbar i{position:relative;display:block;height:100%;min-width:3px;cursor:help;outline:none;font-style:normal;transition:box-shadow .12s}
+.pbar i:first-child{border-radius:6px 0 0 6px}
+.pbar i:last-child{border-radius:0 6px 6px 0}
+.pbar i:only-child{border-radius:6px}
+.pbar i:hover,.pbar i:focus{box-shadow:0 0 0 2px #fff,0 0 0 3.5px rgba(31,35,40,.55);z-index:2}
+.pbar i::after{content:attr(data-tip);display:none;position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);background:rgba(31,35,40,.94);color:#fff;font-size:11.5px;font-weight:500;line-height:1.4;padding:5px 9px;border-radius:7px;white-space:nowrap;pointer-events:none;z-index:5}
+.pbar i:hover::after,.pbar i:focus::after{display:block}
+.pbar i:first-child::after{left:0;transform:none}
+.pbar i:last-child::after{left:auto;right:0;transform:none}
+.plan-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.plan-kpi>div,.kpi>div{background:var(--gray-bg);border-radius:9px;padding:7px 10px;min-width:0}
+.plan-kpi span,.kpi span{display:block;font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plan-kpi b,.kpi b{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+.plan-kpi small,.kpi small{font-size:10.5px;color:var(--ink3);margin-left:3px}
+.plan-tags{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+.rl-cmp{display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px;font-size:11px;color:var(--ink3);background:var(--gray-bg);border-radius:999px;padding:2px 3px 2px 10px}
+.rl-cmp span{padding:1px 8px;border-radius:999px;color:var(--ink2);white-space:nowrap}
+.rl-cmp span.on{background:#fff;color:var(--blue-ink);font-weight:600;box-shadow:0 0 0 .5px var(--line)}
+.rl-cmp b{font-weight:600;font-variant-numeric:tabular-nums}
+.plan-issues{margin-top:10px;border-left:3px solid #EF9F27;background:var(--amber-bg);border-radius:0 8px 8px 0;padding:6px 10px}
+.plan-issues>summary{font-size:12px;color:var(--amber);font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px}
+.plan-issues>summary::-webkit-details-marker{display:none}
+.plan-issues>summary::before{content:"＋";font-size:11px}
+.plan-issues[open]>summary::before{content:"－"}
+.plan-issues>summary b{background:#fff;border-radius:999px;padding:0 7px;font-size:10.5px}
+.plan-issues .note{color:var(--amber);margin:6px 0 0}
+.plan-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.plan-actions .btn.ghost{padding:8px 6px;font-size:13px}
+/* 交易连接：节点 → 专项工程段卡片（关键参数放大，物理估算降级为一行小字）→ 区域网架卡片 */
 .tl{position:relative;padding-left:2px}
 .tl-node{display:flex;gap:10px;align-items:flex-start}
-.tl-dot{flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:#fff;border:2.5px solid var(--blue);margin-top:5px;position:relative;z-index:2}
+.tl-dot{flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:#fff;border:2.5px solid var(--blue);margin-top:6px;position:relative;z-index:2}
 .tl-node.end .tl-dot{border-color:var(--teal);background:var(--teal)}
-.tl-info{min-width:0;padding-bottom:7px}
-.tl-name{font-size:14px;font-weight:700;line-height:1.3}
-.tl-st{font-size:11px;color:var(--ink2);margin-top:2px;line-height:1.5}
-.tl-ad{color:var(--ink3);font-size:10.5px;margin-left:4px}
+.tl-info{min-width:0;padding-bottom:8px}
+.tl-name{font-size:15px;font-weight:700;line-height:1.35}
+.tl-st{font-size:11.5px;color:var(--ink2);margin-top:2px;line-height:1.5}
+.tl-ad{color:var(--ink3);font-size:11px;margin-left:4px}
 .tl-seg{display:flex;gap:10px}
 .tl-seg-line{flex:0 0 auto;width:11px;display:flex;justify-content:center}
 .tl-seg-line::before{content:"";width:2px;background:#85B7EB;border-radius:1px;flex:1}
-.tl-seg-card{flex:1;min-width:0;background:var(--gray-bg);border-radius:9px;padding:9px 10px;margin-bottom:10px}
-.tl-seg-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;font-weight:600;margin-bottom:7px;flex-wrap:wrap}
-.tl-seg-g{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
-.tl-seg-g div{font-size:10px;color:var(--ink3);line-height:1.4}
-.tl-seg-g b{display:block;font-size:12px;color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
-.tl-cap{font-size:10px;color:var(--ink3);margin-top:4px}
-.tl-src{font-size:10px;color:var(--ink3);margin-top:6px;padding-top:6px;border-top:.5px solid rgba(0,0,0,.07);line-height:1.5}
+.tl-seg-card{flex:1;min-width:0;background:var(--gray-bg);border-radius:12px;padding:12px 13px;margin-bottom:12px}
+.tl-seg-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tl-seg-n{font-size:16px;font-weight:700;margin-right:auto}
+.kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpi>div{background:#fff}
+.tl-seg-card .meter{margin-top:10px}
+.tl-cap{font-size:11.5px;color:var(--ink2);margin-top:5px}
+.tl-cap b{color:var(--ink);font-weight:600}
+.tl-sub{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.6}
+.tl-sub i{font-style:normal;margin:0 6px}
+.tl-sub em{font-style:normal}
+.tl-src{font-size:10.5px;color:var(--ink3);margin-top:8px;padding-top:8px;border-top:.5px solid rgba(0,0,0,.07);line-height:1.5}
+.route-timeline .sec-title{flex-wrap:wrap;gap:5px}
+.region-seg>.tl-seg-line::before{background:#70b8ac}
+.region-network{flex:1;min-width:0;border:1px solid #cee5df;background:#f5faf8;border-radius:12px;padding:14px;margin-bottom:12px;overflow-wrap:anywhere}
+.region-network-hd,.region-charge-hd{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px}
+.region-network-hd h3{font-size:16px;font-weight:700;color:var(--teal);margin:0}
+.region-connection{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 12px}
+.region-connection>span{text-align:center;min-width:0}
+.region-connection>span b{display:block;font-size:15px;font-weight:700;color:var(--ink)}
+.region-connection small{display:block;font-size:11px;color:var(--ink3);margin-top:2px}
+.region-connection strong{font-size:14px;font-weight:700;color:var(--teal);border:1.5px dashed #8fc3b5;border-radius:10px;background:#fff;padding:10px 16px;text-align:center;white-space:nowrap}
+.region-connection i{font-style:normal;color:#5e9e90;font-size:16px}
+.region-charge{padding:12px 14px;background:#fff;border:1px solid #deebe6;border-radius:10px;scroll-margin-top:90px}
+.region-charge-hd{margin-bottom:10px}
+.region-charge-hd b{font-size:14px}
+.region-charge-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.region-charge-grid>div{background:#f5faf8;border-radius:9px;padding:8px 10px;min-width:0}
+.region-charge-grid>div>span{display:block;font-size:11px;color:var(--ink3);margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.region-charge-grid b{font-size:20px;font-weight:700;line-height:1.3;font-variant-numeric:tabular-nums;color:var(--ink)}
+.region-charge-grid small{font-size:11px;color:var(--ink3);margin-left:3px}
+.region-charge-grid em{display:inline-block;font-style:normal;font-size:10px;font-weight:600;color:var(--amber);background:var(--amber-bg);border-radius:999px;padding:0 6px;margin-left:5px;vertical-align:middle}
+.region-charge details.explain{margin:10px 0 0}
+.region-charge-note{font-size:11px;line-height:1.65;color:var(--ink2);margin:8px 0 0}
+.region-charge-note a{color:var(--blue-ink)}
+.region-capacity.exceeded{font-size:11.5px;color:var(--red);font-weight:600;line-height:1.6;margin:10px 0 0}
+.region-settlement{margin-top:12px}
+.region-settlement>.region-network-hd{margin-bottom:12px}
+@media(max-width:599px){
+  .hd-route{font-size:18px}
+  .plan-price b{font-size:24px}
+  .plan-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .plan-kpi b,.kpi b{font-size:15px}
+  .kpi{gap:6px}
+  .kpi>div{padding:6px 8px}
+  .kpi small{display:block;margin-left:0}
+  .region-network{padding:11px}
+  .region-charge-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .region-charge-grid>div:last-child{grid-column:1/-1}
+  .region-charge-grid b{font-size:18px}
+  .region-connection strong{padding:8px 10px;font-size:13px}
+  .region-connection>span b{font-size:14px}
+}
 .seg{display:flex;gap:6px;margin-bottom:12px}
 .seg button{flex:1;font-family:inherit;font-size:12px;padding:8px;border:.5px solid var(--line);background:#fff;color:var(--ink2);border-radius:9px;cursor:pointer}
 .seg button.on{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-ink);font-weight:600}
@@ -267,6 +481,23 @@ details.adv.boxed summary{font-size:12.5px}
 .rc-line{font-size:12px;font-weight:600;color:var(--ink);margin:4px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rc.on .rc-line{color:var(--blue-ink)}
 
+/* ==================== 折叠屏展开 / 小平板（600–899px） ====================
+   手机布局限宽 480px，折叠屏展开后两侧会空出大片；这一档铺满宽度，主卡与参数改多列，
+   路线列表与方案详情仍纵向堆叠（两栏在 700px 左右过窄）。 */
+@media (min-width:600px) and (max-width:899px){
+  #app{max-width:none}
+  nav{max-width:none}
+  main{padding:14px 20px 8px}
+  .disclaim{padding-left:20px;padding-right:20px}
+  .hero{padding:14px 16px}
+  .hero-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,.9fr);gap:12px;align-items:end}
+  .hero .bar-params,.hero .chan{margin-top:0}
+  .hero-main{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);align-items:stretch}
+  .hero-res{display:flex;flex-direction:column;justify-content:center}
+  .cmp-list{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .rc{width:132px}
+}
 /* ==================== 桌面端适配 ==================== */
 .topbar{margin-bottom:0}
 /* 手机端：路线列表 → 方案详情 → 智能推荐 纵向堆叠（DOM 顺序是 列表、推荐、详情，用 order 调整） */
@@ -285,12 +516,24 @@ details.adv.boxed summary{font-size:12.5px}
     border-bottom:2px solid transparent;border-radius:0}
   nav button.on{color:var(--blue);border-bottom-color:var(--blue);background:none}
   nav .ic{width:16px;height:16px}
-  main{order:2;padding:16px 24px 56px}
+  main{order:2;padding:16px 24px 14px}
+  /* 桌面端导航条在页头下方（非固定悬浮），页脚沉到文档底部即可，无需大让位内边距；
+     用 footer.disclaim 提高特异性，压过移动端 .disclaim 的导航让位内边距 */
+  footer.disclaim{order:3;padding:6px 24px 10px}
 
   .topbar{display:grid;grid-template-columns:minmax(340px,460px) minmax(0,1fr);gap:12px;
     align-items:stretch;margin-bottom:10px}
   .picker{margin-bottom:0}
   .bar-params{margin-bottom:0}
+  .hero{padding:16px 18px}
+  .hero-top{display:grid;grid-template-columns:minmax(320px,480px) minmax(220px,320px) minmax(220px,300px);gap:20px;align-items:end}
+  .hero .bar-params,.hero .chan{margin-top:0}
+  .hero-main{grid-template-columns:minmax(280px,420px) minmax(0,1fr);gap:16px;align-items:stretch}
+  .hero-price input{font-size:40px;padding:14px 16px}
+  .hero-res{display:flex;flex-direction:column;justify-content:center;padding:12px 18px}
+  .hero-v{font-size:40px}
+  .cmp-list{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+  .pgrid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 14px}
   details.adv.boxed{margin-bottom:10px}
 
   /* 两栏（900～1279px）：左＝路线列表；右列上方＝智能推荐、下方＝方案详情
@@ -304,6 +547,9 @@ details.adv.boxed summary{font-size:12.5px}
   .col-side::-webkit-scrollbar-thumb,.col-ai::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
   .col-ai{grid-column:2;grid-row:1;order:0;min-width:0}
   .col-main{grid-column:2;grid-row:2;order:0;min-width:0}
+  /* 智能推荐隐藏（AI_ENABLED=false）：只剩列表与详情两列，同处第一行 */
+  .layout.no-ai .col-side{grid-row:1}
+  .layout.no-ai .col-main{grid-row:1}
 
   .rlist{flex-direction:column;overflow:visible;gap:6px;padding:0}
   .rlist-foot{margin-top:6px}
@@ -332,7 +578,6 @@ details.adv.boxed summary{font-size:12.5px}
 .libcount{font-size:11px;color:var(--ink3);margin-bottom:7px}
 .libgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;align-items:start}
   .lib-row{min-width:0}
-  .tl-seg-g{grid-template-columns:repeat(6,1fr)}
   .segblk .grid{grid-template-columns:repeat(8,1fr)}
   .big{font-size:30px}
   table{font-size:12px}
@@ -347,6 +592,7 @@ details.adv.boxed summary{font-size:12.5px}
   .col-side{grid-row:1}
   .col-main{grid-column:2;grid-row:1}
   .col-ai{grid-column:3;grid-row:1;position:sticky;top:78px;max-height:calc(100vh - 106px);overflow-y:auto;padding-right:4px}
+  .layout.no-ai{grid-template-columns:380px minmax(0,1fr)}
   .libgrid{gap:0 32px}
 }
 </style>
@@ -356,7 +602,7 @@ details.adv.boxed summary{font-size:12.5px}
   <header>
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
-      <span class="badge" id="verBadge">真实数据 · 2026 第四监管周期</span>
+      <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
     </div>
   </header>
   <main>
@@ -364,8 +610,8 @@ details.adv.boxed summary{font-size:12.5px}
     <section id="v-map" hidden></section>
     <section id="v-lib" hidden></section>
   </main>
-  <!-- REQ-307：页脚定位声明，三 Tab 共用 -->
-  <footer style="padding:10px 16px 4px;text-align:center;font-size:10.5px;color:var(--ink3);line-height:1.6">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
+  <!-- REQ-307：页脚定位声明，三 Tab 共用；样式见 .disclaim（移动端贴固定导航条上方，桌面端沉底） -->
+  <footer class="disclaim">本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。</footer>
   <nav>
     <button id="t-calc" class="on" onclick="go('calc')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15l4-5 3 3 5-7"/><path d="M3 17h14"/></svg>测算</button>
@@ -374,6 +620,23 @@ details.adv.boxed summary{font-size:12.5px}
     <button id="t-lib" onclick="go('lib')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="#8A8A85" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>费率库</button>
   </nav>
+  <!-- 参数弹出面板：壳常驻在测算页 #v-calc 之外（测算页整块重画时不会被关掉），正文与价格由 renderParamSheet 刷新（ui/calc.js）。
+       手机从底部滑出，≥600px 从右侧滑出 -->
+  <div id="param-sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-mask" onclick="closeParams()"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <div class="sheet-hd">
+        <div><div class="sheet-title" id="sheet-title">费用口径与参数</div><div class="sheet-price" id="sheet-price">—</div></div>
+        <button class="sheet-x" id="sheet-close" type="button" onclick="closeParams()" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-body" id="sheet-body"></div>
+      <div class="sheet-ft">
+        <button class="btn ghost" type="button" onclick="resetParams()">恢复默认</button>
+        <button class="btn" type="button" onclick="closeParams()">完成</button>
+      </div>
+    </div>
+  </div>
 </div>
 <script>
 'use strict';

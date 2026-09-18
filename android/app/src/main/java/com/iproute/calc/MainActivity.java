@@ -28,6 +28,16 @@ public class MainActivity extends Activity {
         web.loadUrl("file:///android_asset/index.html");
     }
 
+    /** 返回键：页面有可后退的记录（如参数弹出面板压入的历史）时先在 WebView 内后退，否则按系统默认退出。 */
+    @Override
+    public void onBackPressed() {
+        if (web != null && web.canGoBack()) {
+            web.goBack();
+        } else {
+            super.onBackPressed();
+        }
+    }
+
     @Override
     protected void onDestroy() {
         if (web != null) {

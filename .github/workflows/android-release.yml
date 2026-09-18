@@ -1,0 +1,169 @@
+name: android-release
+# 安卓 APK 只在「发布 GitHub Release」时打包，普通提交与合并请求一律不打包。
+# 执行机：南洋自托管 runner irp-nanyang-1（label irp-linux，专用无特权用户 irp-runner）。
+# 工具链预装在 runner 用户的 ~/android-toolchain（JDK 17 + Gradle 8.7 + Android SDK 34），
+# 布局与 android/build-apk.mjs 的探测约定一致；Gradle 依赖缓存在 runner 用户的 ~/.gradle。
+# 流程：发布正式 Release（标签 vX.Y.Z）→ 校验版本号与工具链 → 标签须在 main 上 → Release 状态与附件查重 → 构建 + 7 组测试 → 打包 → 签名核验 → APK 挂到该 Release。
+# 补打包：Actions 页手动运行本工作流，填已发布的标签；勾选 dry_run 则只打包不上传（验证流水线用）。
+on:
+  release:
+    # released 只在正式版发布时触发，预发布不触发（published 会连预发布一起触发，见 GitHub 事件文档）
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要补打包的已发布 Release 标签（如 v1.1.5）
+        required: true
+      dry_run:
+        description: 只打包不上传（验证流水线，不改动 Release 附件）
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # 上传 APK 到 Release
+
+# 显式 bash = `bash --noprofile --norc -eo pipefail`；隐式默认只有 `bash -e`，管道里前面的命令失败会被吞掉
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: android-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: [self-hosted, irp-linux]
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      # 南洋直连 github.com 与 nodejs.org 不通（其余域可直连），git 与 setup-node 都要走本机 clash。
+      # 代理只加在 job 级：runner 服务自身仍不设代理，避免代理故障击穿控制面导致 runner 掉线。
+      # 仓库变量 RUNNER_HTTPS_PROXY 为空时（例如换回 GitHub 云端机器）等于不设代理。
+      https_proxy: ${{ vars.RUNNER_HTTPS_PROXY }}
+      http_proxy: ${{ vars.RUNNER_HTTPS_PROXY }}
+      no_proxy: localhost,127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 标签与安卓版本号一致性
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::标签 $TAG 不是 vX.Y.Z 格式（预发布 / rc 标签不支持自动打包）"; exit 1; }
+          NAME=$(sed -nE 's/^[[:space:]]*versionName "([^"]+)".*/\1/p' android/app/build.gradle)
+          CODE=$(sed -nE 's/^[[:space:]]*versionCode ([0-9]+).*/\1/p' android/app/build.gradle)
+          if [ "v$NAME" != "$TAG" ]; then
+            echo "::error::android/app/build.gradle 的 versionName=$NAME 与标签 $TAG 不一致——发版前先改版本号（versionCode 同步 +1）"
+            exit 1
+          fi
+          echo "versionName=$NAME versionCode=$CODE"
+
+      # 放在测试之前：工具链坏了就别白跑测试
+      - name: 检查南洋安卓工具链
+        run: |
+          TC="$HOME/android-toolchain"
+          JDK=""
+          for d in "$TC"/jdk-17*; do [ -d "$d" ] && JDK="$d" && break; done
+          for p in "$JDK" "$TC/gradle-8.7/bin/gradle" "$TC/sdk/platforms/android-34" "$TC/sdk/build-tools/34.0.0"; do
+            [ -n "$p" ] && [ -e "$p" ] || { echo "::error::runner 缺安卓工具链组件：${p:-jdk-17}（重装见 android/README.md「发版自动打包」）"; exit 1; }
+          done
+          command -v gh >/dev/null || { echo "::error::runner 缺 GitHub CLI（gh），上传 Release 附件要用（见 android/README.md「发版自动打包」）"; exit 1; }
+          echo "JAVA_HOME=$JDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$TC/sdk" >> "$GITHUB_ENV"
+
+      # 只发布已合入 main 的提交：防止在未合并的功能分支提交上打版本标签就出正式包
+      - name: 标签提交必须已在 main 上
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          # compare main...SHA：identical=就是 main 头，behind=main 的祖先；ahead/diverged=不在 main 上
+          STATUS=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$SHA" --jq .status)
+          case "$STATUS" in
+            identical|behind) echo "标签 $TAG 指向 ${SHA:0:7}，已在 main 上" ;;
+            *) echo "::error::标签 $TAG 指向的提交 ${SHA:0:7} 不在 main 上（compare 状态 ${STATUS}）——先把发版提交合入 main，再在 main 上打标签"; exit 1 ;;
+          esac
+
+      # 不做覆盖式上传：gh 的 --clobber 先删旧附件再传，传失败旧附件就没了。
+      # 已有同名附件一律中止，确需替换由人先在 Release 页面删除后重跑；放在构建前，早失败
+      - name: 检查 Release 状态与同名附件
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="iproute-${TAG}-debug.apk"
+          INFO=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease,assets --jq '(.isPrerelease|tostring), .assets[].name')
+          # 预发布不出包：触发器已排除，这里再拦手动补打包上传到预发布
+          if [ "$(head -n 1 <<<"$INFO")" = true ]; then
+            echo "::error::Release ${TAG} 是预发布（pre-release），不上传 APK——转为正式版后会触发打包（未触发可手动补打包）"
+            exit 1
+          fi
+          EXISTING=$(tail -n +2 <<<"$INFO")
+          for f in "$APK" "$APK.sha256"; do
+            # 用 here-string 不用管道：pipefail 下 grep -q 提前退出可能让上游吃 SIGPIPE，把「找到」误判成失败
+            if grep -qxF "$f" <<<"$EXISTING"; then
+              echo "::error::Release $TAG 已有附件 ${f}——为防上传失败丢失原附件，不做覆盖。确需替换：先在 Release 页面删除 $APK 与 $APK.sha256，再手动重跑（可先勾 dry_run 核对签名）"
+              exit 1
+            fi
+          done
+          echo "Release $TAG 无同名附件，可上传"
+
+      # 先构建再测：测试读的是 index.html，这样测到的就是即将打进 APK 的内容
+      - name: 构建与发版前测试（任一失败不出包）
+        run: |
+          node --version
+          node tools/build.mjs
+          for t in test-modules test-data-share baseline-check test-model-audit test-regional-billing test-prefill test-interaction; do
+            if [ ! -f "tools/$t.mjs" ]; then
+              # 凡要上传就必须 7 组齐全（web-check 只跑其中 3 组，这里是其余 4 组的唯一防线），手动重跑也不例外；
+              # 只有 dry_run（不上传）容忍缺失，用于核对早期标签（如 v1.1.5 还没有 test-model-audit）
+              if [ "$DRY_RUN" != true ]; then echo "::error::缺少 tools/$t.mjs——测试被删除或改名？同步本工作流的测试清单（仅 dry_run 可跳过）"; exit 1; fi
+              echo "::warning::该标签没有 tools/$t.mjs，dry_run 下跳过"
+              continue
+            fi
+            echo "::group::$t"
+            node "tools/$t.mjs"
+            echo "::endgroup::"
+          done
+
+      - name: 打包 APK
+        run: node android/build-apk.mjs
+
+      # 签名证书变了，手机上已装的旧版无法覆盖升级（只能卸载重装、丢本地数据），发出去前拦住
+      - name: 签名核验与命名
+        env:
+          EXPECTED_SIGNER: ${{ vars.ANDROID_SIGNER_SHA256 }}
+        run: |
+          APK="iproute-${TAG}-debug.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "$APK" | tee apk-cert.txt
+          SIGNER=$(sed -nE 's/^Signer #1 certificate SHA-256 digest: ([0-9a-f]+)$/\1/p' apk-cert.txt)
+          [ -n "$SIGNER" ] || { echo "::error::未解析出签名证书指纹"; exit 1; }
+          # 变量兼容 keytool 的大写带冒号写法，统一成 apksigner 的小写连续十六进制再比
+          EXPECTED=$(printf '%s' "$EXPECTED_SIGNER" | tr -d ': ' | tr 'A-F' 'a-f')
+          if [ -z "$EXPECTED" ]; then
+            echo "::warning::未设置仓库变量 ANDROID_SIGNER_SHA256，跳过签名连续性校验（本次签名 ${SIGNER}）"
+          elif [ "$SIGNER" != "$EXPECTED" ]; then
+            echo "::error::APK 签名证书 $SIGNER 与约定的 $EXPECTED 不一致——已安装旧版的手机无法覆盖升级，已中止发布"
+            exit 1
+          fi
+          sha256sum "$APK" > "$APK.sha256"
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          {
+            echo "### 安卓 APK ${TAG}$( [ "$DRY_RUN" = true ] && echo '（dry_run：未上传）')"
+            echo "- 文件：\`$APK\`（$(du -h "$APK" | cut -f1)）"
+            echo "- SHA-256：\`$(cut -d' ' -f1 "$APK.sha256")\`"
+            echo "- 签名证书 SHA-256：\`$SIGNER\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 上传到 Release
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$APK" "$APK.sha256" --repo "$GITHUB_REPOSITORY"

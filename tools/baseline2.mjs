@@ -48,7 +48,8 @@ const keys = Object.keys(PV);
 function runOn(c, f, t) {
   vm.runInContext(`Object.assign(state,{from:${JSON.stringify(f)},to:${JSON.stringify(t)},
     qty:1000,hours:1,pGen:${PV[f].clear},pDst:${PV[t].clear},pNet:${PV[t].net},fund:${PV[t].fund},
-    lossBearer:1,K:6,maxHops:3,maxDetour:2,includeRegion:true,showBad:true,sortBy:"A",showAll:true});`, c);
+    lossBearer:1,K:6,maxHops:3,maxDetour:2,includeRegion:true,showBad:true,sortBy:"A",showAll:true,
+    originLossMode:'included',regionLossMode:'exclude'});`, c);
   return vm.runInContext('solve(state, algoData())', c);
 }
 
@@ -98,7 +99,10 @@ const probs = [];
 for (const c of baseline.cases) {
   const R = runOn(ctx2, c.from, c.to);
   if (R.err) { failed++; probs.push(`${c.from}→${c.to} 报错`); continue; }
-  if (R.rows.length !== c.routes.length) { failed++; probs.push(`${c.from}→${c.to} 路径数 ${R.rows.length}≠${c.routes.length}`); continue; }
+  // 基线只保存前 25 条路线（routes），总数另存在 routeTotal；比对总数必须用 routeTotal，
+  // 不能拿截断后的 routes.length 当总数（路线数超过 25 的省对会误报）。
+  const total = c.routeTotal != null ? c.routeTotal : c.routes.length;
+  if (R.rows.length !== total) { failed++; probs.push(`${c.from}→${c.to} 路径数 ${R.rows.length}≠${total}`); continue; }
   for (let k = 0; k < c.routes.length; k++) {
     const e = c.routes[k], a = R.rows[k];
     checked++;
@@ -116,16 +120,16 @@ console.log('\n=== 渲染冒烟测试 ===');
 const c3 = makeCtx();
 const checks = [
   ['renderCalc() 测算页', 'state.from="SC";state.to="SH";state.sel=0;state._res=solve(state, algoData());renderCalc();', 'v-calc',
-    ['出发地', '目的地', '可选路线', '落地成本', '途经节点与线路', '完整明细', '逐段溯源', '口径位置', '送端省内段', '成本阈值',
+    ['出发地', '目的地', '可选路线', '落地成本', '交易连接与区域计费', '完整明细', '逐段溯源', '口径位置', '送端省内段', '成本阈值',
      '条候选', '送端收益', 'tl-seg-card', 'rc-price', '在网架图上查看', '原文摘录', '调价历史']],
-  ['方案切换 sel=1', 'state.sel=1;renderCalc();', 'v-calc', ['方案 #2', '途经节点与线路', '段入口功率', '段损耗电量']],
+  ['方案切换 sel=1', 'state.sel=1;renderCalc();', 'v-calc', ['方案 #2', '交易连接与区域计费', '段入口功率', '段损耗电量']],
   ['renderMap() 内置拓扑图', "state.mapProvider='svg';renderMap();", 'v-map', ['内置拓扑图', '全网架', '不依赖任何外部地图服务', '拓扑图']],
   ['响应式结构（桌面双栏）', 'state.from="SC";state.to="SH";state._res=solve(state, algoData());renderCalc();', 'v-calc', ['class="topbar"', 'class="layout"', 'class="col-side"', 'class="col-main"']],
   ['renderLib() 通道页', "state.libQ='';state.libFilter='all';libTab='ch';renderLib();", 'v-lib', ['搜索通道名', 'libcard', '匹配', '容量制', '实际输送能力', '送出省输电价格']],
   ['费率库搜索命中', "state.libQ='锦苏';renderLib();", 'v-lib', ['锦苏', '匹配 1 条']],
   ['费率库筛选容量制', "state.libQ='';state.libFilter='capacity';renderLib();", 'v-lib', ['容量制', '辛洹', '云霄']],
   ['renderLib() 省级页', "libTab='pv';renderLib();", 'v-lib', ['输配电价', '待补']],
-  ['renderLib() 断面页', "libTab='sec';renderLib();", 'v-lib', ['川渝断面', 'GSDF']],
+  ['renderLib() 断面页', "libTab='sec';renderLib();", 'v-lib', ['川渝断面', '真实可交易能力须由对应交易机构与调度机构确认']],
   ['renderMap() 腾讯底图', "state.mapProvider='qq';renderMap();", 'v-map', ['腾讯地图', '天地图', 'map-view']],
   ['renderMap() 天地图分支', "state.mapProvider='td';renderMap();", 'v-map', ['天地图密钥', 'cloudcenter.tianditu.gov.cn']],
 ];

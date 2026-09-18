@@ -1,0 +1,4 @@
+# actionlint 配置：声明自托管 runner 的自定义标签，避免误报 unknown label
+self-hosted-runner:
+  labels:
+    - irp-linux   # 南洋 irp-nanyang-1（仓库级，专用无特权用户 irp-runner）

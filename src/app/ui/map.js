@@ -83,18 +83,57 @@ let tdTried='', tdAttempted=false, tdFailKind='server', tdCooldownUntil=0;
 /* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
    冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
 const TD_COOLDOWN_MS=10*60*1000;
+/* 天地图 4.0 的主脚本只同步注册核心类，叠加物类是随后异步注册的——实测 onload 触发时
+   T.Map/T.Marker/T.Polyline 已就绪，但 **T.Label 仍为 undefined，约 200ms 后才注册**。
+   只判断 T.Map 就会立刻开始绘制，撞上「T.Label is not a constructor」被 catch 吞掉，
+   界面误报成「天地图 API 兼容性问题」而降级（2026-09-16 实测的真实故障）。
+   因此必须等绘制用到的类齐备。T.Label 现已不再用于绘制（省名/站点名标注已移除），
+   但仍保留在清单里作为保守的就绪门槛，不放宽实测得出的时序约束。 */
+const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
+const TD_WAIT_MS=5000, TD_POLL_MS=100;
+/* tkVis：密钥输入框的可见性状态（默认掩码）。切换只改 DOM 的 type/图标，不走 renderMap——
+   整卡重渲染会打断输入焦点；renderMap 重绘时按 tkVis 恢复上次选择的可见性。 */
+let tkVis=false;
+const SVG_EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const SVG_EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function toggleTkVis(){
+  tkVis=!tkVis;
+  const inp=document.getElementById('i-tk'), btn=document.querySelector('.tk-eye');
+  if(inp) inp.type=tkVis?'text':'password';
+  if(btn){ btn.innerHTML=tkVis?SVG_EYE_OFF:SVG_EYE; btn.setAttribute('aria-label',tkVis?'隐藏密钥':'显示密钥'); btn.title=btn.getAttribute('aria-label'); }
+}
+function tdApiReady(){
+  if(typeof T==='undefined') return false;
+  if(!TD_REQUIRED.every(k=>typeof T[k]==='function')) return false;
+  /* 瓦片协议钉为 https：SDK 源码（api?v=4.0）中 T.Protocol 只认 "https:" 页面，
+     file://（真机 APK）下 T.Protocol.value 退化为 "http://"，而瓦片 URL 在每次请求时
+     动态读取该值拼接——targetSdk 34 默认禁止明文 HTTP，瓦片会全部失败且叠加物
+     （线路/圆点）正常，肉眼难辨。这里在就绪后统一钉为 https，与 API 脚本同一通道。
+     T.Protocol 为 SDK 内部对象，未来版本若缺失则守卫跳过，行为与旧版一致。 */
+  try{ if(T.Protocol&&T.Protocol.value==='http://') T.Protocol.value='https://'; }catch(e){}
+  return true;
+}
 function loadTianditu(cb){
   tdAttempted=false;
   if(tdReady) return cb(true);
-  if(typeof T!=='undefined'&&T.Map){ tdReady=true; return cb(true); }
+  if(tdApiReady()){ tdReady=true; return cb(true); }
   if(!state.tiandituKey) return cb(false);
   const src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
   if(tdTried===src) return cb(false);
   tdTried=src; tdAttempted=true;
   const s=document.createElement('script');
   s.src=src;
-  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认 T 真正可用才算成功
-  s.onload=()=>{ tdReady=(typeof T!=='undefined'&&!!T.Map); cb(tdReady); };
+  // script 元素的 load 事件在脚本解析失败时也会触发，必须确认所需类真正可用才算成功。
+  // onload 时叠加物类可能尚未注册，故轮询等待而非一次判定（见上方 TD_REQUIRED 说明）；
+  // 超时单独回一句 why='incomplete'，避免被误诊成网络或风控问题。
+  let waited=0;
+  const poll=()=>{
+    if(tdApiReady()){ tdReady=true; return cb(true); }
+    waited+=TD_POLL_MS;
+    if(waited>=TD_WAIT_MS){ tdReady=false; return cb(false,'incomplete'); }
+    setTimeout(poll,TD_POLL_MS);
+  };
+  s.onload=poll;
   s.onerror=()=>cb(false);
   document.head.appendChild(s);
 }
@@ -117,7 +156,6 @@ function drawMapTD(){
           if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
           const p=ST[st];
           tdMap.addOverLay(new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D_HOT,iconSize:new T.Point(14,14)})}));
-          tdMap.addOverLay(new T.Label({text:p.n,position:new T.LngLat(p.lng,p.lat),offset:new T.Point(0,-14)}));
         });
       });
     }
@@ -125,7 +163,6 @@ function drawMapTD(){
       const ll=provLngLat(k); if(!ll||seen.has(k)) return; seen.add(k);
       const onRoute=v.routeNodes.has(k);
       tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl:onRoute?D_HOT:D_BASE,iconSize:new T.Point(onRoute?14:9,onRoute?14:9)})}));
-      tdMap.addOverLay(new T.Label({text:N(k),position:new T.LngLat(ll[0],ll[1]),offset:new T.Point(0,-12)}));
     });
     return true;
   }catch(e){ return false; }
@@ -145,14 +182,14 @@ function showMapFallback(){
     r[sel].segs.forEach((s,i)=>{
       t+=`<div style="padding:6px 0;border-bottom:.5px solid rgba(0,0,0,.06);line-height:1.6">
         <b>第 ${i+1} 段　${N(s.a)} → ${N(s.b)}</b><br>
-        ${s.e.n}　${s.e.kv}　${s.e.t} 元/MWh　线损 ${s.e.loss}%<br>
+        ${s.e.n}　${s.e.kv}　${s.t} 元/MWh　计费线损 ${s.billLossPct}%（物理估算 ${s.e.loss}%）<br>
         <span style="color:#8A8A85">段入口 ${Math.round(s.inMW)} MW　占用 ${s.util!=null?(s.util*100).toFixed(0)+'%':'待补'}</span></div>`;
     });
   }
   t+='<div style="font-weight:600;margin:14px 0 6px">全部通道（'+CH.length+' 条）</div>';
   CH.forEach(c=>{
     const on=r&&r.some(row=>row.edges.some(e=>e.id===c.id))?' ●':'';
-    t+=`<div style="padding:3px 0;border-bottom:.5px solid rgba(0,0,0,.06)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
+    t+=`<div style="padding:3px 0;border-bottom:.5px solid rgba(0,0,0,.06)">${N(c.from)} → ${N(c.to)}　${c.n}　${c.regional?'送出省参考价 ':''}${c.t==null?'—':c.t+' 元/MWh'}${on}</div>`;
   });
   fb.innerHTML=t;
 }
@@ -264,13 +301,15 @@ function renderMap(){
   }
   if(mode==='td'){
     out+=`<label class="f"><span>天地图密钥（tk）</span>
-      <input id="i-tk" type="text" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里"></label>
+      <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
+        <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
+      </div></label>
       <div class="row2" style="margin-bottom:10px">
         <button class="btn ghost" onclick="applyTk()">应用密钥</button>
         <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
       <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
-      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥仅存本机，代码中不内嵌任何有效密钥。</p>`;
+      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥默认掩码显示，点右侧小眼睛可见；仅存本机，代码中不内嵌任何有效密钥。</p>`;
   }
   if(mode==='svg'){
     out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
@@ -287,7 +326,7 @@ function renderMap(){
     out+=`<div style="margin-top:11px;padding-top:11px;border-top:.5px solid var(--line2)">
       <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">选中方案 #${state.sel+1}　${esc(selR.nodes.map(N).join(' → '))}</div>
       ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:.5px solid var(--line2);line-height:1.6">
-        <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.e.t)} 元/MWh　线损 ${fmt(s.e.loss,2)}%
+        <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.t)} 元/MWh　计费线损 ${fmt(s.billLossPct,2)}%（物理估算 ${fmt(s.e.loss,2)}%）
         <span style="color:var(--ink3)">｜入口 ${fmt(s.inMW,0)} MW　${s.util!=null?'占用 '+fmt(s.util*100,0)+'%':'容量待补'}</span>
       </div>`).join('')}
     </div>`;
@@ -295,10 +334,10 @@ function renderMap(){
   out+=`<p class="note" style="margin-top:10px">站点位置为县/市级近似（精确站址见费率库中各通道的送受端地址）。落点未采集的通道以省会位置示意。</p></div>`;
 
   out+=`<div class="card tight"><div class="sec-title">通道费用分布<span class="hint">按输电价升序</span></div>
-    <table><tr><th style="width:40%">通道</th><th>输电价</th><th>线损</th><th>容量</th></tr>
+    <table><tr><th style="width:40%">通道</th><th>输电价 / 送出省参考价</th><th>物理估算线损</th><th>容量</th></tr>
     ${[...CH].filter(c=>c.t!=null).sort((a,b)=>a.t-b.t).map(c=>`<tr>
       <td>${esc(c.n)}<br><span style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
-      <td>${fmt(c.t)}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>
+      <td>${fmt(c.t)}${c.regional?'（仅起点送出省）':''}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>
   </div>`;
 
   document.getElementById('v-map').innerHTML=out;
@@ -311,21 +350,26 @@ function renderMap(){
     } else if(mode==='qq'){
       if(!drawMapQQ()) showMapFallback();
     } else {
-      loadTianditu(ok=>{
+      loadTianditu((ok,why)=>{
         if(ok&&drawMapTD()) tkMsg('ok');
-        else { showMapFallback(); tkMsg(ok?'drawfail':(state.tiandituKey?'loadfail':'empty')); }
+        else { showMapFallback(); tkMsg(ok?'drawfail':(why||(state.tiandituKey?'loadfail':'empty'))); }
       });
     }
   },80);
 }
 function switchMap(p){
   // REQ-703：不可用底图必须给出明确反馈，不得静默回退（真机 APK 以 file:// 加载，
-  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）
+  // isProxyEnv 恒为 false，点击「腾讯地图」必然走到这里）。原生 confirm 在 WebView 中
+  // 不显示且恒按「取消」返回，改用应用内确认框 uiConfirm（见 state.js）
   if(p==='qq'&&!isProxyEnv()){
-    if(confirm('腾讯地图需要本地代理环境，当前环境不可用。\n\n「确定」改用天地图（需自行填入密钥）；「取消」保持内置拓扑图。')){
-      state.mapProvider='td'; tdReady=false;
-    } else { state.mapProvider='svg'; }
-  } else state.mapProvider=p;
+    uiConfirm('腾讯地图不可用','腾讯地图需要本地代理环境，当前环境不可用。','改用天地图','保持内置拓扑图').then(ok=>{
+      state.mapProvider=ok?'td':'svg';
+      if(ok) tdReady=false;
+      saveMap(); renderMap();
+    });
+    return;
+  }
+  state.mapProvider=p;
   saveMap(); renderMap();
 }
 function applyTk(){
@@ -345,11 +389,29 @@ function applyTk(){
    script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
 function tkMsg(kind){
   const el=document.getElementById('tk-msg'); if(!el) return;
-  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; return; }
+  if(kind==='ok'){ el.innerHTML='<span style="color:#0F6E56;font-weight:600">✓ 密钥已应用，天地图加载成功。</span>'; tdTileProbe(el); return; }
   if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
   if(kind==='empty'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
   if(kind==='drawfail'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
+  if(kind==='incomplete'){ el.innerHTML='<span style="color:#B3261E;font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el);
+}
+/* 瓦片自检：叠加物（线路/圆点）正常而底图全灭时肉眼难辨原因。按 SDK 此刻将用的协议
+   探测一张真实 vec_w 瓦片——no-cors 拿不到状态码（天地图无 CORS 头），仅区分
+   「传输可达」与「连接被禁/不通」，把失败定性直接显示在界面上，供真机截图定位。 */
+function tdTileProbe(el){
+  try{
+    if(typeof T==='undefined'||!T.Protocol) return;
+    const tk=state.tiandituKey||window.TMAP_AUTHKEY||'';
+    const url=T.Protocol.value+'t0.tianditu.'+(T.Domain||'gov.cn')
+      +'/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default'
+      +'&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=5&TILEROW=1&TILECOL=1&tk='+encodeURIComponent(tk);
+    const done=txt=>{ if(document.getElementById('tk-msg')!==el) return;
+      el.innerHTML=el.innerHTML.replace(/ ?｜瓦片自检：[^<]*/,'')+' <span style="color:var(--ink3)">｜瓦片自检：'+txt+'</span>'; };
+    fetch(url,{mode:'no-cors'}).then(
+      ()=>done(T.Protocol.value==='https://'?'https 通道传输正常':'异常：瓦片仍走非 https'),
+      ()=>done(T.Protocol.value!=='https://'?'明文 http 被系统禁止（应走 https）':'网络不可达'));
+  }catch(e){}
 }
 /* 加载失败二分诊断：script 标签拿不到状态码（天地图无 CORS 头），改用 no-cors fetch 探测——
    fetch 成功＝服务端有响应（密钥/白名单/风控拒绝，ORB 拦掉了非 JS 内容）；

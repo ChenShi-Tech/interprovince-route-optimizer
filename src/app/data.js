@@ -29,6 +29,7 @@ function algoData(){
     RG: DATA.RG,
     REGION_OF: DATA.RGOF || {},
     LOSS_OF,
+    RLOSS: DATA.RLOSS || {}, VALIDITY: DATA.VALIDITY || {},
     geo: { lngLatOf, provLngLat },
     name: N,
   };
