@@ -122,7 +122,18 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** 只用 API 26 起可用的接口（setSystemUiVisibility 在 API 30 起标为过时，但仍然生效）。 */
+    /**
+     * 只用 API 26 起可用的接口（setSystemUiVisibility 在 API 30 起标为过时，但仍然生效）。
+     *
+     * 导航栏图标深浅：代码开关 SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR 在 API 26 就有，API 27 才有的是主题属性
+     * windowLightNavigationBar（所以 XML 里只能写在 values-v27）。这里也按 27 门控是保守做法，让代码与主题 XML 一致：
+     * API 26 上导航栏只在深色底时改色，浅色底一律不设浅色导航栏图标。
+     * 已知现象：API 26 从「科技」切回「清晰」后，导航栏停在科技的深色（冷启动后是系统默认深色），不会变白。
+     *
+     * ⚠ targetSdk 升到 35 后，在 Android 15 及以上设备上系统强制全面屏（edge-to-edge），setStatusBarColor /
+     * setNavigationBarColor 不再生效；
+     * 届时系统栏同步要改成：按 WindowInsets 给内容区加内边距，状态栏 / 导航栏后面由页面按页头色自己绘制。
+     */
     @SuppressWarnings("deprecation")
     static void applySystemBars(Activity a, int color, boolean lightIcons) {
         if (a.isFinishing() || a.isDestroyed()) return;
@@ -132,11 +143,12 @@ public class MainActivity extends Activity {
         w.setStatusBarColor(color);
         flags = lightIcons ? (flags & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR) : (flags | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            // 导航栏图标深浅从 API 27 起才能可靠设置
+            // API 27+：与 values-v27 的 windowLightNavigationBar 一致，导航栏跟状态栏同色、同步图标深浅
             w.setNavigationBarColor(color);
             flags = lightIcons ? (flags & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR) : (flags | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         } else if (lightIcons) {
-            // API 26：只在深色底（浅色图标，系统默认）时改导航栏颜色；浅色底改不了图标，保持系统默认深色导航栏
+            // API 26：只在深色底（浅色图标，系统默认）时改导航栏颜色；浅色底时不设浅色导航栏图标（保守，见方法注释），
+            // 导航栏保持原来的深色——设成白底又不切图标会看不见按钮
             w.setNavigationBarColor(color);
         }
         decor.setSystemUiVisibility(flags);

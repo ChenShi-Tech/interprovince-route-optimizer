@@ -3,7 +3,7 @@ name: android-release
 # 执行机：南洋自托管 runner irp-nanyang-1（label irp-linux，专用无特权用户 irp-runner）。
 # 工具链预装在 runner 用户的 ~/android-toolchain（JDK 17 + Gradle 8.7 + Android SDK 34），
 # 布局与 android/build-apk.mjs 的探测约定一致；Gradle 依赖缓存在 runner 用户的 ~/.gradle。
-# 流程：发布正式 Release（标签 vX.Y.Z）→ 校验版本号与工具链 → 标签须在 main 上 → Release 状态与附件查重 → 构建 + 7 组测试 → 打包 → 签名核验 → APK 挂到该 Release。
+# 流程：发布正式 Release（标签 vX.Y.Z）→ 校验版本号与工具链 → 标签须在 main 上 → Release 状态与附件查重 → 构建 + 8 组测试 → 打包 → 签名核验 → APK 挂到该 Release。
 # 补打包：Actions 页手动运行本工作流，填已发布的标签；勾选 dry_run 则只打包不上传（验证流水线用）。
 on:
   release:

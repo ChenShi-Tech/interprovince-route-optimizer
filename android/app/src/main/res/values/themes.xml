@@ -4,8 +4,10 @@
          WebView（targetSdk 34）的 prefers-color-scheme 跟随本主题的 isLightTheme：浅色系统下网页按浅色渲染，
          系统切到深色时改用 values-night/themes.xml。页面加载后，由网页通过 IPRouteShell.setSystemBars 按实际主题
          （含 app 内选的「科技」风格）再同步一次颜色。
-         导航栏图标深浅（windowLightNavigationBar）从 API 27 才有，见 values-v27；API 26 上导航栏保持系统默认深色，
-         免得白底配白色图标看不见。 -->
+         导航栏图标深浅的主题属性 windowLightNavigationBar 从 API 27 才有，见 values-v27；API 26 的主题里写不了，
+         所以这里不设导航栏颜色，保持系统默认深色，免得白底配白色图标看不见。代码开关 SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+         其实 API 26 就有，MainActivity 仍按 27 门控、与这里保持一致（保守做法）；代价是 API 26 从「科技」切回「清晰」后
+         导航栏停在深色，属已知现象。 -->
     <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
