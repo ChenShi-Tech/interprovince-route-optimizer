@@ -24,6 +24,9 @@ function restoreDetails(root,snap){
 }
 function renderCalc(){
   const res=state._res;
+  // M11：存档里的 sel 可能越界（方案数随参数变化），渲染前统一夹取到合法范围，
+  // 否则标题会写「方案 #N」而列表高亮在另一条（其余位置此前各自 clamp，口径不一）。
+  if(res&&res.rows&&res.rows.length&&(state.sel<0||state.sel>=res.rows.length)) state.sel=0;
   // 重渲染会整体替换 v-calc：先记录其中的焦点控件与光标位置，重建后恢复，
   // 否则连续步进或输入到一半就会被打断。
   const _host=document.getElementById('v-calc');
@@ -87,7 +90,7 @@ function renderCalc(){
     // 左＝路线列表，中＝方案详情，右＝智能推荐（宽屏，AI_ENABLED 关闭时不渲染）；手机端纵向堆叠，布局由 .layout 的 CSS 决定
     out+='<div class="layout'+(AI_ENABLED?'':' no-ai')+'"><div class="col-side">'+renderRouteList(res)+'</div>'
        + (AI_ENABLED?'<div class="col-ai">'+renderAI(res)+'</div>':'')
-       + '<div class="col-main">'+renderDetail(res,res.rows[Math.min(state.sel,res.rows.length-1)])+renderSensitivity(res)+'</div></div>';
+       + '<div class="col-main">'+renderDetail(res,selectedRow(res))+renderSensitivity(res)+'</div></div>';
   } else {
     out+=`<div class="card"><div class="empty">请选择不同的出发地与目的地</div></div>`;
   }
@@ -136,8 +139,8 @@ function renderParamBody(noDst){
       ${ents.length>1?`<label class="f"><span>受端电网主体</span>${sel('i-dstentity',vt.ent.id,ents.map(e=>[e.id,esc(e.名称)]))}</label>`:''}
       ${tiers.length?`<label class="f"><span>电压等级</span>${sel('i-dsttier',vt.tier.档别,tiers.map(t=>[t.档别,esc(t.档别)]))}</label>
       <label class="f"><span>计价方式</span>${sel('i-dstbilling',vt.billing,[['twopart','两部制',!twoOk],['single','单一制',!oneOk]])}</label>`:''}
-      <label class="f"><span>受端输配电价 ${resetLink('pNet')}</span><input id="i-pnet" type="number" value="${state.pNet}" step="0.1"></label>
-      <label class="f"><span>基金及附加 ${resetLink('fund')}</span><input id="i-fund" type="number" value="${state.fund}" step="0.1"></label>
+      <label class="f"><span>受端输配电价 ${resetLink('pNet')}</span><input id="i-pnet" type="number" value="${state.pNet??''}" step="0.1"${vt.special?' placeholder="结构特殊，须手填"':''}></label>
+      <label class="f"><span>基金及附加 ${resetLink('fund')}</span><input id="i-fund" type="number" value="${state.fund??''}" step="0.1"></label>
       ${vt.tier&&vt.billing==='twopart'?`<label class="f"><span>容（需）量电费</span>${sel('i-dstcapmode',state.dstCapMode||'none',[['none','不计入'],['demand','按需量分摊',vt.tier.需量电价==null],['capacity','按容量分摊',vt.tier.容量电价==null]])}</label>
       ${state.dstCapMode&&state.dstCapMode!=='none'?`<label class="f"><span>${state.dstCapMode==='capacity'?'容量利用率':'负荷率'} %${cap>0?`<em class="p-calc">≈ ${fmt(cap,1)} 元/MWh</em>`:''}</span><input id="i-dstlf" type="number" min="1" max="100" step="5" value="${state.dstLoadFactor??''}" placeholder="必填，如 60"></label>`:''}`:''}
       <label class="f"><span>系统运行费 元/MWh</span><input id="i-dstsysop" type="number" min="0" step="0.1" value="${state.dstSysOpFee??''}" placeholder="未填即缺项"></label>
@@ -183,8 +186,22 @@ function dstTariff(){
   if(tier && tier[billing==='single'?'单一制':'两部制']==null) billing=billing==='single'?'twopart':'single';
   const net=tier?tier[billing==='single'?'单一制':'两部制']:null;
   const inLoss=ent?(ent.电价含线损?0:ent.省内上网环节线损率):null;
-  return {ent,tier,billing,net:net??null,inLoss:inLoss??null};
+  // M10：电价已含线损（深圳）时线损率只折算终端电量、不另计线损费用；未含线损时由 dstInLossPct 承担两项语义
+  const qtyLossPct=ent&&ent.电价含线损?ent.省内上网环节线损率:null;
+  // M9：结构特殊（深圳按用户容量类别 × 月度负荷率分档、无标准电压档）时不自动取值，避免静默沿用其它主体电价
+  const special=!!(ent&&ent.结构特殊&&!tiers.length);
+  return {ent,tier,billing,net:net??null,inLoss:inLoss??null,qtyLossPct,special};
 }
+/* 当前受端主体 / 电压档应自动带入的输配电价；结构特殊（深圳）返回 null = 缺项，须手填。 */
+function dstAutoNet(){
+  const vt=dstTariff();
+  if(vt.special) return null;
+  if(vt.net!=null) return vt.net;
+  const t=PV[state.to];
+  return (t&&t.net!=null)?t.net:null;
+}
+/* 受端省基金及附加的核定值；官方未获取（西藏）时为 null，界面按缺项处理，不静默按 0。 */
+function dstAutoFund(){ const t=PV[state.to]; return (t&&t.fund!=null)?t.fund:null; }
 /* 两部制容（需）量电费按用户负荷假设折成度电：月单价 × 12 ÷（8760 h × 负荷率）→ 元/MWh。负荷率未填则不计。 */
 function dstCapFee(vt){
   if(!vt||!vt.tier||vt.billing!=='twopart'||!state.dstCapMode||state.dstCapMode==='none') return 0;
@@ -200,7 +217,12 @@ function solveInput(){
   const extra={};
   if(state.includeDstCost!==false){
     const vt=dstTariff();
-    if(vt.ent){ extra.dstInLossPct=vt.inLoss; }
+    if(vt.ent){
+      extra.dstInLossPct=vt.inLoss;
+      // M10：电价已含线损的主体（深圳）把「终端电量折算」与「是否另计费」拆开：
+      // dstInLossPct=0（不另计费）+ dstQtyLossPct=注3 线损率（扣电量）
+      if(vt.qtyLossPct!=null) extra.dstQtyLossPct=vt.qtyLossPct;
+    }
     if(vt.tier){ extra.dstBilling=vt.billing; }
     extra.dstCapFee=dstCapFee(vt);
     extra.dstSysOpFee=state.dstSysOpFee??null;
@@ -247,10 +269,13 @@ function renderParamBar(){
     <button class="btn ghost cfg-btn" id="btn-params" type="button" onclick="openParams()" aria-haspopup="dialog"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7"/><circle cx="11" cy="4" r="2"/><circle cx="5" cy="12" r="2"/></svg>参数${n?`<b>${n}</b>`:''}</button>
   </div>${renderDstWarn()}`;
 }
-/* 到户口径下的醒目缺项提示：两部制未计容（需）量电费会明显低估到户价 */
+/* 到户口径下的醒目缺项提示：两部制未计容（需）量电费会明显低估到户价；
+   结构特殊的主体（深圳）按用户容量类别 × 月度负荷率分档，工具未采集该维度，不能自动带入输配电价（M9）。 */
 function renderDstWarn(){
   if(state.includeDstCost===false) return '';
   const vt=dstTariff();
+  if(vt.special)
+    return `<div class="cfg-warn">⚠ ${esc(vt.ent.名称)}输配电价按用户容量类别与月度负荷率分档（1077号附件1 第 ${esc(vt.ent.页码)} 页），本工具不能自动带入（不沿用其它主体值）：${state.pNet==null?'<b>请手填受端输配电价</b>':'当前为手填值，请核对适用档'}　<a onclick="openParams()">去填写</a></div>`;
   if(vt.tier && vt.billing==='twopart' && !(dstCapFee(vt)>0))
     return `<div class="cfg-warn">⚠ 两部制未含容量/需量电费，到户价偏低　<a onclick="openParams()">填写负荷假设</a></div>`;
   return '';
@@ -287,13 +312,16 @@ function closeParams(fromHistory){
    不走 doSolve —— readInputs 会把面板里的旧值读回来。 */
 function resetParams(){
   Object.assign(state,PARAM_DEFAULTS);
+  state.pNetManual=false; state.fundManual=false;   // 恢复默认：受端两项回到核定值（清除手改标记）
   applyToProv();
   state.sel=0; state._res=solveState(); saveLast(); renderCalc();
 }
 
 /* ---------- 顶部结果：所选方案的最终价格与价格组成 ---------- */
+/* 选中方案下标：统一夹取到合法范围（M11），renderRouteList / renderDetail / 导出报告共用同一口径。 */
+function selIndex(res){ const n=res&&res.rows?res.rows.length:0; return n?Math.min(Math.max(0,state.sel|0),n-1):0; }
 function selectedRow(res){
-  return res&&res.rows&&res.rows.length?res.rows[Math.min(state.sel,res.rows.length-1)]:null;
+  return res&&res.rows&&res.rows.length?res.rows[selIndex(res)]:null;
 }
 function renderHeroResult(res){
   const r=selectedRow(res);
@@ -301,7 +329,7 @@ function renderHeroResult(res){
   if(!r) return `<div class="hero-res empty-res"><div class="hero-lb">${costName}</div><div class="hero-v">—</div>
     <div class="hero-sub">${res&&res.err?esc(res.err):'请选择不同的出发地与目的地'}</div></div>`;
   const stops=routeStops(r), landings=stops.filter(s=>s.landing);
-  const tag=state.sel===0?((res.mustHave||[]).length?'所选通道最低价 #1':'最低价方案 #1'):'方案 #'+(Math.min(state.sel,res.rows.length-1)+1);
+  const tag=state.sel===0?((res.mustHave||[]).length?'所选通道最低价 #1':'最低价方案 #1'):'方案 #'+(selIndex(res)+1);
   return `<div class="hero-res">
     <div class="hero-lb">${costName}<span class="hero-tag">${tag}</span></div>
     <div class="hero-v">${fmt(r.landed,2)}<small>元/MWh</small></div>
@@ -331,7 +359,7 @@ function renderPriceComposition(res){
 /* ---------- 可选路线列表 ---------- */
 const RLIMIT=18;
 function renderRouteList(res){
-  const rows=res.rows, sel=Math.min(state.sel,rows.length-1);
+  const rows=res.rows, sel=selIndex(res);
   const isDst=state.includeDstCost!==false;
   // 口径A 的主指标随「费用边界」换名；口径B/C 本就不含受端省内费用，不受开关影响
   // 阈值基准取列表中最低的落地价（越限方案排在可行方案之后，首条不一定最低）
@@ -417,6 +445,9 @@ function renderChannelSelect(res){
 /* 求解当前状态。界面只提供单选通道；换省对后已选通道不在候选里时自动取消，避免筛成空结果。 */
 function solveState(){
   if((state.mustHave||[]).length>1) state.mustHave=state.mustHave.slice(0,1);
+  // M13/M9：boot.js 的主体/档位分支只写入非空自动值；结构特殊的主体（深圳）在这里回到「缺项须手填」，
+  // 避免静默沿用上一个主体的输配电价。手改值（pNetManual/fundManual）不受影响。
+  syncDstAuto();
   let res=solve(solveInput(), algoData());
   const avail=new Set((res.availChannels||[]).map(c=>c.id));
   if(avail.size && (state.mustHave||[]).some(id=>!avail.has(id))){
@@ -578,7 +609,7 @@ function renderDetail(res,r){
   const items=priceItems(r), tot=items.reduce((a,x)=>a+Math.abs(x.v),0)||1;
 
   let out=`<div class="card plan">
-    <div class="plan-hd"><span class="plan-no">方案 #${state.sel+1}</span><span class="plan-st ${r.feasible?'ok':'bad'}">${r.feasible?'参考参数未越限 · ATC待核实':'存在越限'}</span></div>
+    <div class="plan-hd"><span class="plan-no">方案 #${selIndex(res)+1}</span><span class="plan-st ${r.feasible?'ok':'bad'}">${r.feasible?'参考参数未越限 · ATC待核实':'存在越限'}</span></div>
     <div class="plan-main">
       <div class="plan-route">
         <div class="hd-route">${stops.map((s,i)=>(i?'<span class="arw">→</span>':'')+(s.region?`<span class="rg">${esc(s.name)}</span>`:esc(s.name))).join('')}</div>
@@ -615,7 +646,7 @@ function renderDetail(res,r){
 
   // 完整明细
   out+=`<details class="adv boxed" id="d-detail"><summary>完整明细</summary><div class="inner">
-    <div class="sub">费用拆解<em>单价 元/MWh · 总额 元</em></div><p class="note">输入为省间节点交付 ${fmt(r.qty,2)} MWh；${state.includeDstCost!==false?'按省内线损推算终端用电 '+fmt(r.consumerQty,2)+' MWh，以下到户单价及金额以此为基数':'省界单价及金额以交付电量为基数'}。区域网损电量包含在计费总损耗中。</p>
+    <div class="sub">费用拆解<em>单价 元/MWh · 总额 元</em></div><p class="note">输入为省间节点交付 ${fmt(r.qty,2)} MWh；${state.includeDstCost!==false?'按省内线损推算终端用电 '+fmt(r.consumerQty,2)+' MWh，以下到户单价及金额以此为基数':'省界单价及金额以交付电量为基数'}。区域网损电量包含在计费总损耗中。${r.qtyLossPct!=null?'本主体电价已含上网环节线损费用（1077号附件1 注2），因此不单列「受端上网环节线损费用」；省界及以前各项的<b>总额仍按节点交付电量实付</b>，单价已按 '+fmt(r.qtyLossPct,2)+'% 折成到户电量口径。':''}</p>
     <table>
       <tr><th style="width:40%">费用项</th><th>单价</th><th>总额</th><th>占比</th></tr>
       <tr><td>送端省内网损另计</td><td>${fmt(r.comp.originLoss)}</td><td>${num(r.yuan.originLoss)}</td><td>—</td></tr>
@@ -749,7 +780,7 @@ function sensitivityTable(){
 /* ---------- REQ-404 方案报告导出（Markdown） ---------- */
 function exportReport(){
   const res=state._res; if(!res||!res.rows||!res.rows.length) return;
-  const r=res.rows[Math.min(state.sel,res.rows.length-1)];
+  const r=selectedRow(res);
   const L=[];
   L.push('# 省间路径测算报告');
   L.push('');
@@ -824,8 +855,20 @@ function readInputs(){
   // 受端输配电价 / 基金及附加只在「到户已列费用」口径下渲染；按渲染时的口径决定是否读取，未渲染时保留预填值
   if(state.includeDstCost!==false){
     const pn=g('i-pnet'), fd=g('i-fund'), lf=g('i-dstlf'), so=g('i-dstsysop');
-    if(pn) state.pNet=+pn.value||0;
-    if(fd) state.fund=+fd.value||0;
+    // 空输入 = 缺项（保留 null，不静默按 0）；M13：与自动带入值一致视为预填、与 state 不同视为手改并持久化标记
+    const read=el=>{ const raw=String(el.value??'').trim(); return (raw===''||!Number.isFinite(+raw))?null:+raw; };
+    if(pn){
+      const nv=read(pn), auto=dstAutoNet();
+      if(nv!=null && auto!=null && Math.abs(nv-auto)<1e-9) state.pNetManual=false;
+      else if(!(nv==null && state.pNet==null) && nv!==state.pNet) state.pNetManual=true;
+      state.pNet=nv;
+    }
+    if(fd){
+      const nv=read(fd), auto=dstAutoFund();
+      if(nv!=null && auto!=null && Math.abs(nv-auto)<1e-9) state.fundManual=false;
+      else if(!(nv==null && state.fund==null) && nv!==state.fund) state.fundManual=true;
+      state.fund=nv==null?0:nv;
+    }
     const num=el=>{ const v=String(el.value??'').trim(); return v===''||!Number.isFinite(+v)||+v<0?null:+v; };
     if(lf && state.dstCapMode && state.dstCapMode!=='none'){ const v=num(lf); state.dstLoadFactor=v!=null&&v>0&&v<=100?v:null; }
     if(so) state.dstSysOpFee=num(so);
@@ -843,27 +886,47 @@ function readInputs(){
   const _o=+g('i-zyocc')?.value||0;                  // REQ-302
   state.occPct=Math.min(90,Math.max(0,_o));
 }
-/* 送端省变化：只影响送端报价 */
+/* 送端省变化：只影响送端报价。手填值保留；其余情况按该省演示参考值重新预填。
+   M12：state.js 加载存档时把任何存档 pGen 一律推断为「手填」，存档往返后切省不再预填、且无法解开。
+   这里用 _pgenAutoProv（上次自动预填的省）区分真手填：当前值仍等于上次自动预填值（或本省参考值）时
+   视为预填而非手填，重新带入新省参考值；真正手填过的值不受影响。 */
 function applyFromProv(){
   const f=PV[state.from];
-  if(!state.pGenManual&&f&&f.clear!=null) state.pGen=f.clear;
+  if(!f) return;
+  const eq=(a,b)=>a!=null&&b!=null&&Math.abs(+a-+b)<1e-9;
+  const prev=state._pgenAutoProv?PV[state._pgenAutoProv]:null;
+  const looksAuto=!state.pGenManual || (!state._pgenAutoProv ? eq(state.pGen,f.clear) : eq(state.pGen,prev&&prev.clear));
+  if(looksAuto && f.clear!=null){ state.pGen=f.clear; state.pGenManual=false; }
+  state._pgenAutoProv=state.from;
 }
-/* 受端省变化：影响受端省网输配电价、政府性基金及附加 */
+/* 受端省网输配电价与基金及附加的自动带入同步。
+   M13：手改标记（pNetManual / fundManual）随存档持久化，启动时不再无条件覆盖用户手改值；
+   手改值等于自动带入值（含 boot.js 换算档后写入新档位值的情形）时撤销标记，避免误判为手填。
+   M9：结构特殊的深圳电网不自动带入输配电价（返回 null = 缺项），须手填，不静默沿用其它主体值。 */
+function syncDstAuto(){
+  const t=PV[state.to]; if(!t) return;
+  const autoNet=dstAutoNet(), autoFund=dstAutoFund();
+  if(state.pNetManual && autoNet!=null && state.pNet!=null && Math.abs(+state.pNet-autoNet)<1e-9) state.pNetManual=false;
+  if(state.fundManual && autoFund!=null && state.fund!=null && Math.abs(+state.fund-autoFund)<1e-9) state.fundManual=false;
+  if(!state.pNetManual) state.pNet=autoNet;
+  if(!state.fundManual){ state.fundMissing=(autoFund==null); state.fund=autoFund==null?0:autoFund; }
+}
+/* 受端省变化：影响受端省网输配电价、政府性基金及附加。换省视为重新核准，手改标记一并清除（旧行为不变）；
+   启动时同一省份（_pnetProv 未变）则保留手改值（M13）。 */
 function applyToProv(){
   const t=PV[state.to];
   if(!t) return;
-  const vn=dstTariff().net;
-  if(vn!=null) state.pNet=vn; else if(t.net!=null) state.pNet=t.net;
-  state.fundMissing=(t.fund===null||t.fund===undefined);
-  state.fund=state.fundMissing?0:t.fund;
+  if(state._pnetProv!==state.to){ state.pNetManual=false; state.fundManual=false; }
+  state._pnetProv=state.to;
+  syncDstAuto();
 }
 function applyBothProv(){ applyFromProv(); applyToProv(); }
-/* 把某一项恢复为当前受端省的核定值 */
+/* 把某一项恢复为当前受端省的核定值（结构特殊的主体回到「缺项须手填」状态） */
 function resetOne(k){
   const t=PV[state.to];
   if(!t) return;
-  if(k==='pNet'){ const vn=dstTariff().net; if(vn!=null) state.pNet=vn; else if(t.net!=null) state.pNet=t.net; }
-  if(k==='fund'){ state.fundMissing=(t.fund===null||t.fund===undefined); state.fund=state.fundMissing?0:t.fund; }
+  if(k==='pNet'){ state.pNetManual=false; state.pNet=dstAutoNet(); }
+  if(k==='fund'){ state.fundManual=false; state.fundMissing=(dstAutoFund()==null); state.fund=dstAutoFund()??0; }
   state._res=solveState(); saveLast(); renderCalc();
 }
 

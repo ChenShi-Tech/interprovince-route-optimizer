@@ -23,22 +23,33 @@ This file provides guidance to CodeBuddy Code when working with code in this rep
 # 构建：src/ + data/ → index.html（自包含）+ shared/app-data.json(.min)
 node tools/build.mjs
 
-# 算法回归基线，必须 1574/1574 通过
+# 算法回归基线（条数随数据修正变化，以脚本输出为准；2026-09-18 实测 425 省对 / 987 条）
+# ⚠️ 它会先用基线里的费率快照覆盖 CH，因此只证明实现未漂移、不证明费率数值正确
 node tools/baseline-check.mjs
 
-# 重新生成基线 + 渲染冒烟测试 + 底图合规检查（改了费率/通道数据后必须先跑这个）
+# 基线只读核对 + 渲染冒烟测试 + 底图合规检查（默认不写任何文件）
 node tools/baseline2.mjs
+# 差异确认有据后才显式接受，覆写基线（会打印 priceVersion 变化与变更条目）
+node tools/baseline2.mjs --accept
 
-# 一键发版：构建 → 5 组测试 → 提交 → 推送（任一测试不过即中止）
+# 门禁变异测试：改费率 / 反转方向 / 删字段 / 破坏占位符，四个反事实必须让门禁变红
+node tools/test-mutation.mjs
+
+# 一键发版：构建 → 7 组测试 → 数据审计 → 提交 → 推送（任一不过即中止）
 node tools/release.mjs "提交信息"
 node tools/release.mjs "提交信息" --no-push     # 只到提交为止
+node tools/release.mjs "提交信息" --mutation    # 额外跑门禁变异测试
 
-# 5 组测试可单独跑
+# 测试可单独跑
 node tools/test-modules.mjs        # 模块结构 + 算法层纯度守卫
 node tools/test-data-share.mjs     # Web 与安卓端数据一致性
-node tools/baseline-check.mjs      # 算法回归基线 1574 条
+node tools/baseline-check.mjs      # 算法回归基线（2026-09-18 实测 987 条路线）
 node tools/test-prefill.mjs        # 受端参数预填行为
 node tools/test-interaction.mjs    # 交互与计价口径回归
+
+# 数据审计（也已纳入 release 前置；audit-voltage-tariffs 需 pdftotext）
+node tools/audit-fees.mjs            # 费率库内部审计：单位换算、数值合理性、来源可追溯
+node tools/audit-voltage-tariffs.mjs .   # 用 pdftotext 逐值回对 1077号附件1 原件
 
 # 校验外部引擎（迁移到 RN/Swift 后包装成导出 solve/state/CH/PV 同名接口即可）
 node tools/baseline-check.mjs <你的引擎.js>
@@ -51,7 +62,6 @@ node tests/e2e.mjs                 # 产出 tests/report.md + tests/shots/*.png 
 node android/build-apk.mjs         # → android/app/build/outputs/apk/debug/app-debug.apk
 
 # 数据维护
-node tools/audit-fees.mjs          # 费率库内部审计：单位换算、数值合理性、来源可追溯
 node tools/fetch-sources.mjs       # 抓取 sources.md 的 S01~S13 原文到 docs/原始文件/
 node tools/push-github.mjs         # 推送到 GitHub（走 Git Data API，见下文）
 node tools/restore-from-remote.mjs <commit_sha> [文件路径...]   # 从历史提交恢复误删文件
@@ -94,6 +104,8 @@ config → format → data → state → algo/{network,cost,paths,solve} → ui/
 「**通道**」下拉（`ui/calc.js` 的 `renderChannelSelect`，位于测算页顶部主卡，界面单选，选项标注经过该通道的最低价）把直流（专项工程）等通道当作组件来筛选方案：`solve()` 的 `input.mustHave` 是通道 id 数组，路径须**全部包含**它们，不区分行进方向。候选清单来自 `solve()` 返回的 `availChannels`——它取自从绕行度筛选后的**完整候选集**，不能用最终 `rows`，否则用户选中一条组件后其余组件会从选择器里消失、再也点不回来。组件 id 取自 `CH[].id`，旧存档里已失效的 id 要忽略而不是筛成空。
 
 `boot.js` **必须最后**——它是唯一含顶层执行语句的模块。`src/template.html` 里的 `/*__DATA__*/` 与 `/*__APP__*/` **必须独占一行**，替换后残留文字会变成悬空代码导致语法错误。新增模块时要同步改 `build.mjs` 的 `APP_FILES` 和 `tools/test-modules.mjs` 的同一列表。
+
+`build.mjs` 现在自带**构建期 fail-fast**（不过即 `exit 1`）：占位符各出现且仅出现 1 次并独占一行、两份 `APP_FILES` 逐项一致、注入串不含 `String.replace` 的四种替换模式（美元符后接 & 、美元符、反引号、单引号）、内联脚本可被 `vm` 解析、三份产物 `dataHash`/`priceVersion` 同源、数据值域 lint（坐标包络 / `PV` 线损率 / 区域电价 / 双向通道成对 / `CH` 端点省码）。
 
 ### 算法层必须是纯函数
 
@@ -147,17 +159,18 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 - regionItems 含收费位置、费率、网损率、来源、状态及电量；regionScenarios 提供同一路径未计/历史两情景。pricingIssues 与 priceComplete=false 保留适用性待核状态。
 - 受端到户可选输入（缺省与旧口径一致）：dstInLossPct（所选受端电网主体的注3 线损率，电价已含线损的主体如深圳传 0）、dstBilling（single/twopart，仅用于缺项提示）、dstCapFee（两部制容/需量电费按用户负荷率折算的元/到户MWh：月单价×12÷(8.76×负荷率)）、dstSysOpFee（系统运行费手填，null=缺项）。输配电价仍由 pNet 传入，界面按「电网主体 × 电压档 × 单一制/两部制」从数据 VT 带入。
 - 送端电站专属送出价可选输入：srcSendFee、srcExportLossPct、srcSendNote（1077号附件1 川、滇、冀北表注4 对特定电站/电量范围另定的送出价与线损口径，须确认额度）。
-- 数据新增 VT（`受端分电压输配电价`：30 省 33 个电网主体、156 档，电量/需量/容量电价与注3 线损率）与 SRCX（`送端电站专属送出价`），均在 data/fixed-prices.json；`node tools/audit-voltage-tariffs.mjs .` 用 pdftotext 逐值回对 S11 原件（需 pdftotext，不在发版必跑列表）。线损率与基金不随电压等级变化（注3 每表一个值；基金按用户类别取工商业口径）。
+- 数据含 VT（`受端分电压输配电价`：31 省 34 个电网主体、161 档（2026-09-18 实测，海南已补录），电量/需量/容量电价与注3 线损率）与 SRCX（`送端电站专属送出价`），均在 data/fixed-prices.json；`node tools/audit-voltage-tariffs.mjs .` 用 pdftotext 逐值回对 S11 原件，**已纳入 release 发版前置**（缺 pdftotext 时打印跳过原因）。线损率与基金不随电压等级变化（注3 每表一个值；基金按用户类别取工商业口径）。
 - Dphys、inMW 来自独立物理估算链（含交流估损），不能解释为运行潮流或 ATC。capacityStatus 仅 exceeded/unconfirmed。tradeDate 校验当前价格适用日（界面不再提供交付日期，取当天）；不提供完整历史价库。
 
 来源和可复算数字见 [全模型审计](./docs/09-算法模型与收费标准审计.md)。
 
 ### 数据契约与分档
 
-`shared/app-data.json` 的顶层键：`ST`（站点）`CH`（通道）`SEC`（断面）`PV`（省级参数）`RG`（区域电网输电价格）`RGOF`（省→区域归属）`RLOSS`（区域损耗来源）`VALIDITY`（适用期）。完整 TypeScript 定义见 `docs/03-数据接口说明.md`。
+`shared/app-data.json`（当前 **schema v6**）的顶层键：`ST`（站点）`CH`（通道）`SEC`（断面）`PV`（省级参数）`LOSS_OF`（省级上网环节线损率，v6 新增）`RG`（区域电网输电价格）`RGOF`（省→区域归属）`RLOSS`（区域损耗来源）`VALIDITY`（适用期）`CAP`（两部制容/需量电价）`VT`（受端分电压输配电价）`SRCX`（送端电站专属送出价）`NIC`（非省间通道台账）。完整 TypeScript 定义见 `docs/03-数据接口说明.md`。
 
-- `CH[].tier`：`gov`（发改委核定，有文号）/ `grid`（国网披露，含报备价）/ `region`（区域电网或送出省口径）。路径含非 `gov` 段时界面要主动告警
-- `CH[].cap` 优先取「实际输送能力」，缺失回退额定，`capBasis` 标明口径；`priceType` 区分电量制 / 容量制（容量制的 `t` 是交易方的边际输电价，见 `marginalNote`）
+- **`LOSS_OF`（v6）**：`{ [省]: { inLoss, exportLoss } }`，与 `PV` 同源派生；算法层读它决定省内/送省外网损。**缺字段或与 PV 不一致时消费方必须显式告警（fail-closed），不得静默按 0 计**（H3：v5 端侧实测 SC→JS 到户差约 12.6 元/MWh 而基线全绿）。加字段已升 `schema` v5→v6
+- `CH[].tier`：`gov`（发改委核定，有文号）/ `grid`（国网披露，含报备价）/ `region`（区域电网或送出省口径）/ `est`（待补：价格待核，界面显示「待补」）。路径含非 `gov` 段时界面要主动告警；构建期保证四档计数之和 = `CH` 长度
+- `CH[].cap` 优先取「实际输送能力」，缺失回退额定，`capBasis` 标明口径（`cap`/`rated`/`reported`/`estimate`/`unknown`）；**`estimate` 与 `unknown` 不得用于越限判断**。`priceType` 区分电量制 / 容量制（容量制的 `t` 是交易方的边际输电价，见 `marginalNote`）
 - `CH[].pricePending`：价格待核通道。南网 5 条物理直流无独立核定输电价格（收费并入 842 号聚合交易成分），**建边但一律不参与路径枚举**——纳入会按 0 元过网费产出价格虚低的错误方案。消费方（安卓/iOS）必须同样处理，不能当免费通道
 - `NIC`（非省间通道台账）：物理存在但无法建成省级跨省边的工程（广东省内分区背靠背、对俄跨境受入），只登记不计价
 - `PV[].fund` **可能为 `null`**（当前仅西藏）。消费方必须按「缺失」处理并提示用户，**不要静默当 0**——那会低估落地成本
@@ -170,7 +183,8 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 1. **不得编造费率数值。** 找不到就写 `null` 并在文档里记录已检索路径。这条高于一切——一个编造的费率比一个缺失的费率危害大得多。容量同理：ATC 我国不公开，宁可标「未获取」也不编系数。
 2. **价格数据只有一处来源**：`data/fixed-prices.json`。改价格只改这个文件，然后 `node tools/build.mjs`。
 3. **费率必须分档标注来源**，不得把报备价与发改委核定价混为一谈。2024 年后新投运的金永、中衡、坤渝、庆东、宝合与吉泉、昭沂目前只有国网报备价（昭沂的还有被追溯清算的可能）。
-4. **改动算法后必须跑基线**，`1574/1574` 通过才算完成。
+4. **改动算法后必须跑基线**，`node tools/baseline-check.mjs` 全绿才算完成（条数随数据修正变化，以脚本输出为准）。
+   注意**基线只证明实现未漂移、不证明费率数值正确**（校验时会先用基线快照覆盖 CH）；费率/数据正确性靠 `audit-fees.mjs`、`audit-voltage-tariffs.mjs` 与一手来源核对。基线变更必须 `node tools/baseline2.mjs --accept` 显式接受，默认只读。
 5. **新功能开发必须开新 worktree + 新分支**，不在 `main` 工作区直接改。`git worktree add .worktrees/<名字> -b feat/<名字>`（`.worktrees/` 已在 `.gitignore`），做完合回 `main` 再发版。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs:22` 把分支写死为 `main`，会把未合并的改动直接推到远端。详见 `docs/开发约定与操作手册.md` 纪律 5。
 
 ## 底图与合规
@@ -208,7 +222,9 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 
 ## 当前状态与已知缺口
 
-已验证：回归基线 1574/1574；**31 个省**输配电价 + **91 条通道**全部有来源文号；一手原件归档在 `docs/原始文件/`（S01～S34，可离线核对）。2026-09-17 完成全网通道覆盖核对与补录，见 `docs/gaps.md` 末节。
+已验证：**31 个省**输配电价 + **91 条通道**全部有来源文号；一手原件归档在 `docs/原始文件/`（S01～S34，可离线核对）。2026-09-17 完成全网通道覆盖核对与补录，见 `docs/gaps.md` 末节。
+
+回归基线：`node tools/baseline-check.mjs` 全绿即通过（**2026-09-18 实测 425 省对 / 987 条路线**，条数随数据修正变化，以脚本输出为准）。基线变更必须 `node tools/baseline2.mjs --accept` 显式接受；`node tools/test-mutation.mjs` 用四个反事实守住「门禁真的会变红」。
 
 **已知缺口（不要假装它们不存在）**：
 
@@ -217,8 +233,8 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 | ATC（可用输电能力） | 27 条主要通道全部未获取，公开渠道无口径；当前用「实际输送能力」校验容量 |
 | 省内重要输电通道清单与限额 | 未获取（由省调披露，非交易中心）；两端省内段只能按省网输配电价近似 |
 | 交易路径集合 | 确认不存在公开清单，路径由国调中心在等值交易网络上运行时生成；已改用规则条款推导约束 |
-| 省级参数 | 31/31 已取自发改价格〔2026〕1077号 附件1 官方核定值（海南于 2026-09-17 补录）；西藏无附件表、基金及附加仍缺 |
-| 通道额定容量 | 直流侧多为「实际输送能力」；**2026-09-17 起省间联络线一律不填估算值**——公开来源只给到回数、未给逐回输送能力，填估算会参与越限判断而假告警，故 cap=null、界面显示「容量待补」、不做容量校验 |
+| 省级参数 | 31/31 已取自发改价格〔2026〕1077号 附件1 官方核定值（海南于 2026-09-17 补录；西藏于 2026-09-18 回填送出省价格口径与两个线损率，其表源为西藏自治区发展改革委 2026-07-31 通知附件，非附件1）；**西藏政府性基金及附加仍缺** |
+| 通道额定容量 | 直流侧多为「实际输送能力」；**2026-09-17 起省间联络线一律不填估算值**——公开来源只给到回数、未给逐回输送能力，填估算会参与越限判断而假告警，故 cap=null、界面显示「容量待补」、不做容量校验。2026-09-18 已按 `docs/11` D6/H2 清理完 14 条历史估算容量（原值与口径移入说明列可追溯），构建期 lint 断言「regional 交流边容量必须为 null」；当前 `capBasis` 分布 `{unknown:62, cap:21, reported:8}` |
 | 省间联络线（**33 条**） | 含特高压交流 11 条、西北 750kV 4 条。无独立核定通道价，送出省参考价仅在交易起点计；交流接口计费网损 0 |
 | 南网物理直流（**5 条**） | 云广/普侨/高肇/兴安/禄高肇 未检索到发改委独立核价文件，标 `pricePending` 建边但**不参与枚举**；收费并入 842 号聚合交易成分 |
 | 非省间通道（3 条） | 大湾区广州/东莞背靠背（广东省内分区）、黑河背靠背（对俄跨境受入）无法建省级图边，登记在 `NIC` 台账 |
@@ -259,6 +275,7 @@ landed = includeDstCost ? border/(1-ρ受)+pNet+fund : border
 | `docs/改进计划.md` | 未实现想法与依据 |
 | `docs/01-安卓开发框架.md` / `android/README.md` | 安卓路线、工具链、真机验收要点 |
 | `ios/README.md` / `ios/ROADMAP.md` | iOS 路线选择（WKWebView 壳先行 / SwiftUI 主力）与阶段计划 |
-| `docs/regression-baseline-v2.json` | 473 个省对 / 1764 条路线的数值基线（iOS/RN 也必须对它跑） |
+| `docs/regression-baseline-v2.json` | 算法数值基线（2026-09-18 实测 425 省对 / 987 条路线；iOS/RN 也必须对它跑） |
+| `docs/11-数据与功能独立复核报告（2026-09-18）.md` | ★ 独立复核：1011 项数据核对 + 91 条功能发现，P0/P1/P2 修复清单与证据 |
 
 区域价不含线损。区域损耗提供缺项/历史/手填情景，历史率当前适用性尚未核实。
