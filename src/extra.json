@@ -1377,5 +1377,7 @@
     "XZ": 0.0495,
     "HI": 0.03
   },
-  "_说明": "本文件仅存非价格数据：站点、断面、经纬度、区域归属。价格、容量、线路长度见 data/fixed-prices.json。channelStations 是「已建图边通道 → [送端站 id, 受端站 id]」映射，仅供 tools/build.mjs 填充 CH.stFrom/stTo（地图落点与绕行度里程），不参与计价；因此不建图边的工程（中俄直流/黑河背靠背，见 data/fixed-prices.json「非省间通道」台账）不在此列。站点 lng/lat 为县/镇级近似，a 为站址文字（官方口径）。"
+  "_说明": "本文件仅存非价格数据：站点、断面、经纬度、区域归属。价格、容量、线路长度见 data/fixed-prices.json。channelStations 是「已建图边通道 → [送端站 id, 受端站 id]」映射，仅供 tools/build.mjs 填充 CH.stFrom/stTo（地图落点与绕行度里程），不参与计价；因此不建图边的工程（中俄直流/黑河背靠背，见 data/fixed-prices.json「非省间通道」台账）不在此列。站点 lng/lat 为县/镇级近似，a 为站址文字（官方口径）。",
+  "corridors": [],
+  "_corridors_note": "直流走廊几何（示意级，WGS-84 两位小数，waypoints 为中间点、不含起止站）。逐条必须带 src 来源字段（spec: grid-map 走廊，先审后上）；未经人工审核确认的条目不得加入本表。条目格式：{id:通道id, wp:[[lng,lat],...], src:来源说明, url:可选链接}"
 }

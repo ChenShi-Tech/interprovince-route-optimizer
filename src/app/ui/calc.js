@@ -112,6 +112,7 @@ function renderCalc(){
   document.getElementById('v-calc').innerHTML=out;
   renderParamSheet(res);
   restoreDetails(document.getElementById('v-calc'),_detailSnap);
+  reapplyClampMarks();   // FR-1：重绘后重放越限红框红字（输入修正前提示常驻）
   if(_fid){
     const el=document.getElementById(_fid);
     if(el){
@@ -332,7 +333,7 @@ function renderHeroResult(res){
   const tag=state.sel===0?((res.mustHave||[]).length?'所选通道最低价 #1':'最低价方案 #1'):'方案 #'+(selIndex(res)+1);
   return `<div class="hero-res">
     <div class="hero-lb">${costName}<span class="hero-tag">${tag}</span></div>
-    <div class="hero-v">${fmt(r.landed,2)}<small>元/MWh</small></div>
+    <div class="hero-v" title="完整值 ${fmt(r.landed,2)} 元/MWh">${fmtCompact(r.landed,2)}<small>元/MWh</small></div>
     <div class="hero-sub">${stops.map(s=>esc(s.name)).join(' → ')}${landings.length?'　落点 '+landings.map(s=>esc(s.landing)).join('、'):''}</div>
   </div>`;
 }
@@ -444,6 +445,7 @@ function renderChannelSelect(res){
 }
 /* 求解当前状态。界面只提供单选通道；换省对后已选通道不在候选里时自动取消，避免筛成空结果。 */
 function solveState(){
+  if(state.mapFocusLL) state.mapFocusLL=null;   // 批次 B：任何重算让位搜索聚焦（聚焦只由搜索触发）
   if((state.mustHave||[]).length>1) state.mustHave=state.mustHave.slice(0,1);
   // M13/M9：boot.js 的主体/档位分支只写入非空自动值；结构特殊的主体（深圳）在这里回到「缺项须手填」，
   // 避免静默沿用上一个主体的输配电价。手改值（pNetManual/fundManual）不受影响。
@@ -838,6 +840,41 @@ function exportReport(){
   a.download='省间测算报告-'+N(r.nodes[0])+'-'+N(r.nodes[r.nodes.length-1])+'.md'; a.click();
 }
 
+/* ---------- FR-1（PRD-体验问题修复）：输入钳制与红框红字反馈 ----------
+   sanNum（format.js）只管数值；这里负责界面反馈：越限时输入框红框 + 输入框下方红字，
+   修正后消失。越限状态显式记入 _clampBad（而不是重绘后按当前值重判——重绘后输入框
+   已是钳制值，重判永远"合法"，提示会被自己擦掉），renderCalc 整块重绘后重放。 */
+const _clampBad={};
+function clampApply(el,entry){
+  if(!el) return;
+  el.classList.toggle('clamp-bad',!!entry);
+  const box=el.parentElement;
+  let hint=box?box.querySelector('.clamp-hint'):null;
+  if(entry){
+    if(!hint&&box){ hint=document.createElement('div'); hint.className='clamp-hint'; box.appendChild(hint); }
+    if(hint) hint.textContent='超出上限，已按 '+sanNum(entry.n,entry.lim)+' 计算';
+  } else if(hint) hint.remove();
+}
+function clampRegister(el,raw,lim){
+  if(!el) return;
+  const s=String(raw==null?'':raw).trim();
+  const n=Number(s);
+  const bad=s!==''&&Number.isFinite(n)&&n>lim.max;   // PRD 只定义上限钳制，红字仅报超上限
+  if(bad) _clampBad[el.id]={lim,n}; else delete _clampBad[el.id];
+  clampApply(el,bad?{lim,n}:null);
+}
+/* 读输入框并按业务上限钳制；nonNeg=true 时沿用旧口径：0/负数回落默认值（B-02/B-03 行为锁） */
+function readSan(g,id,lim,nonNeg){
+  const el=g(id); if(!el) return lim.fallback;
+  let v=sanNum(el.value,lim);
+  if(nonNeg&&!(v>0)) v=lim.fallback;
+  clampRegister(el,el.value,lim);
+  return v;
+}
+function reapplyClampMarks(){
+  for(const id of Object.keys(_clampBad)) clampApply(document.getElementById(id),_clampBad[id]);
+}
+
 function doSolve(){
   readInputs(); state._res=solveState();
   const n=state._res.rows?state._res.rows.length:0;
@@ -848,30 +885,34 @@ function readInputs(){
   const g=id=>document.getElementById(id);
   if(!g('i-from')) return;
   state.from=g('i-from').value; state.to=g('i-to').value;
-  // 电量必须为正：负数是真值，`+v||1000` 拦不住，需显式归一化
-  const _q=+g('i-qty').value; state.qty=_q>0?_q:1000;
-  const _h=+g('i-hours').value; state.hours=_h>0?_h:1;
-  state.pGen=+g('i-pgen').value||0;
+  // FR-1：数值输入按业务上限钳制（NUM_LIMITS），超上限红框红字提示，state 只存钳制后值；
+  // 电量/时长维持旧口径 0/负数回落默认值（nonNeg）
+  state.qty=readSan(g,'i-qty',NUM_LIMITS.qty,true);
+  state.hours=readSan(g,'i-hours',NUM_LIMITS.hours,true);
+  state.pGen=readSan(g,'i-pgen',NUM_LIMITS.quote);
   // 受端输配电价 / 基金及附加只在「到户已列费用」口径下渲染；按渲染时的口径决定是否读取，未渲染时保留预填值
   if(state.includeDstCost!==false){
     const pn=g('i-pnet'), fd=g('i-fund'), lf=g('i-dstlf'), so=g('i-dstsysop');
-    // 空输入 = 缺项（保留 null，不静默按 0）；M13：与自动带入值一致视为预填、与 state 不同视为手改并持久化标记
+    // 空输入 = 缺项（保留 null，不静默按 0）；M13：与自动带入值一致视为预填、与 state 不同视为手改并持久化标记。
+    // FR-1：数值按业务上限钳制（sanNum），超上限红框红字由 clampRegister 负责
     const read=el=>{ const raw=String(el.value??'').trim(); return (raw===''||!Number.isFinite(+raw))?null:+raw; };
     if(pn){
-      const nv=read(pn), auto=dstAutoNet();
+      const raw=read(pn), nv=raw==null?null:sanNum(raw,NUM_LIMITS.quote), auto=dstAutoNet();
+      clampRegister(pn,pn.value,NUM_LIMITS.quote);
       if(nv!=null && auto!=null && Math.abs(nv-auto)<1e-9) state.pNetManual=false;
       else if(!(nv==null && state.pNet==null) && nv!==state.pNet) state.pNetManual=true;
       state.pNet=nv;
     }
     if(fd){
-      const nv=read(fd), auto=dstAutoFund();
+      const raw=read(fd), nv=raw==null?null:sanNum(raw,NUM_LIMITS.quote), auto=dstAutoFund();
+      clampRegister(fd,fd.value,NUM_LIMITS.quote);
       if(nv!=null && auto!=null && Math.abs(nv-auto)<1e-9) state.fundManual=false;
       else if(!(nv==null && state.fund==null) && nv!==state.fund) state.fundManual=true;
       state.fund=nv==null?0:nv;
     }
     const num=el=>{ const v=String(el.value??'').trim(); return v===''||!Number.isFinite(+v)||+v<0?null:+v; };
     if(lf && state.dstCapMode && state.dstCapMode!=='none'){ const v=num(lf); state.dstLoadFactor=v!=null&&v>0&&v<=100?v:null; }
-    if(so) state.dstSysOpFee=num(so);
+    if(so){ const s=String(so.value??'').trim(); state.dstSysOpFee=s===''||!Number.isFinite(+s)?null:sanNum(so.value,NUM_LIMITS.quote); clampRegister(so,so.value,NUM_LIMITS.quote); }
   }
   state.lossBearer=+g('i-bearer').value;
   state.includeRegion=g('i-region').value==='1';
@@ -880,10 +921,13 @@ function readInputs(){
   state.regionChargeMode=g('i-regioncharge')?.value||state.regionChargeMode;
   state.regionLossMode=g('i-regionloss')?.value||state.regionLossMode||'exclude';
   state.regionLossRates=state.regionLossRates||{};
-  for(const k of Object.keys(DATA.RLOSS||{})){const el=g('i-rloss-'+k);if(el)state.regionLossRates[k]=el.value.trim()===''?null:Number(el.value);}
+  for(const k of Object.keys(DATA.RLOSS||{})){
+    const el=g('i-rloss-'+k);
+    if(el){ const s=el.value.trim(); state.regionLossRates[k]=s===''?null:sanNum(s,NUM_LIMITS.pct); if(s!=='') clampRegister(el,el.value,NUM_LIMITS.pct); }
+  }
   state.includeDstCost=g('i-dstcost').value==='1';
   state.tradableOnly=g('i-tradable')?.value==='1';   // REQ-203
-  const _o=+g('i-zyocc')?.value||0;                  // REQ-302
+  const _o=+g('i-zyocc')?.value||0;                  // REQ-302（百分比维持现有 0~90 钳制）
   state.occPct=Math.min(90,Math.max(0,_o));
 }
 /* 送端省变化：只影响送端报价。手填值保留；其余情况按该省演示参考值重新预填。
@@ -978,13 +1022,22 @@ function renderCapFee(){
     </div>
     <div class="g3" style="margin-top:2px">
       <div class="mc"><div class="l">所选档单价</div><div class="v">${price!=null?fmt(price):'—'}<small>${priceUnit}</small></div></div>
-      <div class="mc"><div class="l">年容量电费</div><div class="v">${annual!=null?num(annual):'—'}<small>元/年</small></div></div>
-      <div class="mc"><div class="l">度电分摊额</div><div class="v">${per!=null?fmt(per,2):'—'}<small>元/MWh</small></div></div>
+      <div class="mc"><div class="l">年容量电费</div><div class="v" ${annual!=null?`title="完整值 ${num(annual)} 元/年"`:''}>${annual!=null?fmtCompact(annual):'—'}<small>元/年</small></div></div>
+      <div class="mc"><div class="l">度电分摊额</div><div class="v" ${per!=null?`title="完整值 ${fmt(per,2)} 元/MWh"`:''}>${per!=null?fmtCompact(per,2):'—'}<small>元/MWh</small></div></div>
     </div>
+    ${tier?`<details class="explain"><summary>本省全部电压档单价<em>1077号附件1</em></summary><div class="inner">
+      <table><tr><th>档别</th><th>容量电价<br>元/千伏安·月</th><th>需量电价<br>元/千瓦·月</th></tr>
+      ${(entry.容量电价||[]).map(t=>{
+        const dm=(entry.需量电价||[]).find(x=>x.档别===t.档别);
+        const cur=tier&&t.档别===tier.档别;
+        return `<tr${cur?' style="background:var(--blue-bg)"':''}><td>${esc(t.档别)}${cur?'　<b>当前</b>':''}</td><td>${t.价!=null?fmt(t.价):'—'}</td><td>${dm&&dm.价!=null?fmt(dm.价):'—'}</td></tr>`;
+      }).join('')}</table>
+      <p class="note">数据同费率库「容量/需量电价」分区；测算取当前所选档，其余档别供核对。</p>
+    </div></details>`:''}
     ${qty<=0?'<p class="note">年用电量为 0，度电分摊额不计算（显示 —）。</p>':''}
     <div class="lib-src" style="margin-top:8px">当前取值依据：${esc(entry.省)} · ${esc(tier?tier.档别:'—')} · ${modeLbl}　${esc(entry.来源)}</div>`;
   }
-  return `<details class="adv boxed" id="d-capfee"><summary>容量电费测算</summary><div class="inner">
+  return `<details class="adv boxed" id="d-capfee"><summary>容量电费测算<span style="font-weight:400;color:var(--ink3);font-size:11px;margin-left:6px">算一笔容量电费的独立小工具</span></summary><div class="inner">
     ${inner}
     <p class="note cap-note" style="margin-top:10px"><b>容量电费与电量来自省内或省外无关，不参与路径比选</b>（发改价格〔2020〕1441号 / 〔2023〕532号口径；年费用 = 单价 × ${isCap?'容量':'需量'} × 12，度电分摊 = 年费用 ÷ 年用电量）。</p>
   </div></details>`;

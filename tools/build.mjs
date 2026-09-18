@@ -341,6 +341,30 @@ for (const [code, geo] of Object.entries(extra.provinces)) {
   };
 }
 
+// ---------- 3.5 直流走廊几何（waypoints，change: grid-map-p1-and-ux-fixes / design D4）----------
+// 仅影响地理呈现，不影响计价与枚举。spec 硬约束：逐条必须带 src 来源（先审后上），
+// 坐标非法或缺来源直接 build 失败——未经审核的走廊数据进不了构建产物。
+{
+  const corridors = extra.corridors || [];
+  const byId = new Map(channels.map((c) => [c.id, c]));
+  for (const entry of corridors) {
+    const ch = byId.get(entry.id);
+    if (!ch) throw new Error(`[corridors] 指向不存在的通道 id: ${entry.id}`);
+    if (!Array.isArray(entry.wp) || !entry.wp.length)
+      throw new Error(`[corridors] ${entry.id} 缺 waypoints（至少 1 个中间点；无数据请整条删除）`);
+    for (const p of entry.wp) {
+      if (!Array.isArray(p) || p.length !== 2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1]) ||
+          Math.abs(p[0]) > 180 || Math.abs(p[1]) > 90)
+        throw new Error(`[corridors] ${entry.id} 存在非法坐标: ${JSON.stringify(p)}`);
+    }
+    if (!entry.src || !String(entry.src).trim())
+      throw new Error(`[corridors] ${entry.id} 缺 src 来源字段（spec: 先审后上）`);
+    ch.waypoints = entry.wp.map((p) => [Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]);
+    ch.wpSrc = String(entry.src).trim();
+    if (entry.url) ch.wpUrl = String(entry.url);
+  }
+}
+
 // ---------- 4. 输出：Web 内联版 + 端云共用的独立数据文件 ----------
 // LOSS_OF（省级上网环节线损率）：与 PV 同源派生，随载荷下发，算法层只认这一份。
 // 为什么必须进契约（H3）：算法层读 data.LOSS_OF 决定受端省内网损（inLoss）与送端省内网损
