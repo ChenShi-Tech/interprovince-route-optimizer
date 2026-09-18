@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用主题（浅色系统）：状态栏 / 导航栏取清晰浅色的页头色（= src/tokens.css 的 system-bar 令牌），深色图标。
+         WebView（targetSdk 34）的 prefers-color-scheme 跟随本主题的 isLightTheme：浅色系统下网页按浅色渲染，
+         系统切到深色时改用 values-night/themes.xml。页面加载后，由网页通过 IPRouteShell.setSystemBars 按实际主题
+         （含 app 内选的「科技」风格）再同步一次颜色。
+         导航栏图标深浅（windowLightNavigationBar）从 API 27 才有，见 values-v27；API 26 上导航栏保持系统默认深色，
+         免得白底配白色图标看不见。 -->
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <!-- 窗口底色 = 页面底色（bg 令牌）：WebView 首帧绘制前不闪白块 -->
+        <item name="android:windowBackground">@color/page_bg</item>
+    </style>
+</resources>

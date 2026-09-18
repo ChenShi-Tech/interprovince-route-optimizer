@@ -132,3 +132,10 @@ Xcode 27 要求 macOS Tahoe 26.6+，本机当前 26.4。**不升级不影响开�
 - **不做第二套独立算法。** 所有实现共用一个契约与一组基线。
 - **不使用 Apple Maps 做业务底图。**
 - **不在 iOS 上做价格预测。** 属另一专业领域，接现有服务。
+
+---
+
+## 九、壳侧待补（Web 端已就绪）
+
+- **系统栏颜色桥 `IPRouteShell.setSystemBars(hex, lightIcons)`**（2026-09-18 起 Web 端调用）：页面切换外观主题时（含 app 内选「科技」风格，它固定深色、与系统明暗无关）会调用 `window.IPRouteShell.setSystemBars('#RRGGBB', lightIcons)`，`lightIcons=true` 表示深色底配浅色图标。安卓壳已实现；iOS 壳要补一个同名桥：用 `WKUserScript`（`.atDocumentStart`）注入 `window.IPRouteShell = { setSystemBars: (hex, lightIcons) => webkit.messageHandlers.IPRouteShell.postMessage({ hex, lightIcons }) }`，原生侧 `WKScriptMessageHandler` 严格校验 `^#[0-9A-Fa-f]{6}$` 后更新状态栏区域底色与 `preferredStatusBarStyle`（`lightIcons` → `.lightContent`，否则 `.darkContent`），再 `setNeedsStatusBarAppearanceUpdate()`。**只许改颜色，不开放任何别的能力**——页面会按需加载第三方地图脚本，它们同样调得到这个桥。
+  - WKWebView 的 `prefers-color-scheme` 自动跟随系统明暗，「跟随系统」模式不需要壳侧处理；没有这个桥时页面静默跳过，只是科技风格下状态栏不会跟着变深。
