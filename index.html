@@ -685,7 +685,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 09:14';
+const BUILD_TIME='2026-09-18 10:29';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -3531,9 +3531,25 @@ function mapGotoChan(id){
 }
 /* 拓扑图快照导出（design D5）：SVG 序列化→2× canvas 光栅化→toBlob 下载；
    priceVersion 与生成时间画在 canvas 层（不进 SVG 源）。栅格底图（天地图/腾讯）无 CORS 头，
-   canvas 会被污染，故导出入口仅在拓扑图视图提供。 */
+   canvas 会被污染，故导出入口仅在拓扑图视图提供。
+   落盘分两路：浏览器走 <a download>；安卓 WebView 壳里 download 会被静默丢弃（真机实测），
+   检测到原生桥 AndroidBridge 时改交 base64 由壳写入下载目录并 Toast 反馈。 */
 function exportTopo(){
   const svgEl=document.querySelector('#map-view svg'); if(!svgEl) return;
+  const name=`iproute-grid-${String(PRICE_VERSION).slice(0,8)}.png`;
+  const save=b=>{
+    if(window.AndroidBridge&&window.AndroidBridge.savePng){
+      const fr=new FileReader();
+      fr.onload=()=>{ const s=String(fr.result); window.AndroidBridge.savePng(name,s.slice(s.indexOf(',')+1)); };
+      fr.readAsDataURL(b);
+      return;
+    }
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(b);
+    a.download=name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  };
   const url=URL.createObjectURL(new Blob([svgEl.outerHTML],{type:'image/svg+xml'}));
   const img=new Image();
   img.onload=()=>{
@@ -3544,14 +3560,7 @@ function exportTopo(){
       ctx.drawImage(img,0,0,cv.width,cv.height);
       ctx.fillStyle='rgba(0,0,0,.55)'; ctx.font='16px sans-serif';
       ctx.fillText(`省间路径优选测算 · priceVersion ${String(PRICE_VERSION).slice(0,8)} · ${new Date().toLocaleString('zh-CN')}`,16,cv.height-14);
-      cv.toBlob(b=>{
-        if(!b) return;
-        const a=document.createElement('a');
-        a.href=URL.createObjectURL(b);
-        a.download=`iproute-grid-${String(PRICE_VERSION).slice(0,8)}.png`;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-      },'image/png');
+      cv.toBlob(b=>{ if(b) save(b); },'image/png');
     }finally{ URL.revokeObjectURL(url); }
   };
   img.src=url;
