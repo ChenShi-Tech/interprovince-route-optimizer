@@ -68,6 +68,83 @@ const openParams = async (page) => {
   }
 };
 
+/* 扩区点击命中审计（UI-HIT）：小控件用透明 ::after 把点击区扩到 44px（src/template.html「可点区域 ≥44px」一段），
+   扩出去的部分不得盖住相邻的可点控件。对 scope 内每个挂了扩区（absolute、z-index:-1 的 ::after）的可见控件：
+   ① 在可见矩形外 1–2px、扩区外沿与中线取样，elementFromPoint 命中的必须是控件自己或非可点元素；
+      扩区之外的取样只追究「别的控件经它自己的扩区伸过来」，相邻控件本体贴得近不算；
+   ② 反向：临时撤掉本控件的伪元素，扩区内同一点原本命中的不能是别的可点控件（否则就是本控件抢了邻居边缘的点击）。
+      例外：叠在输入框里的按钮（密钥显隐）占用输入框给它预留的右内边距，那一段本来就归按钮。
+   返回 { n: 检查的控件数, names: 控件清单, bad: 违例清单 }。 */
+const hitAudit = (page, scope) => page.evaluate(async (scope) => {
+  const CLICK = 'button,a[href],input,select,textarea,label,summary,[onclick],[role="button"],[role="radio"]';
+  const host = document.querySelector(scope);
+  if (!host) return { n: 0, names: [], bad: [`找不到 ${scope}`] };
+  if (!document.getElementById('__hit-off-css')) {
+    const st = document.createElement('style'); st.id = '__hit-off-css';
+    st.textContent = '.__hit-off::after{display:none!important}'; document.head.appendChild(st);
+  }
+  const px = (v) => parseFloat(v) || 0;
+  const name = (el) => `${el.tagName.toLowerCase()}${typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : ''}「${(el.innerText || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 14)}」`;
+  const ctrls = [...host.querySelectorAll('*')].filter((el) => {
+    const a = getComputedStyle(el, '::after');
+    return a.content !== 'none' && a.content !== 'normal' && a.position === 'absolute' && a.zIndex === '-1' && el.getClientRects().length;
+  });
+  const bad = [], names = [];
+  for (const el of ctrls) {
+    el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (r.width < 1 || cx < 0 || cy < 0 || cx >= innerWidth || cy >= innerHeight) continue;   // 收起的弹层等不在屏上的控件
+    const own = (h) => h && (h === el || el.contains(h));
+    const c0 = document.elementFromPoint(cx, cy);
+    if (!own(c0)) { const cl = c0 && c0.closest(CLICK); if (cl && !cl.contains(el)) { bad.push(`${name(el)} 的中心被 ${name(cl)} 盖住`); continue; } }
+    names.push(name(el));
+    const cs = getComputedStyle(el), a = getComputedStyle(el, '::after');
+    const R = {   // 伪元素相对控件的内边距盒定位：扩出后的命中矩形
+      top: r.top + px(cs.borderTopWidth) + px(a.top), bottom: r.bottom - px(cs.borderBottomWidth) - px(a.bottom),
+      left: r.left + px(cs.borderLeftWidth) + px(a.left), right: r.right - px(cs.borderRightWidth) - px(a.right),
+    };
+    const inR = (x, y) => x >= R.left && x < R.right && y >= R.top && y < R.bottom;
+    const inRect = (q, x, y) => x >= q.left && x < q.right && y >= q.top && y < q.bottom;
+    const xs = [r.left + 2, cx, r.right - 2], ys = [r.top + 2, cy, r.bottom - 2];
+    const pts = [];
+    for (const d of [1, 2]) {
+      for (const x of xs) { pts.push([x, r.top - d, '上']); pts.push([x, r.bottom + d - 0.01, '下']); }
+      for (const y of ys) { pts.push([r.left - d, y, '左']); pts.push([r.right + d - 0.01, y, '右']); }
+    }
+    if (R.top < r.top - 0.5) for (const x of xs) pts.push([x, R.top + 0.5, '上扩区外沿'], [x, (R.top + r.top) / 2, '上扩区']);
+    if (R.bottom > r.bottom + 0.5) for (const x of xs) pts.push([x, R.bottom - 0.5, '下扩区外沿'], [x, (R.bottom + r.bottom) / 2, '下扩区']);
+    if (R.left < r.left - 0.5) for (const y of ys) pts.push([R.left + 0.5, y, '左扩区外沿'], [(R.left + r.left) / 2, y, '左扩区']);
+    if (R.right > r.right + 0.5) for (const y of ys) pts.push([R.right - 0.5, y, '右扩区外沿'], [(R.right + r.right) / 2, y, '右扩区']);
+    for (const [x, y, side] of pts) {
+      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+      const at = `${side}(${x.toFixed(1)},${y.toFixed(1)})`;
+      const h = document.elementFromPoint(x, y);
+      if (h && !own(h)) {   // ① 命中了别人
+        const cl = h.closest(CLICK);
+        if (cl && !cl.contains(el)) {
+          const viaExt = !inRect(cl.getBoundingClientRect(), x, y);
+          if (inR(x, y) || viaExt) bad.push(`${name(el)} ${at} → ${name(cl)}${viaExt ? '（经其扩区）' : ''}`);
+        }
+        continue;
+      }
+      if (!h || !inR(x, y) || inRect(r, x, y)) continue;
+      el.classList.add('__hit-off');   // ② 命中了自己的扩区：撤掉扩区，看这一点原本归谁
+      const u = document.elementFromPoint(x, y);
+      el.classList.remove('__hit-off');
+      const cl = u && !own(u) && u.closest(CLICK);
+      if (!cl || cl.contains(el)) continue;
+      if (/^(INPUT|TEXTAREA)$/.test(cl.tagName)) {
+        const ic = getComputedStyle(cl), ir = cl.getBoundingClientRect();
+        if (x >= ir.right - px(ic.paddingRight) - px(ic.borderRightWidth)) continue;
+      }
+      bad.push(`${name(el)} ${at} 扩区压住 ${name(cl)}`);
+    }
+  }
+  return { n: names.length, names, bad: [...new Set(bad)] };
+}, scope);
+
 const G = BASE, DCL = { waitUntil: 'domcontentloaded', timeout: 20000 };
 const tests = [
 
@@ -2056,6 +2133,81 @@ const tests = [
       ok(dis2.every((x) => !x), '切回清晰后明暗按钮应恢复可点');
       ok(!(await page.locator('#theme-body').innerText()).includes('科技风格固定为深色'), '切回清晰后说明应消失');
       set(`科技：明暗组禁用 + 说明；网架图画布 ${g0} → ${g1} 重绘；切回清晰恢复`);
+    },
+  },
+  {
+    id: 'UI-HIT', section: '外观主题', title: '小控件扩大的点击区不抢相邻控件（测算页 390/320px、网架图搜索结果与工具条、弹层）',
+    steps: '对挂了透明扩区的控件逐个取样：测算页（390px、320px；默认与「全部路线 + 含越限」）、网架图搜索「换流站」后的结果与工具条、天地图密钥栏、参数弹层、外观面板；另外实点「锦屏换流站」下沿与「含越限」上方那张路线卡的下沿',
+    expected: '每个控件外沿 1–2px 与扩区内命中的都是控件自己或空白，扩区不压别的可点控件；点「锦屏换流站」下沿打开的是锦屏的浮层（不是下一行的奉贤）；点路线卡下沿选中该路线、「含越限」不被切换',
+    async run(page, set) {
+      const seen = [], bad = [];
+      const audit = async (label, scope) => {
+        const r = await hitAudit(page, scope);
+        ok(r.n > 0, `${label}：没找到挂扩区的控件（选择器或页面结构变了？）`);
+        seen.push(`${label} ${r.n} 个`);
+        bad.push(...r.bad.map((b) => `${label}：${b}`));
+      };
+      // 每轮先清掉上一轮存下的测算状态（全部路线 / 含越限），测的是默认界面；导览「已读」由 init 脚本每次加载重设
+      const fresh = async () => { await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} }); await page.goto(G, DCL); await page.waitForSelector('.card.plan'); };
+      await page.goto(G, DCL);
+      for (const w of [320, 390]) {
+        await page.setViewportSize({ width: w, height: 844 });
+        await fresh();
+        await page.waitForSelector('.card.plan');
+        await audit(`测算页 ${w}px`, 'body');
+        await page.evaluate(() => { state.showBad = true; state.showAll = true; state.sel = 0; doSolve(); });
+        await page.waitForSelector('.card.plan');
+        await audit(`测算页·全部路线 ${w}px`, 'body');
+      }
+      // 以下 390px。回归点 1：「含越限」正上方那张路线卡的下沿（原先被复选框标签的扩区接走 3–7px）
+      await fresh();
+      const rc = await page.evaluate(() => {
+        const tg = document.querySelector('.rlist-foot .tg');
+        tg.scrollIntoView({ block: 'center' });
+        const t = tg.getBoundingClientRect();
+        const cards = [...document.querySelectorAll('.rc')];
+        const i = cards.findIndex((c) => { const q = c.getBoundingClientRect(); return q.left <= t.left && q.right >= t.left + 20 && q.right <= innerWidth + 200; });
+        const q = i < 0 ? null : cards[i].getBoundingClientRect();
+        return q && { i, x: t.left + 10, y: q.bottom - 2, gap: +(t.top - q.bottom).toFixed(1), showBad: state.showBad };
+      });
+      ok(rc, '找不到「含越限」正上方的路线卡');
+      await page.mouse.click(rc.x, rc.y);
+      await page.waitForTimeout(150);
+      const after = await page.evaluate(() => ({ sel: state.sel, showBad: state.showBad }));
+      ok(after.sel === rc.i && after.showBad === rc.showBad, `点第 ${rc.i + 1} 张路线卡下沿应选中它、不切换「含越限」，实际 sel=${after.sel}、含越限 ${rc.showBad}→${after.showBad}`);
+      // 回归点 2：网架图搜索结果换行排布、行距 6px，点「锦屏换流站」下沿原先会打开下一行「奉贤换流站」
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.fill('#map-q', '换流站');
+      await page.waitForTimeout(200);
+      const jp = page.locator('#map-search-out button', { hasText: '锦屏换流站' }).first();
+      await jp.scrollIntoViewIfNeeded();
+      const jb = await jp.boundingBox();
+      ok(jb, '搜索「换流站」应列出「锦屏换流站」');
+      await page.mouse.click(jb.x + jb.width / 2, jb.y + jb.height - 1);
+      await page.waitForTimeout(300);
+      const pop = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      ok(pop.includes('锦屏换流站'), `点「锦屏换流站」下沿应打开锦屏的浮层，实际「${pop.slice(0, 20)}」`);
+      await page.fill('#map-q', '换流站');   // 聚焦后结果仍在；再填一次确保列表完整
+      await page.waitForTimeout(200);
+      await audit('网架图·搜索结果与工具条', '#v-map');
+      await page.evaluate(() => switchMap('td'));
+      await page.waitForSelector('#i-tk');
+      await audit('网架图·天地图密钥栏', '#v-map');
+      await page.evaluate(() => switchMap('svg'));
+      await page.click('#t-calc');
+      await page.waitForSelector('.card.plan');
+      await openParams(page);
+      await page.waitForTimeout(300);
+      await audit('参数弹层', '#param-sheet');
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+      await page.click('#btn-theme');
+      await page.waitForSelector('#theme-sheet.open');
+      await page.waitForTimeout(300);
+      await audit('外观面板', '#theme-sheet');
+      ok(bad.length === 0, `扩区抢点 ${bad.length} 处：\n      ` + bad.slice(0, 12).join('\n      '));
+      set(`取样 ${seen.join('、')}，无抢点；路线卡下沿（与「含越限」相隔 ${rc.gap}px）选中第 ${rc.i + 1} 张；「锦屏换流站」下沿打开锦屏浮层`);
     },
   },
 ];

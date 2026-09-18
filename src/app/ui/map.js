@@ -549,7 +549,8 @@ function mapQSearch(v){
   const total=hits.stations.length+hits.channels.length;
   if(!String(v||'').trim()){ out.innerHTML=''; return; }
   if(!total){ out.innerHTML='<div class="note" style="margin:0 0 6px">无匹配的站点/通道，换个关键词试试。</div>'; return; }
-  const chip=(label,fn)=>`<button class="btn ghost" style="width:auto;padding:3px 10px;font-size:11px" onclick="${fn}">${esc(label)}</button>`;
+  // 结果按钮换行排布、行距 6px：hit-x 让透明扩区只横向扩，免得下一行的按钮抢走上一行下沿的点击
+  const chip=(label,fn)=>`<button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px" onclick="${fn}">${esc(label)}</button>`;
   let html='<div style="display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px">'
     +hits.stations.slice(0,6).map(st=>chip(ST[st].n,`mapGotoStation('${esc(st)}')`)).join('')
     +hits.channels.slice(0,6).map(id=>{ const c=CH.find(x=>x.id===id); return chip(c?c.n:id,`mapGotoChan('${esc(id)}')`); }).join('')
@@ -660,7 +661,7 @@ function renderMap(){
 
   let out=`<div class="card tight">
     <div class="sec-title">跨省网架<span class="hint">${CH.length} 条通道 · ${Object.keys(ST).length} 个站点</span>
-      <button class="btn ghost" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
+      <button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
     <div class="seg small">${MAP_MODES.map(([k,t])=>`<button class="${mode===k?'on':''}" onclick="switchMap('${k}')">${t}</button>`).join('')}</div>`;
 
   if(!proxyOK && mode!=='svg'){
@@ -707,7 +708,7 @@ function renderMap(){
     </div>
     <div id="map-search-out"></div>
     ${secStrip}
-    ${mode==='svg'?`<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button class="btn ghost" style="padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button></div>`:''}
+    ${mode==='svg'?`<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button class="btn ghost hit-x" style="padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button></div>`:''}
     <div id="map-view" onclick="mapSvgClick(event)"></div><div id="fallback"></div><div id="map-pop"></div>`;
 
   if(selR){
