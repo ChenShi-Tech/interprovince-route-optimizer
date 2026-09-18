@@ -75,7 +75,10 @@ window._TMapSecurityConfig = {
    src/template.html 的 <style> 开头（占位符 __TOKENS__）。样式与界面脚本一律写 var(--x)，
    tools/test-design-tokens.mjs 守住「别处不出现字面值、引用的令牌必须在此定义」。
    令牌名与取值对齐设计系统 tokens.json；源码原有的 --ink / --line / --bg / --card / --blue… / --r 保持原名原值。
-   只有一套浅色主题：后续主题（深色、科技感）在 [data-theme] 下覆盖这里的值即可，不改组件样式。
+   主题：<html data-theme> 取 clear（清晰浅色，默认，即本 :root 块）/ clear-dark（清晰深色）/ tech（科技·调度大屏，固定深色）。
+   两个深色主题在文件末尾的 [data-theme=…] 块里逐个覆盖颜色令牌（含图表、网架图、区域、玻璃层、遮罩、气泡、阴影、焦点环），
+   只换取值、不写组件级样式；结构上的差异（网格底纹、卡片高光、数字发光、描边与圆角）也都通过令牌表达。
+   主题由 <head> 内联脚本在首帧前设定、ui/theme.js 的 applyTheme() 切换；对比度由 tools/test-design-tokens.mjs 逐主题检查。
    ⚠ JS 里拿真实颜色字符串（腾讯地图 / 天地图样式对象、data: URI、canvas）用 ui/theme.js 的 tokenColor()。 */
 :root{
   /* ---------- 颜色 · 基础（源码 :root 原名原值） ---------- */
@@ -127,6 +130,7 @@ window._TMapSecurityConfig = {
   --seg-divider:rgba(0,0,0,.07);        /* 时间线段卡内「取值依据」上方分隔线（比 line2 略深） */
   --scrim-dialog:rgba(20,24,32,.45);    /* 应用内确认框（uiConfirm）遮罩，比参数弹层略深 */
   --snapshot-caption:rgba(0,0,0,.55);   /* 拓扑图快照 PNG 底部的版本 / 时间水印文字 */
+  --system-bar:#FFFFFF;                 /* 页头色的不透明版：<meta name="theme-color"> 与安卓壳状态栏 / 导航栏（ui/theme.js 读取，须为 #RRGGBB） */
 
   /* ---------- 颜色 · 价格组成（ui/calc.js COMP_ITEMS，按项固定） ---------- */
   --chart-gen:var(--blue);        /* 送端报价 */
@@ -245,6 +249,197 @@ window._TMapSecurityConfig = {
   --bp-fold:600px;              /* 折叠屏展开 / 小平板 */
   --bp-desktop:900px;           /* Web 辅助版两栏 */
   --bp-wide:1280px;             /* 宽屏三栏 */
+}
+
+/* ==================== 清晰 · 深色（clear-dark） ====================
+   保留清晰风格的结构与克制：只换颜色，不动描边、圆角与字体。底色用中性深灰（不偏藏蓝，与科技风格区分）。
+   区域色用深青绿系；阴影加深；网架图画布转深，但腾讯地图 / 天地图底图本身仍是浅色（平台侧样式，应用改不了）。 */
+[data-theme="clear-dark"]{
+  color-scheme:dark;
+  /* 基础 */
+  --ink:#E8EAED;
+  --ink2:#B6BBC2;
+  --ink3:#959BA4;
+  --line:rgba(255,255,255,.12);
+  --line2:rgba(255,255,255,.07);
+  --bg:#121417;
+  --card:#1C1F24;
+  --blue:#5AA2F0;
+  --blue-bg:#17293E;
+  --blue-ink:#A3CDFF;
+  --teal:#4FCBA2;
+  --teal-bg:#132F28;
+  --amber:#E9B566;
+  --amber-bg:#35290F;
+  --coral:#F2977A;
+  --coral-bg:#3A2119;
+  --gray:#B6BBC2;
+  --gray-bg:#262A31;
+  --red:#F28B82;
+  --red-bg:#3B1D1D;
+  /* 具名字面值 */
+  --on-fill:#0A1626;
+  --field-bg:#16191D;
+  --field-border:#666C75;               /* 在 field-bg 上 3.3:1 */
+  --ghost-border:rgba(90,162,240,.45);
+  --hero-field-border:rgba(90,162,240,.55);
+  --header-glass:rgba(28,31,36,.94);
+  --nav-glass:rgba(28,31,36,.96);
+  --scrim:rgba(0,0,0,.55);
+  --tooltip-bg:#E8EAED;                 /* 深色界面上气泡改浅底深字 */
+  --tooltip-ink:#121417;
+  --sheet-grab:rgba(255,255,255,.22);
+  --explain-bg:#202329;
+  --issue-accent:#E9B566;
+  --timeline-line:#3F74AE;
+  --region-line:#3C8E7E;
+  --region-border:#27463F;
+  --region-bg:#172522;
+  --region-dash:#3F8474;
+  --region-arrow:#63B3A1;
+  --region-card-border:#2A3B37;
+  --error-text:#F28B82;
+  --toast-close-bg:rgba(242,139,130,.16);
+  --seg-divider:rgba(255,255,255,.09);
+  --scrim-dialog:rgba(0,0,0,.6);
+  --snapshot-caption:rgba(255,255,255,.6);
+  --system-bar:#1C1F24;
+  /* 价格组成（--chart-gen 跟随 --blue） */
+  --chart-origin-loss:#9BC6F7;
+  --chart-send:#3F74B0;
+  --chart-trans:#E9A23B;
+  --chart-reg:#4FCBA2;
+  --chart-loss:#EE8F6F;
+  --chart-in-loss:#A9A3EA;
+  --chart-net:#8E949C;
+  --chart-fund:#6B7178;
+  --chart-cap:#8E8AD6;
+  --chart-sys-op:#6FA59C;
+  /* 网架图（拓扑图画布转深；地图 SDK 叠加层同样按这里取色） */
+  --map-alt:#E9A23B;
+  --map-base:#5E646D;
+  --map-edge:#A0A7B1;
+  --map-node:#5E646D;
+  --map-label:#80868F;
+  --map-ground:#181B20;
+  --map-fallback:#1A1D22;
+  --map-casing:#181B20;                 /* 「白色衬底」在深色画布上改成画布色 */
+  --map-region-3:#D08A45;
+  /* 下拉箭头：箭头色 = --ink3 */
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%23959BA4' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* 阴影与焦点环 */
+  --focus-ring:0 0 0 3px rgba(90,162,240,.22);
+  --focus-ring-hero:0 0 0 4px rgba(90,162,240,.25);
+  --focus-ring-bar:0 0 0 2px #1C1F24,0 0 0 3.5px rgba(232,234,237,.6);
+  --focus-ring-bad:0 0 0 3px rgba(242,139,130,.2);
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.5);
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.5);
+  --shadow-toast:0 4px 14px rgba(0,0,0,.45);
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.55);
+  --shadow-guide:0 10px 34px rgba(0,0,0,.5);
+}
+
+/* ==================== 科技 · 调度大屏（tech，固定深色） ====================
+   深色藏蓝底、青色信号光、等宽数字、24px 网格底纹、1px 描边、更小的圆角、关键数字微微发光。
+   全部落在令牌上：网格 = --page-pattern，卡片顶边高光 = --card-highlight，数字发光 = --num-glow，
+   主报价输入框外晕 = --hero-field-glow，等宽数字 = --font-num，1px 描边 = --hairline，圆角 = --r / --radius-*。 */
+[data-theme="tech"]{
+  color-scheme:dark;
+  /* 基础 */
+  --ink:#E6EDF7;
+  --ink2:#A9B8CD;
+  --ink3:#8698B2;
+  --line:rgba(96,165,250,.20);
+  --line2:rgba(96,165,250,.11);
+  --bg:#070E1A;
+  --card:#0D1728;
+  --blue:#2BC4F2;
+  --blue-bg:#0B2A3E;
+  --blue-ink:#8BE6FF;
+  --teal:#3DDC97;
+  --teal-bg:#0B2E26;
+  --amber:#F7B955;
+  --amber-bg:#33260D;
+  --coral:#FF8A65;
+  --coral-bg:#3A1C12;
+  --gray:#A9B8CD;
+  --gray-bg:#111F36;
+  --red:#FF7B7B;
+  --red-bg:#3A1419;
+  /* 具名字面值 */
+  --on-fill:#04121F;
+  --field-bg:#08111F;
+  --field-border:#4A6891;               /* 在 field-bg 上 3.3:1 */
+  --ghost-border:rgba(43,196,242,.45);
+  --hero-field-border:rgba(43,196,242,.6);
+  --header-glass:rgba(7,14,26,.86);
+  --nav-glass:rgba(7,14,26,.94);
+  --scrim:rgba(2,6,14,.62);
+  --tooltip-bg:#E6EDF7;
+  --tooltip-ink:#070E1A;
+  --sheet-grab:rgba(139,230,255,.28);
+  --explain-bg:#0A1424;
+  --issue-accent:#F7B955;
+  --timeline-line:#2596C4;
+  --region-line:#2BA67A;
+  --region-border:#184A3C;
+  --region-bg:#0A211E;
+  --region-dash:#2E8F6C;
+  --region-arrow:#3DDC97;
+  --region-card-border:#153A31;
+  --error-text:#FF7B7B;
+  --toast-close-bg:rgba(255,123,123,.16);
+  --seg-divider:rgba(96,165,250,.16);
+  --scrim-dialog:rgba(2,6,14,.68);
+  --snapshot-caption:rgba(230,237,247,.6);
+  --system-bar:#070E1A;
+  /* 价格组成（--chart-gen 跟随 --blue = #2BC4F2） */
+  --chart-origin-loss:#5B8CFF;
+  --chart-send:#9DB7FF;
+  --chart-trans:#F7B955;
+  --chart-reg:#3DDC97;
+  --chart-loss:#FF8A65;
+  --chart-in-loss:#B69CFF;
+  --chart-net:#7D8FAA;
+  --chart-fund:#52637D;
+  --chart-cap:#A48BFF;
+  --chart-sys-op:#5FC4B6;
+  /* 网架图 */
+  --map-alt:#F7B955;
+  --map-base:#4A6891;
+  --map-edge:#7FA6D9;
+  --map-node:#3E5A80;
+  --map-label:#61728E;
+  --map-ground:#091324;
+  --map-fallback:#0B1628;
+  --map-casing:#091324;
+  --map-region-3:#FF9F43;
+  /* 下拉箭头：箭头色 = --ink3 */
+  --select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' fill='none' stroke='%238698B2' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  /* 结构钩子 */
+  --num-glow:0 0 16px rgba(43,196,242,.45);
+  --page-pattern:repeating-linear-gradient(0deg,rgba(43,196,242,.055) 0 1px,transparent 1px 24px),repeating-linear-gradient(90deg,rgba(43,196,242,.055) 0 1px,transparent 1px 24px);
+  --card-highlight:inset 0 1px 0 rgba(139,230,255,.07);
+  --hero-field-glow:0 0 0 1px rgba(43,196,242,.12),0 0 22px rgba(43,196,242,.14);
+  /* 阴影与焦点环 */
+  --focus-ring:0 0 0 3px rgba(43,196,242,.22);
+  --focus-ring-hero:0 0 0 1px rgba(43,196,242,.35),0 0 0 4px rgba(43,196,242,.18),0 0 26px rgba(43,196,242,.22);
+  --focus-ring-bar:0 0 0 2px #0D1728,0 0 0 3.5px rgba(139,230,255,.75);
+  --focus-ring-bad:0 0 0 3px rgba(255,123,123,.22);
+  --shadow-sheet:0 -8px 30px rgba(0,0,0,.6);
+  --shadow-sheet-side:-8px 0 30px rgba(0,0,0,.6);
+  --shadow-toast:0 4px 14px rgba(0,0,0,.5);
+  --shadow-dialog:0 12px 40px rgba(0,0,0,.6);
+  --shadow-guide:0 10px 34px rgba(0,0,0,.55);
+  /* 字体、描边、圆角 */
+  --font-num:"SF Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --hairline:1px;
+  --r:8px;
+  --radius-btn:6px;
+  --radius-field:6px;
+  --radius-compact:6px;                 /* 参数弹层紧凑输入框与普通输入框同为 6px */
+  --radius-pill:3px;                    /* 标签、胶囊变方角 */
+  --radius-tag:3px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -887,7 +1082,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 11:52';
+const BUILD_TIME='2026-09-18 12:08';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器

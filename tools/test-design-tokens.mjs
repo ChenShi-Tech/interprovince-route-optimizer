@@ -6,13 +6,16 @@
  * 只覆盖令牌取值，不改组件样式。本脚本守住这条边界：
  *   一、颜色字面值：src/template.html（注入前）的 <style> 与其余标记、src/app/**\/*.js 中
  *       不得出现 #hex / rgb() / rgba() / hsl() / hsla()。
- *       白名单：data: URI（select 下拉箭头等，主题需另行覆盖）、var(--x, 字面兜底) 的兜底值、
+ *       白名单：data: URI（地图圆点等运行时拼接的 SVG）、var(--x, 字面兜底) 的兜底值、
  *       <meta name="theme-color">（浏览器状态栏色只认字面值）。
  *   二、令牌引用：var(--x) 与 JS 里以字符串传递的 '--x'（tokenColor('--x') 等）都必须在 src/tokens.css 定义；
  *       src/tokens.css 定义了但 src/ 下无人引用的令牌给出警告（不失败）。
  *   三、字号：CSS / canvas 的 font-size 只能取 FONT_SIZES；拓扑图 SVG 的 font-size 属性另按 SVG_FONT_SIZES。
  *   四、圆角：border-radius 字面值只能是 0 / 50% / 复合值（多值简写）/ 令牌引用。
- *   五、令牌文件自身：只有一个 :root 块、:root 内名字不重复、主题覆盖块（[data-theme] 等）只覆盖已定义的令牌。
+ *   五、令牌文件自身：只有一个 :root 块、:root 内名字不重复、主题覆盖块（[data-theme] 等）只覆盖已定义的令牌；
+ *       深色主题（clear-dark / tech）覆盖 :root 的全部颜色令牌并声明 color-scheme:dark。
+ *   六、主题对比度：三套主题（clear / clear-dark / tech）逐对检查文字 ≥4.5:1、非文字 ≥3:1（别名逐层解析，
+ *       半透明色按所在的底合成），任一主题不达标即失败；清晰浅色网架图省名列为已知例外。
  * 用法：node tools/test-design-tokens.mjs
  */
 import fs from 'node:fs';
@@ -180,6 +183,91 @@ for (const t of targets) {
   }
 }
 ok(radHits.length === 0, '单值圆角全部使用令牌（--r / --radius-*）', radHits.join('\n'));
+
+/* ================= 五、主题覆盖块：完整性 ================= */
+console.log('\n══ 五、主题覆盖块：深色主题覆盖全部颜色令牌 ══');
+/** 解析一个选择器块里的「--名字: 值;」（值里可能含 url("data:…")，不含分号与花括号） */
+const parseDecls = (body) => Object.fromEntries([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+const rootTokens = parseDecls(rootBody);
+const themeBlocks = Object.fromEntries([...tokScan.matchAll(/\[data-theme="([\w-]+)"\]\s*\{([^}]*)\}/g)].map((m) => [m[1], { decls: parseDecls(m[2]), body: m[2] }]));
+const THEMES = ['clear', 'clear-dark', 'tech'];
+ok(Object.keys(themeBlocks).sort().join() === 'clear-dark,tech', `主题覆盖块恰为 clear-dark / tech（实际：${Object.keys(themeBlocks).join(' / ') || '无'}；clear 即 :root）`);
+// 「颜色令牌」= :root 里取值含颜色字面值的令牌（含阴影、焦点环、下拉箭头 data: URI）；别名（var(--x)）随被引用者变化，不要求重写
+const HAS_COLOR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?)\s*\(|%23[0-9a-f]{6}/i;
+const colorTokens = Object.keys(rootTokens).filter((k) => HAS_COLOR.test(rootTokens[k]));
+for (const th of THEMES.slice(1)) {
+  const blk = themeBlocks[th] || { decls: {}, body: '' };
+  const miss = colorTokens.filter((k) => !(k in blk.decls));
+  ok(miss.length === 0, `${th}：${colorTokens.length} 个颜色令牌全部有值`, '      缺：' + miss.join(' '));
+  ok(/color-scheme\s*:\s*dark/.test(blk.body), `${th}：声明 color-scheme:dark（原生控件、滚动条随之变深）`);
+}
+
+/* ================= 六、主题对比度（WCAG 2.x） ================= */
+console.log('\n══ 六、主题对比度：文字 ≥4.5:1，非文字 ≥3:1 ══');
+/** 某主题下令牌的最终取值：:root ← 主题块覆盖，别名 var(--x[, 兜底]) 逐层解析 */
+function themeValue(th, name, depth = 0) {
+  const v = (th !== 'clear' && themeBlocks[th] && name in themeBlocks[th].decls) ? themeBlocks[th].decls[name] : rootTokens[name];
+  if (v == null) throw new Error(`${th}：令牌 ${name} 未定义`);
+  const m = /^var\(\s*(--[\w-]+)\s*(?:,[^)]*)?\)$/.exec(v);
+  if (m) { if (depth > 10) throw new Error(`${th}：${name} 别名循环`); return themeValue(th, m[1], depth + 1); }
+  return v;
+}
+/** 颜色字符串 → [r,g,b,a]（0–255, 0–1）；只接受 #hex 与 rgb()/rgba() */
+function parseColor(s) {
+  let m = /^#([0-9a-f]{3,8})$/i.exec(s);
+  if (m) {
+    let h = m[1];
+    if (h.length <= 4) h = [...h].map((c) => c + c).join('');
+    const n = (i) => parseInt(h.slice(i, i + 2), 16);
+    return [n(0), n(2), n(4), h.length === 8 ? n(6) / 255 : 1];
+  }
+  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(s);
+  if (m) return [+m[1], +m[2], +m[3], m[4] == null ? 1 : +m[4]];
+  throw new Error(`不是可解析的颜色：${s}`);
+}
+const over = (fg, bg) => [0, 1, 2].map((i) => fg[i] * fg[3] + bg[i] * (1 - fg[3])).concat(1);   // 源在上的 alpha 合成
+const lum = (c) => { const [r, g, b] = c.slice(0, 3).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+/** 前景 fg 在背景 bg 上的对比度；透明色按所在的底合成：bg 半透明时先叠到 base 上（缺省 card，base 自身再叠到 bg 上） */
+function contrast(th, fg, bg, base = '--card') {
+  const page = parseColor(themeValue(th, '--bg'));
+  const baseC = base === '--bg' ? page : over(parseColor(themeValue(th, base)), page);
+  const b = over(parseColor(themeValue(th, bg)), baseC);
+  return ratio(over(parseColor(themeValue(th, fg)), b), b);
+}
+const TEXT = 4.5, UI = 3;
+const PAIRS = [
+  ...['--ink', '--ink2', '--ink3'].flatMap((f) => ['--card', '--bg', '--gray-bg'].map((b) => [f, b, TEXT])),
+  ['--ink2', '--blue-bg', TEXT],
+  ['--blue', '--card', TEXT], ['--blue', '--blue-bg', TEXT],
+  ['--blue-ink', '--blue-bg', TEXT], ['--blue-ink', '--card', TEXT],
+  ['--teal', '--teal-bg', TEXT], ['--amber', '--amber-bg', TEXT], ['--red', '--red-bg', TEXT],
+  ['--coral', '--coral-bg', TEXT], ['--gray', '--gray-bg', TEXT],
+  ['--on-fill', '--blue', TEXT], ['--on-fill', '--amber', TEXT],
+  ['--tooltip-ink', '--tooltip-bg', TEXT],   // 气泡浮在方案卡上：半透明气泡底按 card 合成
+  ['--error-text', '--card', TEXT],
+  ['--teal', '--region-bg', TEXT],
+  ['--field-border', '--field-bg', UI], ['--blue', '--field-bg', UI],   // 非文字：输入框边框、聚焦边框
+  ['--map-label', '--map-ground', UI],
+];
+/* 已知例外：清晰浅色的网架图非路线省名 #9A9A95 在画布 #F7F8FA 上只有 2.66:1——源码原值，
+   刻意弱化（路线外省份只作方位参照，路线上的省名用 --map-label-on、对比度充足）。清晰浅色外观不改，列为例外；
+   深色两套主题不享受此例外，须 ≥3:1。 */
+const KNOWN_EXCEPTIONS = { clear: ['--map-label/--map-ground'] };
+for (const th of THEMES) {
+  const rows = [];
+  for (const [f, b, min] of PAIRS) {
+    let r = NaN, err = '';
+    try { r = contrast(th, f, b); } catch (e) { err = e.message; }
+    rows.push({ key: `${f}/${b}`, r, min, err, exempt: (KNOWN_EXCEPTIONS[th] || []).includes(`${f}/${b}`) });
+  }
+  const bad = rows.filter((x) => x.err || (!(x.r >= x.min) && !x.exempt));
+  const low = rows.filter((x) => !x.err && !x.exempt).sort((a, b) => a.r / a.min - b.r / b.min).slice(0, 4)
+    .map((x) => `${x.key} ${x.r.toFixed(2)}`).join('，');
+  const ex = rows.filter((x) => x.exempt).map((x) => `${x.key} ${x.r.toFixed(2)}（已知例外）`).join('，');
+  ok(bad.length === 0, `${th}：对比度 ${rows.length} 对（文字 ≥4.5、非文字 ≥3）；最低 ${low}${ex ? '；' + ex : ''}`,
+    bad.map((x) => `      ${x.key} ${x.err || x.r.toFixed(2) + ' < ' + x.min}`).join('\n'));
+}
 
 /* ---------- 汇总 ---------- */
 if (warns.length) { console.log('\n⚠ 警告（不影响结果）：'); warns.forEach((w) => console.log('  · ' + w)); }
