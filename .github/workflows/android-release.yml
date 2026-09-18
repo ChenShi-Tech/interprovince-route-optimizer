@@ -38,6 +38,12 @@ jobs:
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      # 南洋直连 github.com 与 nodejs.org 不通（其余域可直连），git 与 setup-node 都要走本机 clash。
+      # 代理只加在 job 级：runner 服务自身仍不设代理，避免代理故障击穿控制面导致 runner 掉线。
+      # 仓库变量 RUNNER_HTTPS_PROXY 为空时（例如换回 GitHub 云端机器）等于不设代理。
+      https_proxy: ${{ vars.RUNNER_HTTPS_PROXY }}
+      http_proxy: ${{ vars.RUNNER_HTTPS_PROXY }}
+      no_proxy: localhost,127.0.0.1
     steps:
       - uses: actions/checkout@v4
         with:
