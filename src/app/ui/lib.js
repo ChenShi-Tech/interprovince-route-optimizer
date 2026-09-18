@@ -94,7 +94,7 @@ function renderLibList(){
   return '<div class="libcount">匹配 '+list.length+' 条</div>'+list.map(({c,i})=>`<details class="libcard">
     <summary>
       <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}${effBadge(c)}${c.tradable===false?'<span class="lc-tag">交易网络·待确认</span>':''}</span>
-      <span class="lc-p">${c.regional?'送出省参考价 ':''}${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
+      <span class="lc-p">${c.regional?'<span class="lc-pre">送出省参考价 </span>':''}${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
       <span class="lc-m">${esc(N(c.from))}→${esc(N(c.to))} · ${esc(c.kv)} · 线损 ${c.loss==null?'—':fmt(c.loss,2)+'%'} · ${c.capActual!=null?c.capActual+' MW':(c.cap!=null?'额定 '+c.cap+' MW':'容量待补')}</span>
       <span class="lc-b">${tierTag(c.tier)}</span>
     </summary>
@@ -146,7 +146,7 @@ function renderLib(){
     out+=`<div class="card tight">
       <div class="sec-title">通道费率<span class="hint">共 ${CH.length} 条</span></div>
       <input id="lib-q" type="search" placeholder="搜索通道名 / 别名 / 省份 / 文号…" value="${esc(state.libQ||'')}" oninput="libSearch(this.value)" style="margin-bottom:8px">
-      <div class="seg small" style="flex-wrap:wrap">
+      <div class="seg small wrap">
         ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量'],['incLoss','含线损'],['dd','落地端计费']].map(([k,t])=>
           `<button class="${(state.libFilter||'all')===k?'on':''}" onclick="state.libFilter='${k}';state._libScr=window.scrollY;renderLib()">${t}</button>`).join('')}
       </div>
@@ -162,7 +162,7 @@ function renderLib(){
     out+=`<div class="card tight">
       <div class="sec-title">容量/需量电价<span class="hint">两部制 · 发改价格〔2020〕1077号附件1 口径</span></div>
       <input id="cap-q" type="search" placeholder="搜索省份 / 档别 / 来源…" value="${esc(state.capQ||'')}" oninput="capSearch(this.value)" style="margin-bottom:8px">
-      <div class="seg small" style="flex-wrap:wrap">
+      <div class="seg small wrap">
         ${[['all','全部'],['noCapQ','缺容量价'],['noDmQ','缺需量价']].map(([k,t])=>
           `<button class="${(state.capFilter||'all')===k?'on':''}" onclick="state.capFilter='${k}';renderLib()">${t}</button>`).join('')}
       </div>
@@ -197,14 +197,22 @@ function recalcAfterLib(){
   if(state.sel>=n) state.sel=0;              // 路线数变少时夹取选中项
   saveLast();
 }
-function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); recalcAfterLib();
-  const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }
+/* 页头状态徽标 #verBadge：文字与 title 一起改写——窄屏上徽标会截成省略号，title 始终给全文。
+   「费率已本地修改」要引起注意：挂 .mod（蓝底、不收缩，放不下时由页头标题让位，见 template.html .badge.mod）。
+   默认文案取模板里的原文，只写在一处。 */
+function setVerBadge(modified){
+  const b=document.getElementById('verBadge'); if(!b) return;
+  if(b.dataset.base==null) b.dataset.base=b.textContent;
+  const t=modified?'费率已本地修改':b.dataset.base;
+  b.textContent=t; b.title=t; b.classList.toggle('mod',!!modified);
+}
+function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); recalcAfterLib(); setVerBadge(true); }
 function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); recalcAfterLib(); }
 function exportLib(){ const b=new Blob([JSON.stringify({ch:CH,pv:PV,sec:SEC},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='费率库-v2.json'; a.click(); }
 function resetLib(){
   uiConfirm('恢复检索原始值','恢复为检索原始值？本地修改将丢失。','恢复原始值','取消').then(ok=>{
     if(!ok) return;
-    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); recalcAfterLib();
+    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); recalcAfterLib(); setVerBadge(false);
   });
 }

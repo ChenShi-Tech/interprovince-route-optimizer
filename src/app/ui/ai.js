@@ -169,7 +169,7 @@ function renderAI(res){
       <label class="f"><span>API Key</span><input id="i-ai-key" type="password" value="${esc(aiState.key)}" placeholder="sk-…" autocomplete="off" oninput="aiField('key',this.value)"></label>
       <p class="note" style="margin-top:2px">密钥只保存在本机浏览器，不会写入本站点或构建产物。浏览器直接调用服务商接口（OpenAI 兼容的 chat/completions），服务商须允许跨域；DeepSeek 已验证可用。</p>
     </div>`;
-  if(stale) out+=`<div style="display:flex;align-items:center;gap:10px;margin:10px 0 0;background:var(--gray-bg);border-radius:9px;padding:9px 11px;font-size:11.5px;color:var(--ink2);line-height:1.55"><span style="flex:1">参数已变化，原推荐已失效。</span><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;flex:none" onclick="aiRun()">重新推荐</button></div>`;
+  if(stale) out+=`<div style="display:flex;align-items:center;gap:10px;margin:10px 0 0;background:var(--gray-bg);border-radius:var(--radius-field);padding:9px 11px;font-size:11.5px;color:var(--ink2);line-height:1.55"><span style="flex:1">参数已变化，原推荐已失效。</span><button class="btn ghost" style="width:auto;padding:6px 12px;font-size:12px;flex:none" onclick="aiRun()">重新推荐</button></div>`;
   if(ai.error) out+=`<div class="warn bad" style="margin:10px 0 0">${esc(ai.error)}</div>`;
   if(ai.loading) out+=`<div class="ai-loading">已把 ${Math.min(feasible,AI_MAX_ROUTES)} 条参考路线与你的要求发给 ${esc(aiState.model)}，通常需要 10～40 秒…</div>`;
   if(ai.result){

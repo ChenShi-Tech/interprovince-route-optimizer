@@ -68,6 +68,83 @@ const openParams = async (page) => {
   }
 };
 
+/* 扩区点击命中审计（UI-HIT）：小控件用透明 ::after 把点击区扩到 44px（src/template.html「可点区域 ≥44px」一段），
+   扩出去的部分不得盖住相邻的可点控件。对 scope 内每个挂了扩区（absolute、z-index:-1 的 ::after）的可见控件：
+   ① 在可见矩形外 1–2px、扩区外沿与中线取样，elementFromPoint 命中的必须是控件自己或非可点元素；
+      扩区之外的取样只追究「别的控件经它自己的扩区伸过来」，相邻控件本体贴得近不算；
+   ② 反向：临时撤掉本控件的伪元素，扩区内同一点原本命中的不能是别的可点控件（否则就是本控件抢了邻居边缘的点击）。
+      例外：叠在输入框里的按钮（密钥显隐）占用输入框给它预留的右内边距，那一段本来就归按钮。
+   返回 { n: 检查的控件数, names: 控件清单, bad: 违例清单 }。 */
+const hitAudit = (page, scope) => page.evaluate(async (scope) => {
+  const CLICK = 'button,a[href],input,select,textarea,label,summary,[onclick],[role="button"],[role="radio"]';
+  const host = document.querySelector(scope);
+  if (!host) return { n: 0, names: [], bad: [`找不到 ${scope}`] };
+  if (!document.getElementById('__hit-off-css')) {
+    const st = document.createElement('style'); st.id = '__hit-off-css';
+    st.textContent = '.__hit-off::after{display:none!important}'; document.head.appendChild(st);
+  }
+  const px = (v) => parseFloat(v) || 0;
+  const name = (el) => `${el.tagName.toLowerCase()}${typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : ''}「${(el.innerText || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 14)}」`;
+  const ctrls = [...host.querySelectorAll('*')].filter((el) => {
+    const a = getComputedStyle(el, '::after');
+    return a.content !== 'none' && a.content !== 'normal' && a.position === 'absolute' && a.zIndex === '-1' && el.getClientRects().length;
+  });
+  const bad = [], names = [];
+  for (const el of ctrls) {
+    el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    if (r.width < 1 || cx < 0 || cy < 0 || cx >= innerWidth || cy >= innerHeight) continue;   // 收起的弹层等不在屏上的控件
+    const own = (h) => h && (h === el || el.contains(h));
+    const c0 = document.elementFromPoint(cx, cy);
+    if (!own(c0)) { const cl = c0 && c0.closest(CLICK); if (cl && !cl.contains(el)) { bad.push(`${name(el)} 的中心被 ${name(cl)} 盖住`); continue; } }
+    names.push(name(el));
+    const cs = getComputedStyle(el), a = getComputedStyle(el, '::after');
+    const R = {   // 伪元素相对控件的内边距盒定位：扩出后的命中矩形
+      top: r.top + px(cs.borderTopWidth) + px(a.top), bottom: r.bottom - px(cs.borderBottomWidth) - px(a.bottom),
+      left: r.left + px(cs.borderLeftWidth) + px(a.left), right: r.right - px(cs.borderRightWidth) - px(a.right),
+    };
+    const inR = (x, y) => x >= R.left && x < R.right && y >= R.top && y < R.bottom;
+    const inRect = (q, x, y) => x >= q.left && x < q.right && y >= q.top && y < q.bottom;
+    const xs = [r.left + 2, cx, r.right - 2], ys = [r.top + 2, cy, r.bottom - 2];
+    const pts = [];
+    for (const d of [1, 2]) {
+      for (const x of xs) { pts.push([x, r.top - d, '上']); pts.push([x, r.bottom + d - 0.01, '下']); }
+      for (const y of ys) { pts.push([r.left - d, y, '左']); pts.push([r.right + d - 0.01, y, '右']); }
+    }
+    if (R.top < r.top - 0.5) for (const x of xs) pts.push([x, R.top + 0.5, '上扩区外沿'], [x, (R.top + r.top) / 2, '上扩区']);
+    if (R.bottom > r.bottom + 0.5) for (const x of xs) pts.push([x, R.bottom - 0.5, '下扩区外沿'], [x, (R.bottom + r.bottom) / 2, '下扩区']);
+    if (R.left < r.left - 0.5) for (const y of ys) pts.push([R.left + 0.5, y, '左扩区外沿'], [(R.left + r.left) / 2, y, '左扩区']);
+    if (R.right > r.right + 0.5) for (const y of ys) pts.push([R.right - 0.5, y, '右扩区外沿'], [(R.right + r.right) / 2, y, '右扩区']);
+    for (const [x, y, side] of pts) {
+      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+      const at = `${side}(${x.toFixed(1)},${y.toFixed(1)})`;
+      const h = document.elementFromPoint(x, y);
+      if (h && !own(h)) {   // ① 命中了别人
+        const cl = h.closest(CLICK);
+        if (cl && !cl.contains(el)) {
+          const viaExt = !inRect(cl.getBoundingClientRect(), x, y);
+          if (inR(x, y) || viaExt) bad.push(`${name(el)} ${at} → ${name(cl)}${viaExt ? '（经其扩区）' : ''}`);
+        }
+        continue;
+      }
+      if (!h || !inR(x, y) || inRect(r, x, y)) continue;
+      el.classList.add('__hit-off');   // ② 命中了自己的扩区：撤掉扩区，看这一点原本归谁
+      const u = document.elementFromPoint(x, y);
+      el.classList.remove('__hit-off');
+      const cl = u && !own(u) && u.closest(CLICK);
+      if (!cl || cl.contains(el)) continue;
+      if (/^(INPUT|TEXTAREA)$/.test(cl.tagName)) {
+        const ic = getComputedStyle(cl), ir = cl.getBoundingClientRect();
+        if (x >= ir.right - px(ic.paddingRight) - px(ic.borderRightWidth)) continue;
+      }
+      bad.push(`${name(el)} ${at} 扩区压住 ${name(cl)}`);
+    }
+  }
+  return { n: names.length, names, bad: [...new Set(bad)] };
+}, scope);
+
 const G = BASE, DCL = { waitUntil: 'domcontentloaded', timeout: 20000 };
 const tests = [
 
@@ -290,7 +367,7 @@ const tests = [
   {
     id: 'I-03', section: '交互', title: '费率库改价：即时生效+本地持久化',
     steps: '费率库 Tab，把第 1 条通道输电价改为 99 后失焦',
-    expected: 'CH[0].t=99；顶部徽标变「费率已本地修改」；localStorage 已写入',
+    expected: 'CH[0].t=99；顶部徽标变「费率已本地修改」（带 .mod、title 为全文），320px 下也不截断、按钮不被挤出屏；localStorage 已写入',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-lib');
@@ -303,19 +380,30 @@ const tests = [
       ok(await page.evaluate(() => CH[0].t) === 99, 'CH[0].t 应为 99');
       const badge = await page.locator('#verBadge').innerText();
       ok(badge.includes('本地修改'), `徽标应提示修改，实际「${badge}」`);
+      const bs = await page.evaluate(() => { const b = document.getElementById('verBadge'); return { t: b.textContent, title: b.title, mod: b.classList.contains('mod') }; });
+      ok(bs.mod && bs.title === bs.t, `修改态徽标应带 .mod 且 title 等于全文，实际 ${JSON.stringify(bs)}`);
+      // 窄屏：修改态徽标不收缩、不截断，由标题让位；两个按钮仍在屏内
+      await page.setViewportSize({ width: 320, height: 700 });
+      const nw = await page.evaluate(() => {
+        const b = document.getElementById('verBadge'), help = document.getElementById('btn-help').getBoundingClientRect();
+        return { cut: b.scrollWidth > b.clientWidth + 0.5, helpRight: Math.round(help.right), vw: innerWidth, over: document.documentElement.scrollWidth - innerWidth };
+      });
+      ok(!nw.cut, '320px 下修改态徽标不应被截断');
+      ok(nw.helpRight <= nw.vw && nw.over <= 0, `320px 下「帮助」按钮应在屏内且页面无横向溢出，实际右沿 ${nw.helpRight}/${nw.vw}，溢出 ${nw.over}px`);
       const ls = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.lib')).ch[0].t);
       ok(ls === 99, `localStorage 应存 99，实际 ${ls}`);
-      set(`CH[0].t=99；徽标「${badge}」；localStorage 已持久化`);
+      set(`CH[0].t=99；徽标「${badge}」（.mod，title 全文，320px 不截断）；localStorage 已持久化`);
     },
   },
   {
     id: 'I-04', section: '交互', title: '「恢复检索原始值」应用内确认框（取消/确认）',
     steps: '先改 CH[0].t=123；点恢复→取消；再点恢复→确认',
-    expected: '取消：值不变；确认：恢复为 DATA.CH 原始值',
+    expected: '取消：值不变、徽标仍是「费率已本地修改」；确认：恢复为 DATA.CH 原始值，徽标回到默认文案',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-lib');
-      await page.evaluate(() => { CH[0].t = 123; });
+      await page.evaluate(() => { setCh(0, 't', 123); });
+      const badge0 = await page.evaluate(() => document.getElementById('verBadge').dataset.base);
       const btn = page.locator('button', { hasText: '恢复检索原始值' });
       // 修正(2026-09-18)：role=dialog 现有两个（应用内确认框 + 参数弹出面板 .sheet-panel），须排除后者。
       const dlg = confirmDlg(page);
@@ -325,11 +413,14 @@ const tests = [
       ok(msg.includes('恢复为检索原始值'), `确认框文案异常：「${msg}」`);
       await dlg.locator('button', { hasText: '取消' }).click();
       ok(await page.evaluate(() => CH[0].t) === 123, '取消后应保持 123');
+      ok(await page.evaluate(() => document.getElementById('verBadge').classList.contains('mod')), '取消后徽标应仍是修改态');
       await btn.click();
       await dlg.waitFor({ state: 'visible', timeout: 3000 });
       await dlg.locator('button', { hasText: '恢复原始值' }).click();
       const restored = await page.evaluate(() => CH[0].t === DATA.CH[0].t);
       ok(restored, '确认后应恢复原始值');
+      const bb = await page.evaluate(() => { const b = document.getElementById('verBadge'); return { t: b.textContent, title: b.title, mod: b.classList.contains('mod') }; });
+      ok(!bb.mod && bb.t === badge0 && bb.title === badge0, `恢复后徽标应回到默认「${badge0}」，实际 ${JSON.stringify(bb)}`);
       set(`应用内确认框「${msg.slice(0, 18)}…」；取消保持 123；确认后恢复 ${await page.evaluate(() => DATA.CH[0].t)}`);
     },
   },
@@ -1809,12 +1900,15 @@ const tests = [
         const svg = document.querySelector('#map-view svg');
         const est = [...svg.querySelectorAll('[stroke-dasharray="2 4"]')].length;
         const region = [...svg.querySelectorAll('[stroke-dasharray="8 5"]')].length;
-        const selDash = [...svg.querySelectorAll('line, polyline')].filter(el => el.getAttribute('stroke') === '#185FA5' && el.getAttribute('stroke-dasharray')).length;
+        // 拓扑图配色走设计令牌（style="stroke:var(--map-route)"），按令牌名识别选中层
+        const selDash = [...svg.querySelectorAll('line, polyline')].filter(el => el.style.stroke === 'var(--map-route)' && el.getAttribute('stroke-dasharray')).length;
+        const selLines = [...svg.querySelectorAll('line, polyline')].filter(el => el.style.stroke === 'var(--map-route)').length;
         const legend = document.getElementById('v-map').innerText;
-        return { est, region, selDash, hasLegend: legend.includes('价格线型'), four: ['核定', '国网披露', '区域口径', '待核价'].every(t => legend.includes(t)) };
+        return { est, region, selDash, selLines, hasLegend: legend.includes('价格线型'), four: ['核定', '国网披露', '区域口径', '待核价'].every(t => legend.includes(t)) };
       });
       ok(r.hasLegend && r.four, '图例应含四档线型说明');
       ok(r.est > 0, `全网/候选层应存在 est 短虚线通道，实际 ${r.est} 处`);
+      ok(r.selLines > 0, `应能按令牌识别到选中方案线（实际 ${r.selLines} 条），否则下一条断言失去意义`);
       ok(r.selDash === 0, '选中方案线不得被 tier 线型干扰（spec）');
       set(`est 虚线 ${r.est} 处、region 长虚线 ${r.region} 处；选中层 0 处 dash；图例四档齐备`);
     },
@@ -1876,7 +1970,7 @@ const tests = [
         const s = SEC.find(x => x.id === id);
         const members = (s.edges || []).filter(n => CH.some(c => c.n === n)).length;
         return {
-          halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.getAttribute('stroke') === '#993C1D').length,
+          halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.style.stroke === 'var(--map-section)').length,
           strip: (document.getElementById('v-map').innerText || '').includes('断面高亮：'),
           members,
         };
@@ -1886,7 +1980,7 @@ const tests = [
       await page.selectOption('#i-mapsec', '');
       await page.waitForTimeout(300);
       const r2 = await page.evaluate(() => ({
-        halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.getAttribute('stroke') === '#993C1D').length,
+        halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.style.stroke === 'var(--map-section)').length,
         // 注意：下拉框首项文案「按断面高亮…」含相似字样，必须用带冒号的提示条标记判别
         strip: (document.getElementById('v-map').innerText || '').includes('断面高亮：'),
       }));
@@ -1931,7 +2025,8 @@ const tests = [
       await page.waitForTimeout(300);
       const r1 = await page.evaluate(() => {
         const rings = [...document.querySelectorAll('#map-view svg circle[fill="none"]')];
-        const colors = [...new Set(rings.map(c => c.getAttribute('stroke')))];
+        // 区域环颜色是令牌引用 var(--map-region-N)，按计算后的实际颜色去重
+        const colors = [...new Set(rings.map(c => getComputedStyle(c).stroke))];
         const legend = document.getElementById('v-map').innerText;
         return {
           n: rings.length, colors,
@@ -2167,6 +2262,189 @@ const tests = [
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.map') || '{}'));
       ok(saved.mapProvider === 'svg', '降级选择应持久化');
       set('探针 onerror → 自动降级 svg + 红字说明（密钥无效或被风控拦截）；持久化');
+    },
+  },
+
+  /* ================= 外观主题（clear / clear-dark / tech） ================= */
+  {
+    id: 'TH-01', section: '外观主题', title: '外观面板切换三套主题：data-theme 与系统栏颜色同步',
+    steps: '点页头「外观」→ 明暗选「深色」→「浅色」→ 风格选「科技」→ 再切回「清晰」',
+    expected: 'data-theme 依次为 clear-dark / clear / tech / clear；<meta name="theme-color"> 与安卓壳桥 IPRouteShell.setSystemBars 随主题取 --system-bar（深底配浅色图标）；偏好写入 iproute.v2.ui',
+    async run(page, set) {
+      // 模拟安卓壳注入的桥：记录每次调用（Web / iOS 没有这个对象，页面应静默跳过）
+      await page.addInitScript(() => { window.__bars = []; window.IPRouteShell = { setSystemBars: (hex, lightIcons) => window.__bars.push(hex + (lightIcons ? '/浅色图标' : '/深色图标')) }; });
+      await page.goto(G, DCL);
+      await page.waitForSelector('.card.plan');
+      const th = () => page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      const meta = () => page.evaluate(() => document.querySelector('meta[name="theme-color"]').getAttribute('content'));
+      ok(await th() === 'clear', `默认（跟随系统，浏览器为浅色）应为 clear，实际 ${await th()}`);
+      await page.click('#btn-theme');
+      await page.waitForSelector('#theme-sheet.open');
+      const seen = [];
+      for (const [sel, want, bar] of [['[data-ui-mode="dark"]', 'clear-dark', '#1C1F24'], ['[data-ui-mode="light"]', 'clear', '#FFFFFF'],
+        ['[data-ui-style="tech"]', 'tech', '#070E1A'], ['[data-ui-style="clear"]', 'clear', '#FFFFFF']]) {
+        await page.click('#theme-body ' + sel);
+        const got = await th(), m = await meta();
+        ok(got === want, `点 ${sel} 后 data-theme 应为 ${want}，实际 ${got}`);
+        ok(m === bar, `${want} 的 theme-color 应为 ${bar}，实际 ${m}`);
+        ok(await page.locator('#theme-body ' + sel).getAttribute('aria-checked') === 'true', `${sel} 应处于选中态`);
+        seen.push(`${want}(${m})`);
+      }
+      const bars = await page.evaluate(() => window.__bars);
+      ok(['#FFFFFF/深色图标', '#1C1F24/浅色图标', '#070E1A/浅色图标'].every((x) => bars.includes(x)), `安卓壳桥应收到三种系统栏配色，实际 ${bars.join('、')}`);
+      const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.ui')));
+      ok(saved.style === 'clear' && saved.mode === 'light', `偏好应存为 clear/light，实际 ${JSON.stringify(saved)}`);
+      await page.click('#theme-close');
+      ok(!(await page.evaluate(() => document.getElementById('theme-sheet').classList.contains('open'))), '关闭按钮应收起外观面板');
+      set(`依次切换：${seen.join(' → ')}；偏好存本机；面板可关闭`);
+    },
+  },
+  {
+    id: 'TH-02', section: '外观主题', title: '主题偏好刷新后保持，首帧即生效；「跟随系统」随系统明暗切换',
+    steps: '选「科技」→ 刷新 → 检查首个脚本执行时的 data-theme；改回「清晰 · 跟随系统」→ 模拟系统深色 / 浅色',
+    expected: '刷新后 data-theme 仍为 tech，且在应用脚本运行前（DOMContentLoaded 之前）已设好，<meta name="theme-color"> 同时已是科技的 --system-bar；跟随系统时系统切深色 → clear-dark、切浅色 → clear',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.card.plan');
+      await page.click('#btn-theme');
+      await page.click('#theme-body [data-ui-style="tech"]');
+      // 记录首帧：<body> 一出现（此时只跑过 <head> 里的脚本，应用脚本还没执行）就读 data-theme
+      await page.addInitScript(() => {
+        new MutationObserver((m, o) => {
+          if (document.body) {
+            window.__th0 = document.documentElement.getAttribute('data-theme');
+            const m = document.querySelector('meta[name="theme-color"]');
+            window.__meta0 = m && m.getAttribute('content');
+            o.disconnect();
+          }
+        }).observe(document, { childList: true, subtree: true });
+      });
+      await page.reload(DCL);
+      await page.waitForSelector('.card.plan');
+      const t0 = await page.evaluate(() => window.__th0), t1 = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      ok(t0 === 'tech' && t1 === 'tech', `刷新后应保持 tech（首帧 ${t0}，启动后 ${t1}）`);
+      const meta0 = await page.evaluate(() => window.__meta0);
+      ok(meta0 === '#070E1A', `首帧（应用脚本执行前）theme-color 应已是科技的 #070E1A，实际 ${meta0}`);
+      await page.click('#btn-theme');
+      await page.click('#theme-body [data-ui-style="clear"]');
+      await page.click('#theme-body [data-ui-mode="system"]');
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.waitForTimeout(150);
+      const d = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.waitForTimeout(150);
+      const l = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      ok(d === 'clear-dark' && l === 'clear', `跟随系统：深色应为 clear-dark、浅色应为 clear，实际 ${d} / ${l}`);
+      // 显式选了「浅色」后不再跟随系统
+      await page.click('#theme-body [data-ui-mode="light"]');
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.waitForTimeout(150);
+      const fixed = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
+      await page.emulateMedia({ colorScheme: 'light' });
+      ok(fixed === 'clear', `选定浅色后系统切深色不应跟随，实际 ${fixed}`);
+      set(`刷新保持 tech（首帧即 ${t0}，theme-color ${meta0}）；跟随系统 深→${d} 浅→${l}；选定浅色后不跟随（${fixed}）`);
+    },
+  },
+  {
+    id: 'TH-03', section: '外观主题', title: '科技风格下「明暗」组禁用并说明；网架图页切换主题即重绘',
+    steps: '进入网架图页 → 打开「外观」→ 选「科技」→ 检查明暗三按钮与说明 → 切回「清晰」',
+    expected: '科技风格下明暗三按钮 disabled，出现「科技风格固定为深色」；切回清晰后恢复可点；网架图 SVG 随主题重绘（画布底色取新主题的 --map-ground）',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.waitForSelector('.card.plan');
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      const ground = () => page.evaluate(() => getComputedStyle(document.querySelector('#map-view svg rect')).fill);
+      const g0 = await ground();
+      await page.evaluate(() => { document.querySelector('#map-view svg').dataset.stale = '1'; });
+      await page.click('#btn-theme');
+      await page.click('#theme-body [data-ui-style="tech"]');
+      await page.waitForSelector('#map-view svg:not([data-stale])', { timeout: 3000 });
+      const g1 = await ground();
+      const dis = await page.evaluate(() => [...document.querySelectorAll('#theme-body [data-ui-mode]')].map((b) => b.disabled));
+      ok(dis.length === 3 && dis.every(Boolean), `科技风格下明暗三按钮应全部禁用，实际 ${JSON.stringify(dis)}`);
+      ok((await page.locator('#theme-body').innerText()).includes('科技风格固定为深色'), '应显示「科技风格固定为深色」说明');
+      ok(g0 !== g1, `切到科技后网架图画布底色应变化（${g0} → ${g1}）`);
+      await page.click('#theme-body [data-ui-style="clear"]');
+      const dis2 = await page.evaluate(() => [...document.querySelectorAll('#theme-body [data-ui-mode]')].map((b) => b.disabled));
+      ok(dis2.every((x) => !x), '切回清晰后明暗按钮应恢复可点');
+      ok(!(await page.locator('#theme-body').innerText()).includes('科技风格固定为深色'), '切回清晰后说明应消失');
+      set(`科技：明暗组禁用 + 说明；网架图画布 ${g0} → ${g1} 重绘；切回清晰恢复`);
+    },
+  },
+  {
+    id: 'UI-HIT', section: '外观主题', title: '小控件扩大的点击区不抢相邻控件（测算页 390/320px、网架图搜索结果与工具条、弹层）',
+    steps: '对挂了透明扩区的控件逐个取样：测算页（390px、320px；默认与「全部路线 + 含越限」）、网架图搜索「换流站」后的结果与工具条、天地图密钥栏、参数弹层、外观面板；另外实点「锦屏换流站」下沿与「含越限」上方那张路线卡的下沿',
+    expected: '每个控件外沿 1–2px 与扩区内命中的都是控件自己或空白，扩区不压别的可点控件；点「锦屏换流站」下沿打开的是锦屏的浮层（不是下一行的奉贤）；点路线卡下沿选中该路线、「含越限」不被切换',
+    async run(page, set) {
+      const seen = [], bad = [];
+      const audit = async (label, scope) => {
+        const r = await hitAudit(page, scope);
+        ok(r.n > 0, `${label}：没找到挂扩区的控件（选择器或页面结构变了？）`);
+        seen.push(`${label} ${r.n} 个`);
+        bad.push(...r.bad.map((b) => `${label}：${b}`));
+      };
+      // 每轮先清掉上一轮存下的测算状态（全部路线 / 含越限），测的是默认界面；导览「已读」由 init 脚本每次加载重设
+      const fresh = async () => { await page.evaluate(() => { try { localStorage.clear(); } catch (e) {} }); await page.goto(G, DCL); await page.waitForSelector('.card.plan'); };
+      await page.goto(G, DCL);
+      for (const w of [320, 390]) {
+        await page.setViewportSize({ width: w, height: 844 });
+        await fresh();
+        await page.waitForSelector('.card.plan');
+        await audit(`测算页 ${w}px`, 'body');
+        await page.evaluate(() => { state.showBad = true; state.showAll = true; state.sel = 0; doSolve(); });
+        await page.waitForSelector('.card.plan');
+        await audit(`测算页·全部路线 ${w}px`, 'body');
+      }
+      // 以下 390px。回归点 1：「含越限」正上方那张路线卡的下沿（原先被复选框标签的扩区接走 3–7px）
+      await fresh();
+      const rc = await page.evaluate(() => {
+        const tg = document.querySelector('.rlist-foot .tg');
+        tg.scrollIntoView({ block: 'center' });
+        const t = tg.getBoundingClientRect();
+        const cards = [...document.querySelectorAll('.rc')];
+        const i = cards.findIndex((c) => { const q = c.getBoundingClientRect(); return q.left <= t.left && q.right >= t.left + 20 && q.right <= innerWidth + 200; });
+        const q = i < 0 ? null : cards[i].getBoundingClientRect();
+        return q && { i, x: t.left + 10, y: q.bottom - 2, gap: +(t.top - q.bottom).toFixed(1), showBad: state.showBad };
+      });
+      ok(rc, '找不到「含越限」正上方的路线卡');
+      await page.mouse.click(rc.x, rc.y);
+      await page.waitForTimeout(150);
+      const after = await page.evaluate(() => ({ sel: state.sel, showBad: state.showBad }));
+      ok(after.sel === rc.i && after.showBad === rc.showBad, `点第 ${rc.i + 1} 张路线卡下沿应选中它、不切换「含越限」，实际 sel=${after.sel}、含越限 ${rc.showBad}→${after.showBad}`);
+      // 回归点 2：网架图搜索结果换行排布、行距 6px，点「锦屏换流站」下沿原先会打开下一行「奉贤换流站」
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.fill('#map-q', '换流站');
+      await page.waitForTimeout(200);
+      const jp = page.locator('#map-search-out button', { hasText: '锦屏换流站' }).first();
+      await jp.scrollIntoViewIfNeeded();
+      const jb = await jp.boundingBox();
+      ok(jb, '搜索「换流站」应列出「锦屏换流站」');
+      await page.mouse.click(jb.x + jb.width / 2, jb.y + jb.height - 1);
+      await page.waitForTimeout(300);
+      const pop = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      ok(pop.includes('锦屏换流站'), `点「锦屏换流站」下沿应打开锦屏的浮层，实际「${pop.slice(0, 20)}」`);
+      await page.fill('#map-q', '换流站');   // 聚焦后结果仍在；再填一次确保列表完整
+      await page.waitForTimeout(200);
+      await audit('网架图·搜索结果与工具条', '#v-map');
+      await page.evaluate(() => switchMap('td'));
+      await page.waitForSelector('#i-tk');
+      await audit('网架图·天地图密钥栏', '#v-map');
+      await page.evaluate(() => switchMap('svg'));
+      await page.click('#t-calc');
+      await page.waitForSelector('.card.plan');
+      await openParams(page);
+      await page.waitForTimeout(300);
+      await audit('参数弹层', '#param-sheet');
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+      await page.click('#btn-theme');
+      await page.waitForSelector('#theme-sheet.open');
+      await page.waitForTimeout(300);
+      await audit('外观面板', '#theme-sheet');
+      ok(bad.length === 0, `扩区抢点 ${bad.length} 处：\n      ` + bad.slice(0, 12).join('\n      '));
+      set(`取样 ${seen.join('、')}，无抢点；路线卡下沿（与「含越限」相隔 ${rc.gap}px）选中第 ${rc.i + 1} 张；「锦屏换流站」下沿打开锦屏浮层`);
     },
   },
 ];
