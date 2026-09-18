@@ -367,7 +367,7 @@ const tests = [
   {
     id: 'I-03', section: '交互', title: '费率库改价：即时生效+本地持久化',
     steps: '费率库 Tab，把第 1 条通道输电价改为 99 后失焦',
-    expected: 'CH[0].t=99；顶部徽标变「费率已本地修改」；localStorage 已写入',
+    expected: 'CH[0].t=99；顶部徽标变「费率已本地修改」（带 .mod、title 为全文），320px 下也不截断、按钮不被挤出屏；localStorage 已写入',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-lib');
@@ -380,19 +380,30 @@ const tests = [
       ok(await page.evaluate(() => CH[0].t) === 99, 'CH[0].t 应为 99');
       const badge = await page.locator('#verBadge').innerText();
       ok(badge.includes('本地修改'), `徽标应提示修改，实际「${badge}」`);
+      const bs = await page.evaluate(() => { const b = document.getElementById('verBadge'); return { t: b.textContent, title: b.title, mod: b.classList.contains('mod') }; });
+      ok(bs.mod && bs.title === bs.t, `修改态徽标应带 .mod 且 title 等于全文，实际 ${JSON.stringify(bs)}`);
+      // 窄屏：修改态徽标不收缩、不截断，由标题让位；两个按钮仍在屏内
+      await page.setViewportSize({ width: 320, height: 700 });
+      const nw = await page.evaluate(() => {
+        const b = document.getElementById('verBadge'), help = document.getElementById('btn-help').getBoundingClientRect();
+        return { cut: b.scrollWidth > b.clientWidth + 0.5, helpRight: Math.round(help.right), vw: innerWidth, over: document.documentElement.scrollWidth - innerWidth };
+      });
+      ok(!nw.cut, '320px 下修改态徽标不应被截断');
+      ok(nw.helpRight <= nw.vw && nw.over <= 0, `320px 下「帮助」按钮应在屏内且页面无横向溢出，实际右沿 ${nw.helpRight}/${nw.vw}，溢出 ${nw.over}px`);
       const ls = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.lib')).ch[0].t);
       ok(ls === 99, `localStorage 应存 99，实际 ${ls}`);
-      set(`CH[0].t=99；徽标「${badge}」；localStorage 已持久化`);
+      set(`CH[0].t=99；徽标「${badge}」（.mod，title 全文，320px 不截断）；localStorage 已持久化`);
     },
   },
   {
     id: 'I-04', section: '交互', title: '「恢复检索原始值」应用内确认框（取消/确认）',
     steps: '先改 CH[0].t=123；点恢复→取消；再点恢复→确认',
-    expected: '取消：值不变；确认：恢复为 DATA.CH 原始值',
+    expected: '取消：值不变、徽标仍是「费率已本地修改」；确认：恢复为 DATA.CH 原始值，徽标回到默认文案',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-lib');
-      await page.evaluate(() => { CH[0].t = 123; });
+      await page.evaluate(() => { setCh(0, 't', 123); });
+      const badge0 = await page.evaluate(() => document.getElementById('verBadge').dataset.base);
       const btn = page.locator('button', { hasText: '恢复检索原始值' });
       // 修正(2026-09-18)：role=dialog 现有两个（应用内确认框 + 参数弹出面板 .sheet-panel），须排除后者。
       const dlg = confirmDlg(page);
@@ -402,11 +413,14 @@ const tests = [
       ok(msg.includes('恢复为检索原始值'), `确认框文案异常：「${msg}」`);
       await dlg.locator('button', { hasText: '取消' }).click();
       ok(await page.evaluate(() => CH[0].t) === 123, '取消后应保持 123');
+      ok(await page.evaluate(() => document.getElementById('verBadge').classList.contains('mod')), '取消后徽标应仍是修改态');
       await btn.click();
       await dlg.waitFor({ state: 'visible', timeout: 3000 });
       await dlg.locator('button', { hasText: '恢复原始值' }).click();
       const restored = await page.evaluate(() => CH[0].t === DATA.CH[0].t);
       ok(restored, '确认后应恢复原始值');
+      const bb = await page.evaluate(() => { const b = document.getElementById('verBadge'); return { t: b.textContent, title: b.title, mod: b.classList.contains('mod') }; });
+      ok(!bb.mod && bb.t === badge0 && bb.title === badge0, `恢复后徽标应回到默认「${badge0}」，实际 ${JSON.stringify(bb)}`);
       set(`应用内确认框「${msg.slice(0, 18)}…」；取消保持 123；确认后恢复 ${await page.evaluate(() => DATA.CH[0].t)}`);
     },
   },

@@ -404,6 +404,11 @@ h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowr
 /* 页头右侧：状态徽标 + 外观 + 帮助。手机宽度放不下全部时，徽标先收缩成省略号，标题与两个按钮不换行、不缩 */
 .hd-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* 要引起注意的状态（费率已本地修改，ui/lib.js 的 setVerBadge）：徽标挂 .mod，换蓝底、不收缩，放不下时由标题让位（截成省略号）。
+   不认 :has() 的老内核退回默认排布：徽标照旧截断，title 仍给全文 */
+.badge.mod{background:var(--blue-bg);color:var(--blue-ink)}
+.hd-top:has(.badge.mod) h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hd-top:has(.badge.mod) .hd-acts,.hd-top:has(.badge.mod) .badge{flex:none}
 /* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
 .help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
@@ -1015,7 +1020,7 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
       <div class="hd-acts">
-        <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
+        <span class="badge" id="verBadge" title="公开价格 · 含历史与估算参数">公开价格 · 含历史与估算参数</span>
         <button class="help-link" id="btn-theme" type="button" onclick="openAppearance()" aria-label="外观：风格与明暗">外观</button>
         <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
       </div>
@@ -1074,7 +1079,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 13:27';
+const BUILD_TIME='2026-09-18 13:30';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -3492,15 +3497,23 @@ function recalcAfterLib(){
   if(state.sel>=n) state.sel=0;              // 路线数变少时夹取选中项
   saveLast();
 }
-function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); recalcAfterLib();
-  const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }
+/* 页头状态徽标 #verBadge：文字与 title 一起改写——窄屏上徽标会截成省略号，title 始终给全文。
+   「费率已本地修改」要引起注意：挂 .mod（蓝底、不收缩，放不下时由页头标题让位，见 template.html .badge.mod）。
+   默认文案取模板里的原文，只写在一处。 */
+function setVerBadge(modified){
+  const b=document.getElementById('verBadge'); if(!b) return;
+  if(b.dataset.base==null) b.dataset.base=b.textContent;
+  const t=modified?'费率已本地修改':b.dataset.base;
+  b.textContent=t; b.title=t; b.classList.toggle('mod',!!modified);
+}
+function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); recalcAfterLib(); setVerBadge(true); }
 function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); recalcAfterLib(); }
 function exportLib(){ const b=new Blob([JSON.stringify({ch:CH,pv:PV,sec:SEC},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='费率库-v2.json'; a.click(); }
 function resetLib(){
   uiConfirm('恢复检索原始值','恢复为检索原始值？本地修改将丢失。','恢复原始值','取消').then(ok=>{
     if(!ok) return;
-    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); recalcAfterLib();
+    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); recalcAfterLib(); setVerBadge(false);
   });
 }
 

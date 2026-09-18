@@ -98,6 +98,11 @@ h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowr
 /* 页头右侧：状态徽标 + 外观 + 帮助。手机宽度放不下全部时，徽标先收缩成省略号，标题与两个按钮不换行、不缩 */
 .hd-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* 要引起注意的状态（费率已本地修改，ui/lib.js 的 setVerBadge）：徽标挂 .mod，换蓝底、不收缩，放不下时由标题让位（截成省略号）。
+   不认 :has() 的老内核退回默认排布：徽标照旧截断，title 仍给全文 */
+.badge.mod{background:var(--blue-bg);color:var(--blue-ink)}
+.hd-top:has(.badge.mod) h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.hd-top:has(.badge.mod) .hd-acts,.hd-top:has(.badge.mod) .badge{flex:none}
 /* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
 .help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
@@ -709,7 +714,7 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
       <div class="hd-acts">
-        <span class="badge" id="verBadge">公开价格 · 含历史与估算参数</span>
+        <span class="badge" id="verBadge" title="公开价格 · 含历史与估算参数">公开价格 · 含历史与估算参数</span>
         <button class="help-link" id="btn-theme" type="button" onclick="openAppearance()" aria-label="外观：风格与明暗">外观</button>
         <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
       </div>
