@@ -411,7 +411,8 @@ console.log('══ 十、顶部结果、价格组成、区域落点与说明折
   // ① 送端报价是主输入，结果在页面最上方
   const iPgen = h.indexOf('id="i-pgen"'), iHero = h.indexOf('class="hero-res'), iList = h.indexOf('class="col-side"');
   ok(iPgen > 0 && iHero > iPgen && iList > iHero && h.includes('class="hero-price"'), '送端报价大输入框与测算结果位于路线列表之前');
-  ok(h.includes(`<div class="hero-v">${r.landed.toFixed(2)}<small>`), `顶部显示最低价 ${r.landed.toFixed(2)} 元/MWh`);
+  // FR-1：大数按万 / 亿压缩显示（fmtCompact），完整值放在 title 里；本例三位数不压缩
+  ok(new RegExp(`<div class="hero-v" title="完整值 ${r.landed.toFixed(2)} 元/MWh">${r.landed.toFixed(2)}<small>`).test(h), `顶部显示最低价 ${r.landed.toFixed(2)} 元/MWh（title 带完整值）`);
   // ② 价格组成：各项之和等于最终价格
   const items = G('priceItems(state._res.rows[0])');
   ok(Math.abs(items.reduce((a, x) => a + x.v, 0) - r.landed) < 1e-6, `价格组成 ${items.length} 项之和等于最终价格`);
@@ -518,7 +519,8 @@ console.log('══ 十二、网损默认口径与方案 / 区域卡片 ══')
   ok(tl.includes('<strong>华东区域网架</strong>') && !h.includes('交流网架'), '区域卡片写「华东区域网架」');
   ok(!tl.includes('皖苏联络线') && !tl.includes('苏沪联络线') && !tl.includes('region-interfaces'), '区域卡片不再展开区域内联络线');
   ok(h.includes('区域网架参考接口，不单独计费'), '区域内联络线仅保留在完整明细逐段溯源中并标注');
-  ok(['<summary>完整明细</summary>', '<summary>价差敏感性</summary>', '<summary>容量电费测算</summary>', '<summary>政策与取值依据</summary>'].every((t) => h.includes(t)), '底部折叠标题已简化');
+  // 容量电费测算的标题后带一行灰色副标题（FR-3 新手导览指向它），只校验标题本身
+  ok(['<summary>完整明细</summary>', '<summary>价差敏感性</summary>', '<summary>容量电费测算<span', '<summary>政策与取值依据</summary>'].every((t) => h.includes(t)), '底部折叠标题已简化');
   ok(G("document.getElementById('sheet-body').innerHTML").includes('<option value="separate" selected>另计</option><option value="included" >不另计</option>'), '送端省内网损选项为「另计 / 不另计」');
   G('state.mustHave=[];state._res=solveState();');
 }
