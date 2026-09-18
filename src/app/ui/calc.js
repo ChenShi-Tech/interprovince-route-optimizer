@@ -447,6 +447,7 @@ function renderChannelSelect(res){
 /* 求解当前状态。界面只提供单选通道；换省对后已选通道不在候选里时自动取消，避免筛成空结果。 */
 function solveState(){
   if(state.mapFocusLL) state.mapFocusLL=null;   // 批次 B：任何重算让位搜索聚焦（聚焦只由搜索触发）
+  if(state.mapView) state.mapView=null;         // grid-map-device-fixes D2：参数/起止省变化复位用户触摸视野
   if((state.mustHave||[]).length>1) state.mustHave=state.mustHave.slice(0,1);
   // M13/M9：boot.js 的主体/档位分支只写入非空自动值；结构特殊的主体（深圳）在这里回到「缺项须手填」，
   // 避免静默沿用上一个主体的输配电价。手改值（pNetManual/fundManual）不受影响。
@@ -460,7 +461,7 @@ function solveState(){
   return res;
 }
 function clearChannel(){ state.mustHave=[]; state.sel=0; doSolve(); }
-function pick(i){ state.sel=i; saveLast(); renderCalc();
+function pick(i){ state.sel=i; if(state.mapView) state.mapView=null; saveLast(); renderCalc();   // grid-map-device-fixes D2：选中方案变化复位触摸视野
   const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
 
 /* ---------- 选中路线详情 ---------- */

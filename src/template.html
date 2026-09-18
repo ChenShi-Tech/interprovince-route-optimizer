@@ -103,8 +103,11 @@ h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowr
 .badge.mod{background:var(--blue-bg);color:var(--blue-ink)}
 .hd-top:has(.badge.mod) h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .hd-top:has(.badge.mod) .hd-acts,.hd-top:has(.badge.mod) .badge{flex:none}
-/* FR-3：页头常驻帮助入口，任意时刻可重看新手导览 */
+/* FR-3：页头常驻帮助入口，任意时刻可重看新手导览。
+   change: grid-map-device-fixes（D1，与 PR #28 设计系统合流）：帮助按钮改 ？ 圆钮——36px
+   点按区满足手指点按（spec: experience-fixes ≥32px 等效区域）；颜色全走设计令牌，深浅主题都成立 */
 .help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
+.help-link.help-round{width:36px;height:36px;padding:0;border-radius:50%;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;line-height:1}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 /* overflow-x 用 clip 而不是 hidden（M14）：hidden 会把计算值 overflow-y 变成 auto，main 随之
@@ -280,8 +283,11 @@ td b{font-weight:600}
    contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
 #map-view{contain:paint;position:relative;z-index:0}
 /* REQ-603+702：svg 拓扑模式容器高度随绘制纵横比自适应（viewBox 660×430），
-   仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则 */
-#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430}
+   仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则。
+   change: grid-map-device-fixes（D2）：拓扑模式接管触摸——touch-action:none 阻止浏览器
+   手势（滚动/双指缩放页面）与自定义捏合冲突；user-select:none 防拖动时选中 SVG 文字。
+   qq/td 模式不设 touch-action，保留底图原生手势。 */
+#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430;touch-action:none;user-select:none;-webkit-user-select:none}
 #fallback{display:none;padding:16px;font-size:12px;color:var(--ink2);overflow:auto}
 .empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
 .empty-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px}
@@ -714,9 +720,12 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
       <div class="hd-acts">
-        <span class="badge" id="verBadge" title="公开价格 · 含历史与估算参数">公开价格 · 含历史与估算参数</span>
+        <!-- change: grid-map-device-fixes（D1 页头一行化）× 设计系统（PR #28）合流：徽章默认文案缩短
+             （公开价格 · 含历史与估算参数→公开数据，title 留全文），帮助改 ？ 圆钮（36px 点按区），
+             外观按钮保留——360px 视口四元素仍单行；本地修改态由 lib.js setVerBadge 挂 .mod 换文案 -->
+        <span class="badge" id="verBadge" title="公开价格 · 含历史与估算参数">公开数据</span>
         <button class="help-link" id="btn-theme" type="button" onclick="openAppearance()" aria-label="外观：风格与明暗">外观</button>
-        <button class="help-link" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">帮助</button>
+        <button class="help-link help-round" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">？</button>
       </div>
     </div>
   </header>

@@ -81,3 +81,23 @@ const routeLabelList=(row,ST)=>{
   return out;
 };
 
+/* ---------- 拓扑图触摸视图纯函数（change: grid-map-device-fixes，design D2） ----------
+   viewBox 状态对象 {x,y,w,h}（px 坐标）。缩放范围夹取在 [聚焦视野的 0.5 倍, 全图 1 倍]：
+   min={w,h} 为允许的最小视野（放最大），full 为全图视野（缩最小）。
+   纯函数便于 test-modules 单测；手势接线在 ui/map.js。 */
+const topoViewClamp=(vb,full,min)=>{
+  const cl=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);
+  const w=cl(vb.w,min.w,full.w), h=cl(vb.h,min.h,full.h);
+  return {x:cl(vb.x,0,full.w-w), y:cl(vb.y,0,full.h-h), w, h};
+};
+/* 围绕点 (cx,cy) 缩放：factor>1 放大。缩放前后该点在视野中的相对位置保持不变。 */
+const topoViewZoomAt=(vb,cx,cy,factor,full,min)=>{
+  const f=(Number.isFinite(factor)&&factor>0)?factor:1;
+  const w=vb.w/f, h=vb.h/f;
+  const kx=(cx-vb.x)/vb.w, ky=(cy-vb.y)/vb.h;
+  return topoViewClamp({x:cx-w*kx, y:cy-h*ky, w, h}, full, min);
+};
+/* 平移：位移量按 viewBox 坐标给出，越界夹回全图范围内。 */
+const topoViewPan=(vb,dx,dy,full,min)=>topoViewClamp({x:vb.x+dx,y:vb.y+dy,w:vb.w,h:vb.h},full,min);
+
+

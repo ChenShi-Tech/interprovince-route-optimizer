@@ -169,5 +169,32 @@ ok(Object.values(p7).every(c => /^var\(--map-region-[1-8]\)$/.test(c)), '颜色�
 ok(new Set(Object.values(p7)).size === Object.keys(p7).length, '不同区域取到不同颜色');
 ok(regionPalette({ A: 'x', B: 'x' }).x === regionPalette({ C: 'x' }).x, '同名区域跨名单颜色稳定（返回值以区域名为键）');
 
+console.log('\n══ 八、拓扑图触摸视图纯函数（format.js topoView*，change: grid-map-device-fixes）══');
+const ctx8 = {};
+new Function('exports', fmtSrc + '\n;exports.topoViewClamp=topoViewClamp;exports.topoViewZoomAt=topoViewZoomAt;exports.topoViewPan=topoViewPan;')(ctx8);
+const { topoViewClamp, topoViewZoomAt, topoViewPan } = ctx8;
+const FULL8 = { x: 0, y: 0, w: 660, h: 430 };      // 全图视野
+const MIN8 = { w: 100, h: 60 };                    // 最小视野（聚焦盒 0.5 倍，示意）
+const eq8 = (a, b) => ['x', 'y', 'w', 'h'].every(k => Math.abs(a[k] - b[k]) < 1e-9);
+// 夹取：超界视野收回 [min, full]，位置夹回全图范围
+ok(eq8(topoViewClamp({ x: 10, y: 10, w: 330, h: 215 }, FULL8, MIN8), { x: 10, y: 10, w: 330, h: 215 }), '合法视野原样通过');
+ok(topoViewClamp({ x: 0, y: 0, w: 2000, h: 900 }, FULL8, MIN8).w === 660 && topoViewClamp({ x: 0, y: 0, w: 2000, h: 900 }, FULL8, MIN8).h === 430, '视野宽高超全图时夹回全图');
+ok(topoViewClamp({ x: 0, y: 0, w: 20, h: 10 }, FULL8, MIN8).w === 100 && topoViewClamp({ x: 0, y: 0, w: 20, h: 10 }, FULL8, MIN8).h === 60, '视野小于最小值时夹回下限');
+const panOut = topoViewClamp({ x: 900, y: -50, w: 330, h: 215 }, FULL8, MIN8);
+ok(panOut.x === 330 && panOut.y === 0, `平移越界夹回全图边界（x=${panOut.x}, y=${panOut.y}）`);
+// 中心缩放：围绕中心放大 2 倍，视野中心不变
+const vb8 = { x: 100, y: 80, w: 400, h: 260 };
+const c8 = { x: vb8.x + 200, y: vb8.y + 130 };
+const z8 = topoViewZoomAt(vb8, c8.x, c8.y, 2, FULL8, MIN8);
+ok(Math.abs(z8.w - 200) < 1e-9 && Math.abs(z8.h - 130) < 1e-9, '放大 2 倍视野减半');
+ok(Math.abs((z8.x + z8.w / 2) - c8.x) < 1e-9 && Math.abs((z8.y + z8.h / 2) - c8.y) < 1e-9, '按中心缩放时中心点保持不动');
+// 角点缩放：围绕角点放大，角点在视野中的相对位置不变
+const z9 = topoViewZoomAt(vb8, vb8.x, vb8.y, 2, FULL8, MIN8);
+ok(Math.abs(z9.x - vb8.x) < 1e-9, '围绕左上角缩放时左上角点不动');
+// 平移：线性增量
+const p8 = topoViewPan(vb8, 30, -20, FULL8, MIN8);
+ok(Math.abs(p8.x - 130) < 1e-9 && Math.abs(p8.y - 60) < 1e-9, '平移增量按位移量叠加');
+ok(topoViewZoomAt(vb8, c8.x, c8.y, 0, FULL8, MIN8).w === vb8.w, '非正/非法缩放系数按 1 处理（原样返回）');
+
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);
 process.exit(fail ? 1 : 0);

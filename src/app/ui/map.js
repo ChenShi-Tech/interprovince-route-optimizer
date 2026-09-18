@@ -169,9 +169,13 @@ function tdFlush(ok,why){
 }
 function loadTianditu(cb){
   tdAttempted=false;
+  /* 密钥门槛前置（grid-map-device-fixes D4，推翻 PRD D-2 的「保留容器」口径）：天地图 api
+     端点对无效 tk 仍下发 SDK，SDK 一旦在本页常驻，旧实现的 tdApiReady 短路会在无密钥时
+     照样报「就绪」，叠加物画在灰底上形成无底图假地图。现在无密钥一律不画——不管 SDK
+     是否已在内存里；填入密钥后 SDK 常驻的短路路径照常生效。 */
+  if(!state.tiandituKey) return cb(false,'empty');
   if(tdReady) return cb(true);
   if(tdApiReady()){ tdReady=true; return cb(true); }
-  if(!state.tiandituKey) return cb(false);
   const src='https://api.tianditu.gov.cn/api?v=4.0&tk='+encodeURIComponent(state.tiandituKey);
   if(tdTried===src){
     if(tdLoading){ if(cb) tdQueue.push(cb); return; }   // 同一密钥正在下载：等这一轮结果，别急着降级
@@ -224,6 +228,7 @@ function fitZoom(bb,wPx,hPx){
 }
 function drawMapTD(){
   if(!tdReady) return false;
+  if(!state.tiandituKey) return false;   // grid-map-device-fixes D4：密钥门槛——SDK 常驻也不得无密钥绘制叠加物
   try{
     if(!tdMap){ tdMap=new T.Map('map-view'); tdMap.centerAndZoom(new T.LngLat(108,34),5); }
     tdMap.clearOverLays();
@@ -365,6 +370,10 @@ if(isProxyEnv()) loadTMap();   // 代理环境：脚本求值即开始下载（b
 
 /* 内置拓扑图：纯 SVG，不依赖任何外部地图服务，离线与托管环境均可用。
    按站点经纬度做等距圆柱投影，只画节点与连线，不绘制任何行政区划边界。 */
+/* 触摸视图（change: grid-map-device-fixes，design D2）：topoViewMeta 由 topoSVG 每次渲染写入
+   （full=全图视野 / min=最小视野[聚焦 0.5 倍或全图 1/6] / base=本次渲染的基准视野），
+   供手势层夹取与双击复位；topoDragged=拖动标志，用于吞掉拖动结束后的 click（防误触通道过滤）。 */
+let topoViewMeta=null, topoDragged=false;
 function topoSVG(){
   const ids=Object.keys(PV);
   const lngs=ids.map(k=>PV[k].lng), lats=ids.map(k=>PV[k].lat);
@@ -452,9 +461,14 @@ function topoSVG(){
     const pad=55;
     focusBox={x0:fx0-pad,y0:fy0-pad,x1:fx1+pad,y1:fy1+pad};
   }
-  const focused=!!focusBox;
-  let vbx0=-1e9,vbx1=1e9,vby0=-1e9,vby1=1e9;
-  if(focused){ vbx0=focusBox.x0; vbx1=focusBox.x1; vby0=focusBox.y0; vby1=focusBox.y1; }
+  const focused=!!focusBox||!!state.mapView;
+  /* 可视盒（spec: grid-map 聚焦 + grid-map-device-fixes D2）：用户触摸视野 state.mapView 优先——
+     用户显式接管后重绘不再应用路线/搜索聚焦（视野从 state.mapView 恢复），标注裁剪与视野输出同源。 */
+  const shownBox=state.mapView
+    ?(mv=>({x:mv.x,y:mv.y,x1:mv.x+mv.w,y1:mv.y+mv.h,w:mv.w,h:mv.h}))(state.mapView)
+    :(focusBox?{x:focusBox.x0,y:focusBox.y0,x1:focusBox.x1,y1:focusBox.y1,w:focusBox.x1-focusBox.x0,h:focusBox.y1-focusBox.y0}
+              :{x:0,y:0,x1:W,y1:H,w:W,h:H});
+  let vbx0=shownBox.x,vbx1=shownBox.x1,vby0=shownBox.y,vby1=shownBox.y1;
   ids.forEach(k=>{
     const [x,y]=P(PV[k].lng,PV[k].lat);
     const onRoute=v.routeNodes.has(k);
@@ -481,10 +495,14 @@ function topoSVG(){
     });
   }
 
-  /* 视野聚焦：聚焦盒（搜索 / 选中方案）优先，无则保持全国视野 */
-  let vb=focusBox
-    ?`${focusBox.x0.toFixed(1)} ${focusBox.y0.toFixed(1)} ${(focusBox.x1-focusBox.x0).toFixed(1)} ${(focusBox.y1-focusBox.y0).toFixed(1)}`
-    :`0 0 ${W} ${H}`;
+  /* 视野输出：用户触摸视野 > 聚焦盒（搜索 / 选中方案）> 全国视野；
+     并写入 topoViewMeta 供手势层夹取（design D2）。 */
+  const vb=`${shownBox.x.toFixed(1)} ${shownBox.y.toFixed(1)} ${shownBox.w.toFixed(1)} ${shownBox.h.toFixed(1)}`;
+  topoViewMeta={
+    full:{x:0,y:0,w:W,h:H},
+    min:focusBox?{w:(focusBox.x1-focusBox.x0)/2,h:(focusBox.y1-focusBox.y0)/2}:{w:W/6,h:H/6},
+    base:focusBox?{x:focusBox.x0,y:focusBox.y0,w:focusBox.x1-focusBox.x0,h:focusBox.y1-focusBox.y0}:{x:0,y:0,w:W,h:H},
+  };
 
   return `<svg viewBox="${vb}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" xmlns="http://www.w3.org/2000/svg">
 <title>跨省电网拓扑图</title><desc>按站点经纬度投影的节点连线图，仅示拓扑不绘制行政区划边界。</desc>
@@ -523,13 +541,97 @@ function chanPop(id){
     ${on?'<span style="color:var(--teal);font-size:11px;margin-left:6px">必经过滤中，测算页已同步</span>':''}
   </div>`;
 }
-/* 拓扑 SVG 事件委托：命中通道热区→必经过滤；命中站点→站点信息浮层（数据与费率库同源） */
+/* 拓扑 SVG 事件委托：命中通道热区→必经过滤；命中站点→站点信息浮层（数据与费率库同源）。
+   grid-map-device-fixes D2：位移超阈值的拖动结束后的 click 在此吞掉——拖地图不得误触通道过滤。 */
 function mapSvgClick(e){
+  if(topoDragged) return;
   const t=e.target;
   const st=t.getAttribute&&t.getAttribute('data-st');
   if(st){ stationPop(st); return; }
   const chan=t.closest?t.closest('[data-chan]'):null;
   if(chan) toggleChan(chan.getAttribute('data-chan'));
+}
+/* ---------- 拓扑图触摸缩放与平移（change: grid-map-device-fixes，design D2） ----------
+   机制：渲染内容（topoSVG 输出）不变，手势只改 <svg> 的 viewBox——矢量缩放天然清晰；
+   视野状态存 state.mapView（会话内），重绘后由 topoSVG 从中恢复。
+   手势（pointer 事件统一处理，Android WebView/桌面通吃）：
+     单指位移=平移；双指=捏合（两指中点为中心按距离比例缩放）；双击=复位回聚焦视野；
+     滚轮=桌面缩放。位移阈值 TOPO_DRAG_PX 区分拖动与点击。
+   夹取用 format.js 纯函数 topoViewClamp/ZoomAt/Pan（test-modules 覆盖）。 */
+const TOPO_DRAG_PX=6;
+function topoVBof(){
+  if(state.mapView) return {...state.mapView};
+  return {...((topoViewMeta&&topoViewMeta.base)||{x:0,y:0,w:660,h:430})};
+}
+function topoViewSet(vb){
+  if(!topoViewMeta) return;
+  state.mapView=topoViewClamp(vb,topoViewMeta.full,topoViewMeta.min);
+  const m=state.mapView, svg=document.querySelector('#map-view svg');
+  if(svg) svg.setAttribute('viewBox',`${m.x.toFixed(1)} ${m.y.toFixed(1)} ${m.w.toFixed(1)} ${m.h.toFixed(1)}`);
+}
+function topoViewReset(){
+  if(!state.mapView) return;
+  state.mapView=null;
+  const svg=document.querySelector('#map-view svg');
+  if(svg&&topoViewMeta){
+    const b=topoViewMeta.base;
+    svg.setAttribute('viewBox',`${b.x.toFixed(1)} ${b.y.toFixed(1)} ${b.w.toFixed(1)} ${b.h.toFixed(1)}`);
+  }
+}
+function attachTopoGestures(box){
+  if(!box) return;
+  const svg=box.querySelector('svg'); if(!svg) return;
+  const ptrs=new Map();
+  let start=null, pinch=null;                     // start=单指起点 {x,y,vb,moved}；pinch=捏合基准 {d,vb}
+  const rectOf=()=>svg.getBoundingClientRect();
+  /* 客户端坐标 → viewBox 坐标（容器纵横比与 viewBox 一致，线性映射无 letterboxing） */
+  const ptOf=(cx,cy)=>{
+    const r=rectOf(), vb=topoVBof();
+    return {x:vb.x+(cx-r.left)*(vb.w/(r.width||1)), y:vb.y+(cy-r.top)*(vb.h/(r.height||1))};
+  };
+  box.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0) return;
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size===1) start={x:e.clientX,y:e.clientY,vb:topoVBof(),moved:false};
+    else if(ptrs.size===2){
+      start=null;
+      const [a,b]=[...ptrs.values()];
+      pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,vb:topoVBof()};
+    }
+  });
+  box.addEventListener('pointermove',e=>{
+    if(!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size===2&&pinch&&topoViewMeta){
+      const [a,b]=[...ptrs.values()];
+      const d=Math.hypot(a.x-b.x,a.y-b.y)||1;
+      const c=ptOf((a.x+b.x)/2,(a.y+b.y)/2);
+      topoViewSet(topoViewZoomAt(pinch.vb,c.x,c.y,d/pinch.d,topoViewMeta.full,topoViewMeta.min));
+      topoDragged=true;
+    }else if(ptrs.size===1&&start&&topoViewMeta){
+      const dx=e.clientX-start.x, dy=e.clientY-start.y;
+      if(!start.moved&&Math.hypot(dx,dy)<TOPO_DRAG_PX) return;   // 阈值内不算拖动，click 照常
+      start.moved=true; topoDragged=true;
+      const sx=start.vb.w/(rectOf().width||1);
+      topoViewSet(topoViewPan(start.vb,-dx*sx,-dy*sx,topoViewMeta.full,topoViewMeta.min));
+    }
+  });
+  const up=e=>{
+    ptrs.delete(e.pointerId);
+    if(ptrs.size<2) pinch=null;
+    if(ptrs.size===1){ const [p]=[...ptrs.values()]; start={x:p.x,y:p.y,vb:topoVBof(),moved:true}; }   // 双指抬起一指后继续单指平移
+    if(ptrs.size===0) setTimeout(()=>{ topoDragged=false; },0);   // click 派发后再复位吞击标志
+  };
+  box.addEventListener('pointerup',up);
+  box.addEventListener('pointercancel',up);
+  box.addEventListener('dblclick',e=>{ e.preventDefault(); topoViewReset(); });
+  box.addEventListener('wheel',e=>{
+    if(!topoViewMeta) return;
+    e.preventDefault();   // 地图上滚轮=缩放视野，不滚动页面
+    const f=e.deltaY<0?1.18:1/1.18;
+    const p=ptOf(e.clientX,e.clientY);
+    topoViewSet(topoViewZoomAt(topoVBof(),p.x,p.y,f,topoViewMeta.full,topoViewMeta.min));
+  },{passive:false});
 }
 function stationPop(st){
   const el=document.getElementById('map-pop'); if(!el||!ST[st]) return;
@@ -547,7 +649,13 @@ function mapQSearch(v){
   const out=document.getElementById('map-search-out'); if(!out) return;
   const hits=mapSearchHits(v,ST,CH);
   const total=hits.stations.length+hits.channels.length;
-  if(!String(v||'').trim()){ out.innerHTML=''; return; }
+  if(!String(v||'').trim()){
+    out.innerHTML='';
+    /* grid-map-device-fixes D3：清空搜索=清除搜索聚焦，视野回到路线聚焦；
+       不改命中列表其余行为，也不动选中方案与必经过滤。 */
+    if(state.mapFocusLL){ state.mapFocusLL=null; if(!document.getElementById('v-map').hidden) renderMap(); }
+    return;
+  }
   if(!total){ out.innerHTML='<div class="note" style="margin:0 0 6px">无匹配的站点/通道，换个关键词试试。</div>'; return; }
   // 结果按钮换行排布、行距 6px：hit-x 让透明扩区只横向扩，免得下一行的按钮抢走上一行下沿的点击
   const chip=(label,fn)=>`<button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px" onclick="${fn}">${esc(label)}</button>`;
@@ -577,9 +685,25 @@ function mapGotoChan(id){
 }
 /* 拓扑图快照导出（design D5）：SVG 序列化→2× canvas 光栅化→toBlob 下载；
    priceVersion 与生成时间画在 canvas 层（不进 SVG 源）。栅格底图（天地图/腾讯）无 CORS 头，
-   canvas 会被污染，故导出入口仅在拓扑图视图提供。 */
+   canvas 会被污染，故导出入口仅在拓扑图视图提供。
+   落盘分两路：浏览器走 <a download>；安卓 WebView 壳里 download 会被静默丢弃（真机实测），
+   检测到原生桥 AndroidBridge 时改交 base64 由壳写入下载目录并 Toast 反馈。 */
 function exportTopo(){
   const svgEl=document.querySelector('#map-view svg'); if(!svgEl) return;
+  const name=`iproute-grid-${String(PRICE_VERSION).slice(0,8)}.png`;
+  const save=b=>{
+    if(window.AndroidBridge&&window.AndroidBridge.savePng){
+      const fr=new FileReader();
+      fr.onload=()=>{ const s=String(fr.result); window.AndroidBridge.savePng(name,s.slice(s.indexOf(',')+1)); };
+      fr.readAsDataURL(b);
+      return;
+    }
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(b);
+    a.download=name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  };
   // 拓扑图配色写的是 var(--令牌)：序列化成独立图片后页面样式表不再生效，先把用到的令牌按当前值内联到根元素
   const url=URL.createObjectURL(new Blob([inlineTokenVars(svgEl.cloneNode(true)).outerHTML],{type:'image/svg+xml'}));
   const img=new Image();
@@ -591,14 +715,7 @@ function exportTopo(){
       ctx.drawImage(img,0,0,cv.width,cv.height);
       ctx.fillStyle=tokenColor('--snapshot-caption'); ctx.font='16px sans-serif';
       ctx.fillText(`省间路径优选测算 · priceVersion ${String(PRICE_VERSION).slice(0,8)} · ${new Date().toLocaleString('zh-CN')}`,16,cv.height-14);
-      cv.toBlob(b=>{
-        if(!b) return;
-        const a=document.createElement('a');
-        a.href=URL.createObjectURL(b);
-        a.download=`iproute-grid-${String(PRICE_VERSION).slice(0,8)}.png`;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-      },'image/png');
+      cv.toBlob(b=>{ if(b) save(b); },'image/png');
     }finally{ URL.revokeObjectURL(url); }
   };
   img.src=url;
@@ -667,6 +784,10 @@ function renderMap(){
   if(!proxyOK && mode!=='svg'){
     out+=`<div class="warn" style="margin-bottom:10px">当前环境无法使用腾讯地图代理（该底图仅在本机预览时可用）。天地图需要你在下方填入自己的密钥。</div>`;
   }
+  /* grid-map-device-fixes D4：探针失败自动降级的一次性红字说明（会话标志，成功应用有效密钥后清除） */
+  if(mode==='svg'&&state.tdDegradeNote){
+    out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
+  }
   if(mode==='td'){
     out+=`<label class="f"><span>天地图密钥（tk）</span>
       <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
@@ -734,7 +855,7 @@ function renderMap(){
     if(stale()) return; // 80ms 内用户已切换底图或页面重画则放弃本次注入，避免迟到回调污染新容器
     if(mode==='svg'){
       const box=document.getElementById('map-view');
-      if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='var(--radius-btn)'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); }
+      if(box){ box.className='topo-svg'; box.style.background='transparent'; box.style.border='0'; box.style.borderRadius='var(--radius-btn)'; box.style.overflow='hidden'; box.innerHTML=topoSVG(); attachTopoGestures(box); }
       const fb=document.getElementById('fallback'); if(fb) fb.style.display='none';
     } else if(mode==='qq'){
       loadTMap(ok=>{
@@ -809,13 +930,23 @@ function tkMsg(kind){
   if(kind==='incomplete'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
   tkFailDiagnose(el,gen);
 }
+/* 探针失败自动降级（grid-map-device-fixes D4，推翻《PRD-体验问题修复-20260918》决策 D-2：
+   「探针失败保留容器不降级」——真机证明留一张没有底图的线条图比自动降级更困惑）。
+   置一次性红字说明（state.tdDegradeNote，区分 密钥无效/风控拦截 vs 网络不可达）→
+   自动切回内置拓扑图并持久化选择；说明在拓扑视图顶部显示，成功应用有效密钥后清除。 */
+function tdDegrade(kind){
+  state.tdDegradeNote=kind==='net'
+    ?'✗ 天地图瓦片加载失败：网络不可达，已自动切回内置拓扑图。网络恢复后可在「天地图」视图重试。'
+    :'✗ 天地图瓦片加载失败：密钥无效或被风控拦截，已自动切回内置拓扑图。核对密钥后可在「天地图」视图重试。';
+  state.mapProvider='svg'; saveMap(); renderMap();
+}
 /* 瓦片级真校验（FR-2，PRD-体验问题修复）：fetch(no-cors) 对任何 HTTP 状态都 resolve，
    只能证明「传输可达」，证明不了密钥有效——乱码密钥显示「自检正常」的假阳性根源（清单 F2）。
    改用 Image 加载一张固定 vec_w 瓦片（与 SDK 实际瓦片同域同格式）：无论服务端以 403 还是
    拦截页（HTML）拒绝，均不可解码为图片，onerror 必然触发——与拒绝方式无关，绕开
    「浏览器拿不到跨域状态码」的平台限制（PRD §9 V4 双通道实测）。
-   失败时保留地图容器与叠加物，不强制降级（PRD 决策 D-2）；文案按
-   密钥无效/风控拦截 与 网络不可达 二分（复用 tkFailShow 的 no-cors fetch 思路）。 */
+   探针失败不再保留无底图叠加物：自动切回内置拓扑图（tdDegrade，grid-map-device-fixes D4）；
+   探针通过时清除既有降级说明。文案按 密钥无效/风控拦截 与 网络不可达 二分。 */
 function tdTileProbe(el,gen){
   try{
     if(typeof T==='undefined'||!T.Protocol) return;
@@ -824,20 +955,25 @@ function tdTileProbe(el,gen){
       +'/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default'
       +'&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX=5&TILEROW=1&TILECOL=1&tk='+encodeURIComponent(tk);
     const live=()=>document.getElementById('tk-msg')===el&&gen===tkMsgGen;   // 重绘/新消息竞态防护
-    const failMsg=txt=>'<span style="color:var(--error-text);font-weight:600">✗ '+txt+'</span>已保留地图与叠加物，可核对密钥后重试，或点上方「拓扑图」使用内置底图。';
+    const failMsg=txt=>'<span style="color:var(--error-text);font-weight:600">✗ '+txt+'</span>已自动切回内置拓扑图，可核对密钥后在「天地图」视图重试。';
     const img=new Image();
     img.onload=()=>{
       if(!live()) return;
-      if(img.naturalWidth>=256){ el.innerHTML='<span style="color:var(--teal);font-weight:600">✓ 密钥有效，底图可用。</span>'; return; }
+      if(img.naturalWidth>=256){
+        el.innerHTML='<span style="color:var(--teal);font-weight:600">✓ 密钥有效，底图可用。</span>';
+        state.tdDegradeNote=null;   // grid-map-device-fixes D4：有效密钥成功即清除降级说明
+        return;
+      }
       el.innerHTML=failMsg('瓦片返回内容异常（未能解码为有效图片）。');
+      tdDegrade('key');
     };
     img.onerror=()=>{
       if(!live()) return;
       let probe;
       try{ probe=fetch(url,{mode:'no-cors'}); }catch(e){ probe=Promise.reject(e); }
       probe.then(
-        ()=>{ if(live()) el.innerHTML=failMsg('瓦片请求被拒（密钥无效或被风控拦截）。'); },
-        ()=>{ if(live()) el.innerHTML=failMsg('网络不可达，瓦片加载失败。'); });
+        ()=>{ if(!live()) return; el.innerHTML=failMsg('瓦片请求被拒（密钥无效或被风控拦截）。'); tdDegrade('key'); },
+        ()=>{ if(!live()) return; el.innerHTML=failMsg('网络不可达，瓦片加载失败。'); tdDegrade('net'); });
     };
     el.innerHTML='<span style="color:var(--ink2)">SDK 已加载，正在验证瓦片…</span>';
     img.src=url;

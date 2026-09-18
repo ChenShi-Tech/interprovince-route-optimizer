@@ -27,8 +27,11 @@ let state={
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
   mustHave:[],
   mapProvider:'svg', tiandituKey:'', mapNet:'dim',   // mapNet：全网架层显示模式 'dim'=弱化显示 / 'off'=隐藏（spec: grid-map 分层）
-  // 批次 B（grid-map P1）会话内视图状态，不入档（saveLast 剥离）：mapSec=断面高亮选择、mapQ=搜索词、mapFocusLL=搜索聚焦包围盒（度）、mapRegion=按区域着色
-  mapSec:null, mapQ:'', mapFocusLL:null, mapRegion:false
+  // 批��� B（grid-map P1）会话内视图状态，不入档（saveLast 剥离）：mapSec=断面高亮选择、mapQ=搜索词、mapFocusLL=搜索聚焦包围盒（度）、mapRegion=按区域着色
+  mapSec:null, mapQ:'', mapFocusLL:null, mapRegion:false,
+  // change: grid-map-device-fixes（D2）：mapView=拓扑图用户视野 {x,y,w,h}（会话内不入档，选中方案/参数变化复位）；
+  // tdDegradeNote=天地图探针失败自动降级的一次性红字说明（成功应用有效密钥后清除，不入档）
+  mapView:null, tdDegradeNote:null
 };
 let stored=null;
 /* 应用内确认框：原生 confirm() 在安卓 WebView（壳未设 WebChromeClient）与 iOS WKWebView
@@ -126,6 +129,7 @@ function saveLast(){
     delete s.tradableOnly; delete s.occPct; delete s.tradeDate;
     delete s._res; delete s._ai; delete s._libStale; delete s._stalePrice;
     delete s.mapSec; delete s.mapQ; delete s.mapFocusLL; delete s.mapRegion;   // 会话内视图状态不入档
+    delete s.mapView; delete s.tdDegradeNote;   // change: grid-map-device-fixes：触摸视野与降级说明同为会话内状态
     localStorage.setItem(LS_LAST,JSON.stringify(s));
   }catch(e){ _storageBroken=true; }
 }
