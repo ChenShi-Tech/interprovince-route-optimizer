@@ -7,7 +7,7 @@
  *   一、颜色字面值：src/template.html（注入前）的 <style> 与其余标记、src/app/**\/*.js 中
  *       不得出现 #hex / rgb() / rgba() / hsl() / hsla()。
  *       白名单：data: URI（select 下拉箭头等，主题需另行覆盖）、var(--x, 字面兜底) 的兜底值、
- *       <meta name="theme-color">（浏览器状态栏色只认字面值）、.libcard 组临时白名单（见 LIBCARD_TODO）。
+ *       <meta name="theme-color">（浏览器状态栏色只认字面值）。
  *   二、令牌引用：var(--x) 与 JS 里以字符串传递的 '--x'（tokenColor('--x') 等）都必须在 src/tokens.css 定义；
  *       src/tokens.css 定义了但 src/ 下无人引用的令牌给出警告（不失败）。
  *   三、字号：font-size 只能取 FONT_SIZES 里的现有取值。
@@ -29,12 +29,6 @@ const ok = (c, l, d) => { if (c) { pass++; console.log('  ✅ ' + l); } else { f
    不要为了让守卫变绿直接往这里加值。9 只出现在拓扑图 SVG 的 font-size 属性（非路线省名）。 */
 const FONT_SIZES = [9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 16, 17, 18, 19, 20, 21, 24, 26, 30, 34, 40];
 
-/* 临时白名单：费率库卡片这组规则正由 fix/libcard-mobile 分支移出 ≥900px 媒体查询，
-   本阶段不改动以免冲突，其中的 #fff / 10px / 4px 字面值暂时放行。
-   TODO(design-tokens)：fix/libcard-mobile 合并后把这组规则的字面值换成令牌
-   （background:var(--card)、border-radius:var(--radius-btn) / var(--radius-tag)），
-   并把模板末尾单独补的 .lc-p 数字字体钩子并回原规则，然后删掉本白名单。 */
-const LIBCARD_TODO = /(^|[\s,>+~(])\.(libcard|lc-[\w-]+|libcount|libgrid)(?![\w-])/;
 
 /* ---------- 读取 ---------- */
 const tpl = rd('src/template.html');
@@ -77,33 +71,10 @@ function stripVarFallback(s) {
 const lineOf = (s, idx) => s.slice(0, idx).split('\n').length;
 const snippet = (s, idx) => { const a = s.lastIndexOf('\n', idx) + 1, b = s.indexOf('\n', idx); return s.slice(a, b < 0 ? undefined : b).trim().slice(0, 140); };
 
-/** 极简 CSS 规则切分：返回叶子规则（不含嵌套块）的 {sel, from, to}（from/to 为声明体在原串中的区间） */
-function cssLeafRules(css) {
-  const out = [], stack = [];
-  let start = 0;
-  for (let i = 0; i < css.length; i++) {
-    if (css[i] === '{') { stack.push({ sel: css.slice(start, i).trim(), at: i }); start = i + 1; }
-    else if (css[i] === '}') {
-      const top = stack.pop();
-      if (top && !css.slice(top.at + 1, i).includes('{')) out.push({ sel: top.sel, from: top.at + 1, to: i });
-      start = i + 1;
-    }
-  }
-  return out;
-}
-
 /* ---------- 各扫描目标（已抹掉注释 / data URI / var 兜底） ---------- */
 // 模板 <style>：以整个模板为坐标系（行号即模板行号），只保留 <style> 区间
 const tplStyleOnly = tpl.slice(0, styleOpen + 7).replace(/[^\n]/g, ' ') + tpl.slice(styleOpen + 7, styleClose) + blank(tpl.slice(styleClose));
 const styleScan = stripVarFallback(stripDataUri(stripCssComments(tplStyleOnly)));
-// libcard 临时白名单：命中的叶子规则整段抹掉（仅用于颜色与圆角两项）
-let styleScanNoLib = styleScan, libRules = 0;
-for (const r of cssLeafRules(styleScan)) {
-  if (LIBCARD_TODO.test(r.sel)) {
-    libRules++;
-    styleScanNoLib = styleScanNoLib.slice(0, r.from) + blank(styleScanNoLib.slice(r.from, r.to)) + styleScanNoLib.slice(r.to);
-  }
-}
 // 模板其余部分（head 脚本、body 标记）：<meta name="theme-color"> 放行
 const tplMarkupOnly = tpl.slice(0, styleOpen) + blank(tpl.slice(styleOpen, styleClose)) + tpl.slice(styleClose);
 const markupScan = stripVarFallback(stripDataUri(stripJsComments(stripHtmlComments(tplMarkupOnly))))
@@ -111,7 +82,7 @@ const markupScan = stripVarFallback(stripDataUri(stripJsComments(stripHtmlCommen
 const jsScan = jsFiles.map(({ file, text }) => ({ file, text, scan: stripVarFallback(stripDataUri(stripJsComments(text))) }));
 
 const targets = [
-  { name: 'src/template.html <style>', file: 'src/template.html', text: tpl, scan: styleScanNoLib, scanAll: styleScan },
+  { name: 'src/template.html <style>', file: 'src/template.html', text: tpl, scan: styleScan, scanAll: styleScan },
   { name: 'src/template.html 其余标记（head 脚本 / body）', file: 'src/template.html', text: tpl, scan: markupScan, scanAll: markupScan },
   ...jsScan.map((j) => ({ name: j.file, file: j.file, text: j.text, scan: j.scan, scanAll: j.scan })),
 ];
@@ -123,7 +94,6 @@ for (const t of targets) {
   const hits = [...t.scan.matchAll(COLOR_RE)].map((m) => `      ${t.file}:${lineOf(t.text, m.index)}　${m[0]}　${snippet(t.text, m.index)}`);
   ok(hits.length === 0, `${t.name} 无颜色字面值`, hits.slice(0, 20).join('\n') + (hits.length > 20 ? `\n      …共 ${hits.length} 处` : ''));
 }
-ok(libRules > 0 && libRules <= 20, `.libcard 组临时白名单只覆盖该组规则（${libRules} 条，TODO：fix/libcard-mobile 合并后移除）`);
 ok(styleCount === 1, '模板只有一个 <style> 块（守卫按单块扫描）');
 
 /* ================= 二、令牌定义与引用 ================= */

@@ -382,6 +382,35 @@ td b{font-weight:600}
 .lib-io label{font-size:10.5px;color:var(--ink3);display:block;margin-bottom:3px}
 .lib-io input{padding:6px 8px;font-size:12.5px;border-radius:var(--radius-mini)}
 .lib-src{font-size:10.5px;color:var(--ink3);margin-top:6px;line-height:1.5}
+/* 费率库卡片（通道 / 省级参数）：lib.js 在所有宽度下都渲染 details.libcard，属移动端基础样式；
+   .libgrid 手机单列，≥900px 两列（见桌面端适配） */
+.libcard{border:.5px solid var(--line);border-radius:var(--radius-btn);background:var(--card);margin-bottom:7px;overflow:hidden}
+.libcard summary{list-style:none;cursor:pointer;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center}
+.libcard summary::-webkit-details-marker{display:none}
+.libcard[open] summary{border-bottom:.5px solid var(--line2);background:var(--gray-bg)}
+.lc-n{font-size:13px;font-weight:600;grid-column:1;grid-row:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lc-tag{font-size:9.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:1px 5px;border-radius:var(--radius-tag);margin-left:5px}
+.lc-p{grid-column:2;grid-row:1/3;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--font-num);text-align:right;align-self:center}
+.lc-p small{font-size:9.5px;font-weight:500;color:var(--ink3);margin-left:1px}
+.lc-m{grid-column:1;grid-row:2;font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lc-b{grid-column:1;grid-row:3}
+.lc-body{padding:11px 12px}
+.lc-kv{font-size:11px;color:var(--ink2);line-height:1.7;margin-top:9px;padding-top:8px;border-top:.5px solid var(--line2)}
+.lc-kv span{display:inline-block;min-width:74px;color:var(--ink3)}
+.libcount{font-size:11px;color:var(--ink3);margin-bottom:7px}
+.libgrid{display:grid;grid-template-columns:minmax(0,1fr);align-items:start}
+/* 手机 / 折叠屏（<900px）：卡片只有约 300px 宽，名称与元信息单行省略会把标签、线损、容量截掉，
+   改为换行——名称与标签按整颗换行、左缘对齐；元信息只在空格处断行（「容量待补」不被拆开）；
+   区域口径通道的「送出省参考价」前缀缩成小字另起一行，不再挤占名称列；明细键值折行时悬挂缩进 */
+@media (max-width:899px){
+  .lc-n{display:flex;flex-wrap:wrap;align-items:center;gap:3px 5px;white-space:normal;line-height:1.45}
+  .lc-tag{margin-left:0;max-width:100%;line-height:1.35}
+  .lc-m{white-space:normal;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
+  .lc-pre{display:block;font-size:10px;font-weight:500;color:var(--ink3)}
+  .lc-kv>div{padding-left:74px;text-indent:-74px}
+  .lc-kv span{text-indent:0}
+  .lib-src{overflow-wrap:anywhere}   /* 来源里的长网址不会自然断行，卡片 overflow:hidden 下会被裁掉 */
+}
 .prow{display:grid;grid-template-columns:58px 1fr 1fr 1fr 44px;gap:6px;align-items:center;padding:5px 0;border-bottom:.5px solid var(--line2)}
 .prow:first-of-type{font-size:10.5px;color:var(--ink3)}
 .prow .pn{font-size:12px;font-weight:500}
@@ -671,6 +700,10 @@ details.adv.boxed>summary{font-size:12.5px}
 .seg button.on{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-ink);font-weight:600}
 .seg.small{gap:5px;margin-bottom:9px}
 .seg.small button{font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)}
+/* 可换行的筛选按钮组（费率库）：<900px 时 flex:1 会把按钮压成一字一行，禁止按钮内折行，
+   让按钮按文字宽度整颗换到下一行、再均分余宽 */
+.seg.wrap{flex-wrap:wrap}
+@media (max-width:899px){ .seg.wrap button{white-space:nowrap} }
 .rc{width:118px;padding:9px 10px 10px}
 .rc-hop{font-size:9.5px;font-weight:600;color:var(--ink3);background:var(--gray-bg);padding:1px 6px;border-radius:var(--radius-pill);flex:0 0 auto}
 .rc.on .rc-hop{background:var(--card)}
@@ -758,21 +791,7 @@ details.adv.boxed>summary{font-size:12.5px}
   .rc-meta{grid-column:2;grid-row:2;margin:0}
   .rc-price{grid-column:3;grid-row:1/3;text-align:right;align-self:center;font-size:19px}
 
-  .libcard{border:.5px solid var(--line);border-radius:10px;background:#fff;margin-bottom:7px;overflow:hidden}
-.libcard summary{list-style:none;cursor:pointer;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center}
-.libcard summary::-webkit-details-marker{display:none}
-.libcard[open] summary{border-bottom:.5px solid var(--line2);background:var(--gray-bg)}
-.lc-n{font-size:13px;font-weight:600;grid-column:1;grid-row:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lc-tag{font-size:9.5px;font-weight:600;color:var(--amber);background:var(--amber-bg);padding:1px 5px;border-radius:4px;margin-left:5px}
-.lc-p{grid-column:2;grid-row:1/3;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;text-align:right;align-self:center}
-.lc-p small{font-size:9.5px;font-weight:500;color:var(--ink3);margin-left:1px}
-.lc-m{grid-column:1;grid-row:2;font-size:10.5px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lc-b{grid-column:1;grid-row:3}
-.lc-body{padding:11px 12px}
-.lc-kv{font-size:11px;color:var(--ink2);line-height:1.7;margin-top:9px;padding-top:8px;border-top:.5px solid var(--line2)}
-.lc-kv span{display:inline-block;min-width:74px;color:var(--ink3)}
-.libcount{font-size:11px;color:var(--ink3);margin-bottom:7px}
-.libgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 26px;align-items:start}
+  .libgrid{grid-template-columns:1fr 1fr;gap:0 26px}
   .lib-row{min-width:0}
   .segblk .grid{grid-template-columns:repeat(8,1fr)}
   .big{font-size:30px}
@@ -791,10 +810,6 @@ details.adv.boxed>summary{font-size:12.5px}
   .layout.no-ai{grid-template-columns:380px minmax(0,1fr)}
   .libgrid{gap:0 32px}
 }
-/* 数字字体钩子（费率库卡片价格）：.libcard / .lc-* 组规则正由 fix/libcard-mobile 分支移出媒体查询，
-   为避免冲突本阶段不改那组规则，先在这里单独挂 --font-num。
-   TODO(design-tokens)：fix/libcard-mobile 合并后把这条并入 .lc-p，并同步去掉 tools/test-design-tokens.mjs 的临时白名单。 */
-.lc-p{font-family:var(--font-num)}
 </style>
 </head>
 <body>
@@ -848,7 +863,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-18 11:16';
+const BUILD_TIME='2026-09-18 11:27';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -3046,7 +3061,7 @@ function renderLibList(){
   return '<div class="libcount">匹配 '+list.length+' 条</div>'+list.map(({c,i})=>`<details class="libcard">
     <summary>
       <span class="lc-n">${esc(c.n)}${c.priceType==='capacity'?'<span class="lc-tag">容量制</span>':''}${effBadge(c)}${c.tradable===false?'<span class="lc-tag">交易网络·待确认</span>':''}</span>
-      <span class="lc-p">${c.regional?'送出省参考价 ':''}${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
+      <span class="lc-p">${c.regional?'<span class="lc-pre">送出省参考价 </span>':''}${c.t==null?'—':fmt(c.t,1)}<small>元/MWh</small></span>
       <span class="lc-m">${esc(N(c.from))}→${esc(N(c.to))} · ${esc(c.kv)} · 线损 ${c.loss==null?'—':fmt(c.loss,2)+'%'} · ${c.capActual!=null?c.capActual+' MW':(c.cap!=null?'额定 '+c.cap+' MW':'容量待补')}</span>
       <span class="lc-b">${tierTag(c.tier)}</span>
     </summary>
@@ -3098,7 +3113,7 @@ function renderLib(){
     out+=`<div class="card tight">
       <div class="sec-title">通道费率<span class="hint">共 ${CH.length} 条</span></div>
       <input id="lib-q" type="search" placeholder="搜索通道名 / 别名 / 省份 / 文号…" value="${esc(state.libQ||'')}" oninput="libSearch(this.value)" style="margin-bottom:8px">
-      <div class="seg small" style="flex-wrap:wrap">
+      <div class="seg small wrap">
         ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量'],['incLoss','含线损'],['dd','落地端计费']].map(([k,t])=>
           `<button class="${(state.libFilter||'all')===k?'on':''}" onclick="state.libFilter='${k}';state._libScr=window.scrollY;renderLib()">${t}</button>`).join('')}
       </div>
@@ -3114,7 +3129,7 @@ function renderLib(){
     out+=`<div class="card tight">
       <div class="sec-title">容量/需量电价<span class="hint">两部制 · 发改价格〔2020〕1077号附件1 口径</span></div>
       <input id="cap-q" type="search" placeholder="搜索省份 / 档别 / 来源…" value="${esc(state.capQ||'')}" oninput="capSearch(this.value)" style="margin-bottom:8px">
-      <div class="seg small" style="flex-wrap:wrap">
+      <div class="seg small wrap">
         ${[['all','全部'],['noCapQ','缺容量价'],['noDmQ','缺需量价']].map(([k,t])=>
           `<button class="${(state.capFilter||'all')===k?'on':''}" onclick="state.capFilter='${k}';renderLib()">${t}</button>`).join('')}
       </div>
