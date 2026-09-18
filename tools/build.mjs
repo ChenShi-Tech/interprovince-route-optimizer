@@ -17,7 +17,8 @@
  *
  * 构建期 fail-fast（任一不过即 process.exit(1) 并说明原因）：
  *   ① 模板三个注入占位符（TOKENS / DATA / APP）各出现且仅出现 1 次、各自独占一行；
- *      TOKENS 注入 src/tokens.css（设计令牌 :root 块，全站唯一允许写颜色 / 圆角字面值的地方）；
+ *      TOKENS 注入 src/tokens.css（设计令牌 :root 块，全站唯一允许写颜色 / 圆角字面值的地方），
+ *      注入前去掉注释，因此令牌文件里的 url( 后面必须紧跟引号（否则 url() 里的 /* 会被当成注释吃掉）；
  *   ② APP_FILES 与 tools/test-modules.mjs 的守卫清单逐项一致；
  *   ③ 注入串不含 String.replace 的替换陷阱（$& / $$ / $` / $'，M23）；
  *   ④ 内联脚本能被 vm 解析（语法检查）；
@@ -481,9 +482,29 @@ function stripCssComments(css) {
   }
   return out.split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim()).join('\n');
 }
+/** 不带引号的 url(：跳过注释与引号内字符串逐字扫描，返回行号（tools/test-design-tokens.mjs 同一规则）。
+    stripCssComments 只放过引号内的字符串——url(data:…/*…) 这类不加引号的写法，里面的 /* 会被当成注释开头吃掉，
+    产物静默损坏，所以令牌文件里的 url( 后面必须紧跟引号。 */
+function unquotedUrls(css) {
+  const out = [];
+  for (let i = 0; i < css.length;) {
+    const c = css[i];
+    if (c === '/' && css[i + 1] === '*') { const e = css.indexOf('*/', i + 2); i = e < 0 ? css.length : e + 2; continue; }
+    if (c === '"' || c === "'") { let j = i + 1; while (j < css.length && css[j] !== c) j += css[j] === '\\' ? 2 : 1; i = j + 1; continue; }
+    if (/^url\(/i.test(css.slice(i, i + 4)) && !/[\w-]/.test(css[i - 1] || '')) {
+      if (!/["']/.test(css[i + 4] || '')) out.push(css.slice(0, i).split('\n').length);
+      i += 4; continue;
+    }
+    i++;
+  }
+  return out;
+}
 const tokensPath = path.join(root, 'src/tokens.css');
 if (!fs.existsSync(tokensPath)) failFast('缺少设计令牌文件 src/tokens.css');
-const tokensCss = stripCssComments(fs.readFileSync(tokensPath, 'utf8').replace(/\r\n?/g, '\n')).trim();
+const tokensSrc = fs.readFileSync(tokensPath, 'utf8').replace(/\r\n?/g, '\n');
+const bareUrls = unquotedUrls(tokensSrc);
+if (bareUrls.length) failFast(`src/tokens.css 第 ${bareUrls.join('、')} 行的 url( 后面没有紧跟引号：构建去注释会误伤不加引号的 url()，请写成 url("…")`);
+const tokensCss = stripCssComments(tokensSrc).trim();
 if (/\/\*|\*\//.test(tokensCss.replace(/(["'])(?:\\.|(?!\1).)*\1/g, ''))) failFast('src/tokens.css 去注释后仍残留 /* 或 */（注释未闭合？）');
 if (!/(^|\n):root\s*\{/.test(tokensCss)) failFast('src/tokens.css 中没有 :root{…} 令牌块');
 if (/<\/style/i.test(tokensCss)) failFast('src/tokens.css 含 </style>，注入后会提前闭合样式块');

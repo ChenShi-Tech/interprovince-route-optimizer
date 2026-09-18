@@ -8,14 +8,22 @@
  *       不得出现 #hex / rgb() / rgba() / hsl() / hsla()。
  *       白名单：data: URI（地图圆点等运行时拼接的 SVG）、var(--x, 字面兜底) 的兜底值、
  *       <meta name="theme-color">（浏览器状态栏色只认字面值）。
+ *       颜色名（white / black / red …）：颜色类属性（color / background / border / fill / stroke / outline /
+ *       box-shadow / text-shadow 等，含 SVG 的 fill= / stroke= 属性）与 src/tokens.css 的令牌取值里一律不许出现；
+ *       transparent / currentColor / inherit / none 放行。
+ *       data: URI 里写死的 %23 + 3 / 6 位十六进制色：警告（不失败）并列出位置，提醒改成绘制时用 tokenColor() 取令牌
+ *       （src/tokens.css 自己按主题逐份写出的下拉箭头不算）。
  *   二、令牌引用：var(--x) 与 JS 里以字符串传递的 '--x'（tokenColor('--x') 等）都必须在 src/tokens.css 定义；
  *       src/tokens.css 定义了但 src/ 下无人引用的令牌给出警告（不失败）。
  *   三、字号：CSS / canvas 的 font-size 只能取 FONT_SIZES；拓扑图 SVG 的 font-size 属性另按 SVG_FONT_SIZES。
  *   四、圆角：border-radius 字面值只能是 0 / 50% / 复合值（多值简写）/ 令牌引用。
  *   五、令牌文件自身：只有一个 :root 块、:root 内名字不重复、主题覆盖块（[data-theme] 等）只覆盖已定义的令牌；
- *       深色主题（clear-dark / tech）覆盖 :root 的全部颜色令牌并声明 color-scheme:dark。
- *   六、主题对比度：三套主题（clear / clear-dark / tech）逐对检查文字 ≥4.5:1、非文字 ≥3:1（别名逐层解析，
- *       半透明色按所在的底合成），任一主题不达标即失败；清晰浅色网架图省名列为已知例外。
+ *       主题清单从 [data-theme="…"] 块自动推导（clear 即 :root），每个覆盖块覆盖 :root 的全部颜色令牌并声明
+ *       color-scheme；主题名在 ui/theme.js、<head> 内联脚本、tools/ui-shots.mjs 的主题表里都要出现；
+ *       每套主题的 --system-bar 必须是 #RRGGBB；url( 后面必须紧跟引号（构建去注释只认引号内的字符串，
+ *       不加引号的 url() 里出现 /* 会被当成注释吃掉；tools/build.mjs 同样断言）。
+ *   六、主题对比度：每套主题逐对检查文字 ≥4.5:1、非文字 ≥3:1（别名逐层解析，半透明色按所在的底合成），
+ *       任一主题不达标即失败；清晰浅色的源码原值 map-label、region-arrow 列为已知例外（见 KNOWN_EXCEPTIONS）。
  * 用法：node tools/test-design-tokens.mjs
  */
 import fs from 'node:fs';
@@ -103,6 +111,48 @@ for (const t of targets) {
 }
 ok(styleCount === 1, '模板只有一个 <style> 块（守卫按单块扫描）');
 
+/* 颜色名：CSS 颜色类属性的取值、SVG 的 fill= / stroke= 属性、src/tokens.css 的令牌取值里都不许出现。
+   先抹掉 var(--x) / --x 令牌名、url(…)、引号内字符串，再按整词找 CSS 具名颜色（令牌 --red / --blue 不会误报） */
+const NAMED_COLORS = ('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown '
+  + 'burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray '
+  + 'darkgreen darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue '
+  + 'darkslategray darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite '
+  + 'forestgreen fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory '
+  + 'khaki lavender lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen '
+  + 'lightgrey lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime '
+  + 'limegreen linen magenta maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue '
+  + 'mediumspringgreen mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive '
+  + 'olivedrab orange orangered orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum '
+  + 'powderblue purple rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue '
+  + 'slateblue slategray slategrey snow springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke '
+  + 'yellow yellowgreen').split(' ');
+const NAMED_RE = new RegExp(`(?<![\\w-])(${NAMED_COLORS.join('|')})(?![\\w-])`, 'i');
+const COLOR_PROP_RE = /(?<![\w-])(color|background(?:-color|-image)?|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?(?:-color)?|outline(?:-color)?|fill|stroke|box-shadow|text-shadow|text-decoration(?:-color)?|accent-color|caret-color|column-rule(?:-color)?|stop-color|flood-color|lighting-color)\s*:\s*([^;{}"'`\n]*)/gi;
+const COLOR_ATTR_RE = /(?<![\w-])(fill|stroke|color|stop-color|flood-color)\s*=\s*\\?(["'])([^"'\\]*)\\?\2/gi;
+const valueNamed = (v) => {
+  const m = NAMED_RE.exec(v.replace(/var\(\s*--[\w-]+/g, ' ').replace(/--[\w-]+/g, ' ').replace(/url\([^)]*\)/g, ' ').replace(/(["'])[^"']*\1/g, ' '));
+  return m && m[1];
+};
+const nameHits = [];
+for (const t of targets) {
+  for (const m of t.scan.matchAll(COLOR_PROP_RE)) { const n = valueNamed(m[2]); if (n) nameHits.push(`      ${t.file}:${lineOf(t.text, m.index)}　${m[1]}:${m[2].trim().slice(0, 40)}（${n}）`); }
+  for (const m of t.scan.matchAll(COLOR_ATTR_RE)) { const n = valueNamed(m[3]); if (n) nameHits.push(`      ${t.file}:${lineOf(t.text, m.index)}　${m[1]}="${m[3]}"（${n}）`); }
+}
+const tokRaw = stripDataUri(stripCssComments(tokensCss));
+for (const m of tokRaw.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) { const n = valueNamed(m[2]); if (n) nameHits.push(`      src/tokens.css:${lineOf(tokensCss, m.index)}　${m[1]}（${n}）`); }
+ok(nameHits.length === 0, '颜色类属性与令牌取值不用颜色名（transparent / currentColor / inherit / none 除外）', [...new Set(nameHits)].slice(0, 20).join('\n'));
+
+/* data: URI 里写死的十六进制色（%23 即 #）：只警告，列出位置 */
+const uriHits = [];
+for (const { file, text } of [{ file: 'src/template.html', text: tpl }, ...jsFiles]) {
+  const s = file.endsWith('.js') ? stripJsComments(text) : stripHtmlComments(stripCssComments(text));
+  for (const u of s.matchAll(/(["'`])data:[\s\S]*?\1/g)) {
+    for (const h of u[0].matchAll(/%23(?:[0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-f])/gi)) uriHits.push(`${file}:${lineOf(text, u.index + h.index)} ${h[0]}`);
+  }
+}
+if (uriHits.length) warns.push(`data: URI 里写死了 ${uriHits.length} 处十六进制色（改成绘制时用 tokenColor() 取令牌）：${uriHits.join('；')}`);
+console.log(`  ${uriHits.length ? '⚠' : '✅'} data: URI 写死的十六进制色 ${uriHits.length} 处（警告，不失败）`);
+
 /* ================= 二、令牌定义与引用 ================= */
 console.log('\n══ 二、令牌定义与引用 ══');
 const tokScan = stripCssComments(tokensCss);
@@ -185,13 +235,15 @@ for (const t of targets) {
 ok(radHits.length === 0, '单值圆角全部使用令牌（--r / --radius-*）', radHits.join('\n'));
 
 /* ================= 五、主题覆盖块：完整性 ================= */
-console.log('\n══ 五、主题覆盖块：深色主题覆盖全部颜色令牌 ══');
+console.log('\n══ 五、主题覆盖块：主题清单、完整性、system-bar、url() 引号 ══');
 /** 解析一个选择器块里的「--名字: 值;」（值里可能含 url("data:…")，不含分号与花括号） */
 const parseDecls = (body) => Object.fromEntries([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
 const rootTokens = parseDecls(rootBody);
 const themeBlocks = Object.fromEntries([...tokScan.matchAll(/\[data-theme="([\w-]+)"\]\s*\{([^}]*)\}/g)].map((m) => [m[1], { decls: parseDecls(m[2]), body: m[2] }]));
-const THEMES = ['clear', 'clear-dark', 'tech'];
-ok(Object.keys(themeBlocks).sort().join() === 'clear-dark,tech', `主题覆盖块恰为 clear-dark / tech（实际：${Object.keys(themeBlocks).join(' / ') || '无'}；clear 即 :root）`);
+/* 主题清单从 src/tokens.css 推导：clear 即 :root，其余每个 [data-theme="…"] 覆盖块一套。
+   新增主题只要加了覆盖块，下面的完整性、system-bar、对比度检查自动纳入，不用改这里。 */
+const THEMES = ['clear', ...Object.keys(themeBlocks).filter((t) => t !== 'clear')];
+ok(THEMES.length >= 2 && !('clear' in themeBlocks), `主题清单（由 [data-theme] 覆盖块推导）：${THEMES.join(' / ')}；clear 即 :root，不另写覆盖块`);
 // 「颜色令牌」= :root 里取值含颜色字面值的令牌（含阴影、焦点环、下拉箭头 data: URI）；别名（var(--x)）随被引用者变化，不要求重写
 const HAS_COLOR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?)\s*\(|%23[0-9a-f]{6}/i;
 const colorTokens = Object.keys(rootTokens).filter((k) => HAS_COLOR.test(rootTokens[k]));
@@ -199,8 +251,38 @@ for (const th of THEMES.slice(1)) {
   const blk = themeBlocks[th] || { decls: {}, body: '' };
   const miss = colorTokens.filter((k) => !(k in blk.decls));
   ok(miss.length === 0, `${th}：${colorTokens.length} 个颜色令牌全部有值`, '      缺：' + miss.join(' '));
-  ok(/color-scheme\s*:\s*dark/.test(blk.body), `${th}：声明 color-scheme:dark（原生控件、滚动条随之变深）`);
+  ok(/color-scheme\s*:\s*(dark|light)\b/.test(blk.body), `${th}：声明 color-scheme（原生控件、滚动条随主题明暗变化）`);
 }
+// 新增主题的其余改动面（规范 §2.2）：主题名要出现在 ui/theme.js 的主题解析、<head> 内联脚本，且 ui-shots 主题表恰好覆盖全部主题
+const themeJs = rd('src/app/ui/theme.js'), shotsJs = rd('tools/ui-shots.mjs'), headScript = tpl.slice(0, styleOpen);
+for (const th of THEMES) {
+  const q = new RegExp(`['"]${th}['"]`);
+  const miss = [['src/app/ui/theme.js', themeJs], ['<head> 内联脚本', headScript]].filter(([, src]) => !q.test(src)).map(([n]) => n);
+  ok(miss.length === 0, `主题 ${th}：ui/theme.js 与 <head> 内联脚本都认得`, '      缺：' + miss.join('、'));
+}
+const shotsTbl = /const THEME_PREFS = \{([^;]*)\};/.exec(shotsJs);
+const shotThemes = shotsTbl ? [...shotsTbl[1].matchAll(/(?:^|[{,])\s*'?([\w-]+)'?\s*:\s*\{/g)].map((m) => m[1]) : [];
+ok(shotThemes.slice().sort().join() === THEMES.slice().sort().join(), `tools/ui-shots.mjs 的主题表与主题清单一致（${shotThemes.join(' / ') || '没找到 THEME_PREFS'}）`);
+// --system-bar：<meta name="theme-color"> 与安卓壳 IPRouteShell.setSystemBars 只认不透明的 #RRGGBB
+for (const th of THEMES) {
+  let v = '';
+  try { v = themeValue(th, '--system-bar'); } catch (e) { v = e.message; }
+  ok(/^#[0-9a-f]{6}$/i.test(v), `${th}：--system-bar 是 #RRGGBB（${v}）`);
+}
+/** CSS 里不带引号的 url(：跳过注释与引号内字符串逐字扫描，返回行号。与 tools/build.mjs 的构建期断言同一规则 */
+function unquotedUrls(css) {
+  const out = [];
+  for (let i = 0; i < css.length;) {
+    const c = css[i];
+    if (c === '/' && css[i + 1] === '*') { const e = css.indexOf('*/', i + 2); i = e < 0 ? css.length : e + 2; continue; }
+    if (c === '"' || c === "'") { let j = i + 1; while (j < css.length && css[j] !== c) j += css[j] === '\\' ? 2 : 1; i = j + 1; continue; }
+    if (/^url\(/i.test(css.slice(i, i + 4)) && !/[\w-]/.test(css[i - 1] || '')) { if (!/["']/.test(css[i + 4] || '')) out.push(lineOf(css, i)); i += 4; continue; }
+    i++;
+  }
+  return out;
+}
+const bareUrls = unquotedUrls(tokensCss);
+ok(bareUrls.length === 0, 'src/tokens.css 的 url( 后面都紧跟引号（构建去注释只放过引号内的字符串）', '      行：' + bareUrls.join('、'));
 
 /* ================= 六、主题对比度（WCAG 2.x） ================= */
 console.log('\n══ 六、主题对比度：文字 ≥4.5:1，非文字 ≥3:1 ══');
@@ -249,11 +331,20 @@ const PAIRS = [
   ['--teal', '--region-bg', TEXT],
   ['--field-border', '--field-bg', UI], ['--blue', '--field-bg', UI],   // 非文字：输入框边框、聚焦边框
   ['--map-label', '--map-ground', UI],
+  ['--ink3', '--blue-bg', TEXT],               // 选中卡 / 结果块里的单位与提示
+  ['--red', '--card', TEXT],                   // 超限提示、越限标记直接写在卡片上
+  ['--map-label-on', '--map-ground', TEXT],    // 拓扑图：路线上的省名、段名
+  ['--on-fill', '--map-route', TEXT],          // 拓扑图：选中路线上的段序号（实色圆底上的字）
+  ['--map-end', '--map-ground', UI],           // 拓扑图：起止省节点、换流站圆点与站名
+  ['--region-arrow', '--region-bg', UI],       // 区域共用网络卡里「接入 ↔ 网架 ↔ 交付」的箭头字形
 ];
-/* 已知例外：清晰浅色的网架图非路线省名 #9A9A95 在画布 #F7F8FA 上只有 2.66:1——源码原值，
-   刻意弱化（路线外省份只作方位参照，路线上的省名用 --map-label-on、对比度充足）。清晰浅色外观不改，列为例外；
-   深色两套主题不享受此例外，须 ≥3:1。 */
-const KNOWN_EXCEPTIONS = { clear: ['--map-label/--map-ground'] };
+/* 已知例外（只限清晰浅色，都是源码原值；清晰浅色外观不改，其它主题不享受例外）：
+   · --map-label/--map-ground：网架图非路线省名 #9A9A95 在画布 #F7F8FA 上 2.66:1，刻意弱化——
+     路线外省份只作方位参照，路线上的省名用 --map-label-on、对比度充足；
+   · --region-arrow/--region-bg：区域共用网络卡里的 ↔ 箭头 #5E9E90 在 #F5FAF8 上 2.94:1，是字形不是文字，
+     两侧的区域名与网架名本身对比度充足，箭头只示意方向。 */
+const KNOWN_EXCEPTIONS = { clear: ['--map-label/--map-ground', '--region-arrow/--region-bg'] };
+const table = {};
 for (const th of THEMES) {
   const rows = [];
   for (const [f, b, min] of PAIRS) {
@@ -267,6 +358,14 @@ for (const th of THEMES) {
   const ex = rows.filter((x) => x.exempt).map((x) => `${x.key} ${x.r.toFixed(2)}（已知例外）`).join('，');
   ok(bad.length === 0, `${th}：对比度 ${rows.length} 对（文字 ≥4.5、非文字 ≥3）；最低 ${low}${ex ? '；' + ex : ''}`,
     bad.map((x) => `      ${x.key} ${x.err || x.r.toFixed(2) + ' < ' + x.min}`).join('\n'));
+  table[th] = rows;
+}
+// --table：逐对打印各主题的对比度（查看余量、写报告用）
+if (process.argv.includes('--table')) {
+  console.log(`\n  对比度明细（${THEMES.join(' / ')}）`);
+  PAIRS.forEach(([f, b, min], i) => console.log(`  ${(f + ' / ' + b).padEnd(34)} ≥${min}　` + THEMES.map((th) => {
+    const x = table[th][i]; return x.err ? '错误' : x.r.toFixed(2) + (x.exempt ? '（例外）' : x.r < min ? '（不达标）' : '');
+  }).join('　')));
 }
 
 /* ---------- 汇总 ---------- */

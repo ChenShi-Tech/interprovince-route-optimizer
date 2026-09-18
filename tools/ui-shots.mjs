@@ -123,7 +123,8 @@ for (let i = 0; i < args.length; i++) {
   else if (!args[i].startsWith('--')) outDir = args[i];
 }
 if (args.includes('--theme') && !theme) { console.error('--theme 需要一个名字'); process.exit(2); }
-/* 主题 id → 外观偏好（与 src/app/ui/theme.js 的 resolveTheme 对应） */
+/* 主题 id → 外观偏好（与 src/app/ui/theme.js 的 resolveTheme 对应）。新增主题要加在这里：
+   tools/test-design-tokens.mjs 核对这张表恰好覆盖 src/tokens.css 推导出的全部主题 */
 const THEME_PREFS = { clear: { style: 'clear', mode: 'light' }, 'clear-dark': { style: 'clear', mode: 'dark' }, tech: { style: 'tech', mode: 'system' } };
 if (theme && !THEME_PREFS[theme]) { console.error(`未知主题 ${theme}（可选：${Object.keys(THEME_PREFS).join(' / ')}）`); process.exit(2); }
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
