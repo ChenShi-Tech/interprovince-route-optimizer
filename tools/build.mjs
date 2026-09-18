@@ -463,10 +463,28 @@ function assertNoReplaceDollar(s, label){
   if (m) failFast(`注入串 ${label} 含替换模式 ${JSON.stringify(m[0])}（String.replace 会改写它）；` +
     '请在数据/源码中改写该序列或为替换实现转义（$ → $$）后再构建');
 }
-// 设计令牌（src/tokens.css）：注入模板 <style> 开头的 /*__TOKENS__*/ 占位行
+// 设计令牌（src/tokens.css）：注入模板 <style> 开头的 /*__TOKENS__*/ 占位行。
+// 注入前去掉 /* */ 注释与由此留下的空行（源文件保留注释供查阅，产物不带，约省 10 KB）；
+// 引号内的字符串（url("data:…") 等）原样保留。tools/test-modules.mjs 用同一规则核对产物。
+function stripCssComments(css) {
+  let out = '', i = 0;
+  while (i < css.length) {
+    const c = css[i];
+    if (c === '"' || c === "'") {                       // 字符串：原样拷到配对的引号（含转义）
+      let j = i + 1;
+      while (j < css.length && css[j] !== c) j += css[j] === '\\' ? 2 : 1;
+      out += css.slice(i, j + 1); i = j + 1;
+    } else if (c === '/' && css[i + 1] === '*') {       // 注释：跳到 */
+      const end = css.indexOf('*/', i + 2);
+      i = end < 0 ? css.length : end + 2;
+    } else { out += c; i++; }
+  }
+  return out.split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim()).join('\n');
+}
 const tokensPath = path.join(root, 'src/tokens.css');
 if (!fs.existsSync(tokensPath)) failFast('缺少设计令牌文件 src/tokens.css');
-const tokensCss = fs.readFileSync(tokensPath, 'utf8').replace(/\r\n?/g, '\n').trim();
+const tokensCss = stripCssComments(fs.readFileSync(tokensPath, 'utf8').replace(/\r\n?/g, '\n')).trim();
+if (/\/\*|\*\//.test(tokensCss.replace(/(["'])(?:\\.|(?!\1).)*\1/g, ''))) failFast('src/tokens.css 去注释后仍残留 /* 或 */（注释未闭合？）');
 if (!/(^|\n):root\s*\{/.test(tokensCss)) failFast('src/tokens.css 中没有 :root{…} 令牌块');
 if (/<\/style/i.test(tokensCss)) failFast('src/tokens.css 含 </style>，注入后会提前闭合样式块');
 if (/\/\*__(TOKENS|DATA|APP)__\*\//.test(tokensCss)) failFast('src/tokens.css 含注入占位符字面量，会与模板占位符混淆');

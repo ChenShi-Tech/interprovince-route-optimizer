@@ -62,9 +62,21 @@ ok(!html.includes('/*__APP__*/'), '占位符 __APP__ 已被替换');
 ok(!html.includes('/*__DATA__*/'), '占位符 __DATA__ 已被替换');
 ok(!html.includes('/*__TOKENS__*/'), '占位符 __TOKENS__ 已被替换');
 {
-  const tokensCss = fs.readFileSync(path.join(root, 'src/tokens.css'), 'utf8').replace(/\r\n?/g, '\n').trim();
+  // 构建注入前去掉 /* */ 注释与空行（tools/build.mjs 的 stripCssComments，引号内原样保留）；这里按同一规则还原期望值
+  const stripCssComments = (css) => {
+    let out = '', i = 0;
+    while (i < css.length) {
+      const c = css[i];
+      if (c === '"' || c === "'") { let j = i + 1; while (j < css.length && css[j] !== c) j += css[j] === '\\' ? 2 : 1; out += css.slice(i, j + 1); i = j + 1; }
+      else if (c === '/' && css[i + 1] === '*') { const end = css.indexOf('*/', i + 2); i = end < 0 ? css.length : end + 2; }
+      else { out += c; i++; }
+    }
+    return out.split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim()).join('\n');
+  };
+  const tokensCss = stripCssComments(fs.readFileSync(path.join(root, 'src/tokens.css'), 'utf8').replace(/\r\n?/g, '\n')).trim();
   const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
-  ok(style.split(tokensCss).length - 1 === 1, 'src/tokens.css 原样内联在 <style> 中且只出现 1 次');
+  ok(style.split(tokensCss).length - 1 === 1, 'src/tokens.css（去注释后）原样内联在 <style> 中且只出现 1 次');
+  ok(!/\/\*\s*=+\s*设计令牌/.test(style), '内联的设计令牌不带源文件注释');
 }
 const marks = APP_FILES.map((f) => ({ f, at: html.indexOf(`/* ===== ${f} ===== */`) }));
 ok(marks.every((m) => m.at >= 0), `全部 ${APP_FILES.length} 个模块都已内联`,
