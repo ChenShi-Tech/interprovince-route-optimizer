@@ -552,7 +552,17 @@ console.log('══ 十三、选到无可行方案的通道后可回退 ══')
 console.log('══ 十四、受端到户：电网主体 × 电压档 × 计价方式，容需量与系统运行费，送端专属送出价 ══');
 {
   const VT = G('DATA.VT'), SRCX = G('DATA.SRCX');
-  ok(VT && Object.keys(VT).filter((k) => k[0] !== '_').length === 30 && SRCX, '构建载荷含受端分电压输配电价（30 省）与送端电站专属送出价');
+  {
+    // VT 的省集合必须与省级参数（PV）一致：2026-09-17 海南补录、2026-09-18 D1 复核后为 31 省。
+    // 不写死人数快照，改为集合相等并逐省列出缺项，下次补省不会再让断言过期、也不会漏检。
+    const vtKeys = Object.keys(VT || {}).filter((k) => k[0] !== '_');
+    const pvKeys = Object.keys(G('PV'));
+    const miss = pvKeys.filter((k) => !vtKeys.includes(k));
+    const extra = vtKeys.filter((k) => !pvKeys.includes(k));
+    ok(VT && miss.length === 0 && extra.length === 0 && SRCX,
+      `构建载荷含受端分电压输配电价（${vtKeys.length} 省，与省级参数省份集合一致）与送端电站专属送出价`,
+      `字段 VT：缺 ${miss.join(',') || '无'}；多出 ${extra.join(',') || '无'}`);
+  }
   const inp = () => G('solveInput()');
   G("Object.assign(state,PARAM_DEFAULTS);state.from='SX';state.to='HE';state.mustHave=[];state.sel=0;state.showBad=true;state.includeDstCost=true;state.pGenManual=false;applyBothProv();state._res=solveState();renderCalc();"); syncDom();
   // 默认：河北南网 · 220千伏及以上 · 两部制 = 原默认输配电价

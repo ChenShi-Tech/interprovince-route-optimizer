@@ -19,7 +19,10 @@
  *   sortBy, showBad     排序口径（A/B/C）/ 是否显示越限方案
  *   mustHave            必经通道 id 数组（「通道组件」筛选），空数组或缺失 = 不筛选
  *   以下均为可选，缺省时与旧口径完全一致：
- *   dstInLossPct        受端省内上网环节线损率 %（按所选受端电网主体，覆盖省默认值）
+ *   dstInLossPct        受端省内上网环节线损率 %（按所选受端电网主体，覆盖省默认值）；另计线损费用
+ *   dstQtyLossPct       可选：仅用于终端电量折算的受端上网环节线损率 %。受端主体电价已含线损费用时
+ *                       （如深圳，1077号附件1 第22页注2）使用：终端电量按 (1-ρ) 折算，但不另计线损费用。
+ *                       缺省（不传）时行为与旧口径完全一致（不折算、不另计）。
  *   dstBilling          受端计价方式 'single' | 'twopart'（只用于缺项提示，输配电价仍由 pNet 传入）
  *   dstCapFee           两部制容（需）量电费分摊 元/到户MWh（用户负荷假设下的估算）
  *   dstSysOpFee         系统运行费 元/到户MWh（手填；null = 缺项）
@@ -32,6 +35,7 @@
  */
 const ENUM_CAP = 800;   // 枚举上限：防止组合爆炸，同时保证低成本方案优先生成
 const MAX_HOPS = 10;    // 跳数硬上限：界面固定取此值，不再提供选项（2026-09-17 全省对实测未触发 ENUM_CAP）
+const PROBE_CAP = 16;   // 单通道可达性探测的取数上限：只用于补全候选集/通道清单，远小于主枚举上限
 
 function solve(input, data){
   if(input.marketMode && input.marketMode!=='mlt') return {err:'省间现货入口待拓展，当前仅提供中长期交付成本与报价测算'};
@@ -55,7 +59,8 @@ function solve(input, data){
     sourceQuote: input.sourceQuote || 'plant', originLossMode: input.originLossMode || 'included',
     regionLossMode:input.regionLossMode||'exclude', regionLossRates:input.regionLossRates||{},
     occPct: Math.min(90, Math.max(0, +input.occPct || 0)),   // REQ-302：中长期占用 %
-    dstInLossPct: input.dstInLossPct ?? null, dstCapFee: input.dstCapFee ?? 0, dstSysOpFee: input.dstSysOpFee ?? null,
+    dstInLossPct: input.dstInLossPct ?? null, dstQtyLossPct: input.dstQtyLossPct ?? null,
+    dstCapFee: input.dstCapFee ?? 0, dstSysOpFee: input.dstSysOpFee ?? null,
     srcSendFee: input.srcSendFee ?? null, srcExportLossPct: input.srcExportLossPct ?? null,
   };
   const { from, to } = input;
@@ -74,7 +79,7 @@ function solve(input, data){
     if(input[k]!=null && !Number.isFinite(input[k])) return {err:'参数 '+k+' 必须为有限数值'};
   }
   const hasDst = input.pDst!=null;
-  for(const k of ['dstInLossPct','srcExportLossPct']){
+  for(const k of ['dstInLossPct','dstQtyLossPct','srcExportLossPct']){
     if(input[k]!=null && (!Number.isFinite(input[k])||input[k]<0||input[k]>=100)) return {err:'参数 '+k+' 须为 0（含）到 100（不含）之间的百分数'};
   }
   for(const k of ['dstCapFee','dstSysOpFee','srcSendFee']){
@@ -112,10 +117,12 @@ function solve(input, data){
   const weightOf = (nb,u)=>approxW(env, nb.e, u, nb.to);
   const raw = [], seenPath = new Set();
   let hitCap = false;
-  for(let h=1; h<=maxHops && raw.length<ENUM_CAP; h++){
+  for(let h=1; h<=maxHops; h++){
+    // 累计候选已达上限：后续层不再枚举——同样是「提前截断」，只退出不置位会让 truncated 出现假阴性（M3）
+    if(raw.length>=ENUM_CAP){ hitCap = true; break; }
     const part = enumPaths(adj, from, to, h, ENUM_CAP, weightOf);
     for(const p of part){
-      const k = p.nodes.join('>')+'#'+p.edges.map(e=>e.id).join(',');
+      const k = pathKeyOf(p);
       if(!seenPath.has(k)){ seenPath.add(k); raw.push(p); }
     }
     if(part.hitCap){ hitCap = true; break; }
@@ -123,11 +130,30 @@ function solve(input, data){
   if(!raw.length){
     return {err:'在 '+maxHops+' 段以内没有 '+N(from)+' 到 '+N(to)+' 的连通路径', pendingChannels};
   }
-  const truncated = hitCap;   // REQ-601：enumPaths 因 cap 提前返回时置位，消除「恰好满 800」歧义
+  const truncated = hitCap;   // REQ-601：枚举因 cap 提前返回（或在 cap 处停层）时置位
 
   const maxDetour = input.maxDetour;
-  const kept = maxDetour==null ? raw : raw.filter(p=>detourOf(p.nodes, p.edges, env.geo) <= maxDetour);
+  const keepPath = p => maxDetour==null || detourOf(p.nodes, p.edges, env.geo) <= maxDetour;
+  const kept = raw.filter(keepPath);
   if(!kept.length) return {err:'绕行度上限把所有候选都筛掉了，请放宽绕行度上限'};
+
+  // H1：主枚举被截断时，候选集里可能整条通道都不出现（availChannels 缺失、mustHave 筛成空）。
+  // 对「还没出现过、且跳数上允许经过」的通道做一次单通道浅层枚举，把找到的路径并回候选集：
+  // 这样候选清单、下拉最低价与筛选结果都与完整候选集一致，且不抬高 ENUM_CAP（只按通道定向补录）。
+  if(truncated){
+    const covered = new Set();
+    for(const p of kept) for(const e of p.edges) covered.add(e.id);
+    const dOut = hopDist(adj, from, maxHops, false), dIn = hopDist(adj, to, maxHops, true);
+    for(const c of CHpool){
+      if(covered.has(c.id) || !channelCouldFit(c, dOut, dIn, maxHops)) continue;
+      const part = enumPathsMust(adj, from, to, maxHops, maxDetour==null?PROBE_CAP:PROBE_CAP*8, weightOf, [c.id]);
+      for(const p of part){
+        if(!keepPath(p)) continue;
+        const k = pathKeyOf(p);
+        if(!seenPath.has(k)){ seenPath.add(k); kept.push(p); }
+      }
+    }
+  }
 
   // 「通道组件」候选集：取自绕行度筛选后的**完整候选**，不能用最终 rows。
   // 否则用户选中某组件后其余组件会从选择器里消失、再也点不回来。
@@ -137,9 +163,19 @@ function solve(input, data){
   // 旧存档里的组件 id 可能已不存在，先按当前通道表过滤，避免筛出空结果。
   const validIds = new Set(data.CH.map(c=>c.id));
   const mustHave = (input.mustHave||[]).filter(id=>validIds.has(id));
-  const picked = mustHave.length
+  let picked = mustHave.length
     ? kept.filter(p=>mustHave.every(id=>p.edges.some(e=>e.id===id)))
     : kept;
+  // H1：主枚举截断时，候选集只补录了每个通道的少量路径（PROBE_CAP）。用户明确选中组件时改用
+  // 「约束枚举」单独求全部经过它的路径（上限同主枚举），使筛选结果与完整枚举一致，不再返回假阴性。
+  if(mustHave.length && truncated){
+    const seen = new Set(picked.map(pathKeyOf));
+    for(const p of enumPathsMust(adj, from, to, maxHops, ENUM_CAP, weightOf, mustHave)){
+      if(!keepPath(p)) continue;
+      const k = pathKeyOf(p);
+      if(!seen.has(k)){ seen.add(k); picked.push(p); }
+    }
+  }
   if(!picked.length){
     return {err:'没有任何方案同时包含所选的 '+mustHave.length+' 个通道组件，请减少组件',
       availChannels, mustHave, totalAll:kept.length, pendingChannels};
@@ -153,11 +189,11 @@ function solve(input, data){
       if(tok[0]!=='R' || parts[parts.length-1]!==tok) parts.push(tok);
     }); return parts.join('|'); };
   const rowsAll = picked.map(p=>{
-    const r=evalPath(p,ctx,env);
+    const r=applyDstQtyLoss(evalPath(p,ctx,env), ctx);
     r.pricingIssues=pricingIssues(r,input,data,date);
     r.priceComplete=r.pricingIssues.length===0;
     r.regionScenarios=['exclude','historical'].map(mode=>{
-      const x=ctx.regionLossMode===mode?r:evalPath(p,{...ctx,regionLossMode:mode},env);
+      const x=ctx.regionLossMode===mode?r:applyDstQtyLoss(evalPath(p,{...ctx,regionLossMode:mode},env), ctx);
       return {mode,border:x.border,landed:x.landed,D:x.D,amount:x.yuan.total,
         regions:x.regionItems.map(v=>({region:v.region,pct:v.pct,status:v.status})),
         complete:false};
@@ -206,6 +242,81 @@ function solve(input, data){
   }
   return {rows:shown,byA,byB,byC,bestA,bestB,bestC,n:shown.length,total,feasibleCount,truncated,
     availChannels,mustHave,totalAll:kept.length,pendingChannels,channelBest};
+}
+
+/** 路径唯一键：节点序列 + 边序列。不能用边对象的 from/to（反向通行的联络线存储方向与行进方向相反）。 */
+function pathKeyOf(p){ return p.nodes.join('>')+'#'+p.edges.map(e=>e.id).join(','); }
+
+/** 受端电价已含上网环节线损费用时的终端电量折算（M10）。
+ *  这类主体（深圳：1077号附件1 第22页注2「各电价含…上网环节线损费用」）线损率只用于把省间节点交付电量
+ *  折算成终端用电量，不另计线损费用。cost.js 的 amountQty/金额按 dstInLossPct 计算，这里按 dstQtyLossPct
+ *  改基数并等比重算金额；landed 与各 comp 单价不变，避免与「电价已含线损」重复计费。
+ *  缺省（不传 dstQtyLossPct）时不进入本函数，旧口径完全不变。 */
+function applyDstQtyLoss(r, ctx){
+  if(ctx.dstQtyLossPct==null || ctx.includeDstCost===false) return r;
+  const consumerQty=ctx.qty*(1-ctx.dstQtyLossPct/100);
+  if(!(r.amountQty>0) || !(consumerQty>0)) return r;
+  const k=consumerQty/r.amountQty;
+  r.consumerQty=consumerQty; r.amountQty=consumerQty;
+  for(const key of Object.keys(r.yuan)) r.yuan[key]*=k;
+  return r;
+}
+
+/** 从 start 出发（reverse=true 时沿反向图）不超过 maxHops 跳可达的省 → 最小跳数。
+ *  仅用于通道探测的廉价剪枝：最小跳数和已超过 maxHops 的通道不必再跑枚举。 */
+function hopDist(adj, start, maxHops, reverse){
+  const g={};
+  if(reverse){ for(const u in adj) for(const nb of adj[u]) (g[nb.to]||(g[nb.to]=[])).push(u); }
+  else for(const u in adj) g[u]=adj[u].map(nb=>nb.to);
+  const d={}, q=[start];
+  d[start]=0;
+  for(let i=0;i<q.length;i++){
+    const u=q[i];
+    if(d[u]>=maxHops) continue;
+    for(const v of g[u]||[]) if(d[v]==null){ d[v]=d[u]+1; q.push(v); }
+  }
+  return d;
+}
+
+/** 通道 c 在跳数上是否可能出现在某条 src→dst 路径里（必要非充分：两段最短路的节点可能重叠）。
+ *  只用于过滤明显不可能经过的通道，避免为它们做无谓的枚举。 */
+function channelCouldFit(c, dOut, dIn, maxHops){
+  const dirs = c.bidir ? [[c.from,c.to],[c.to,c.from]] : [[c.from,c.to]];
+  return dirs.some(([u,v])=> dOut[u]!=null && dIn[v]!=null && dOut[u]+1+dIn[v]<=maxHops);
+}
+
+/** 带「必经通道」约束的路径枚举：规则与 enumPaths 一致（简单路径、跳数上限、originOnly 仅首段），
+ *  额外要求路径覆盖 requiredIds 中每一条通道（不区分行进方向，方向由 bidir 决定）。
+ *  与 enumPaths 解耦，使通道筛选不受主枚举截断影响（H1）。 */
+function enumPathsMust(adj, src, dst, maxHops, cap, weightOf, requiredIds){
+  const need=new Set(requiredIds), got=new Set();
+  const out=[], nodes=[src], edges=[], visited=new Set([src]);
+  let hitCap=false;
+  const ord={};
+  for(const k in adj) ord[k]=adj[k].slice().sort((a,b)=>weightOf(a,k)-weightOf(b,k));
+  (function dfs(u){
+    if(hitCap) return;
+    if(u===dst){
+      if(got.size!==need.size) return;
+      if(out.length===cap){ hitCap=true; return; }
+      out.push({nodes:nodes.slice(),edges:edges.slice()});
+      return;
+    }
+    if(edges.length>=maxHops) return;
+    for(const nb of ord[u]||[]){
+      if(visited.has(nb.to)) continue;
+      if(nb.e.originOnly && u!==src) continue;
+      const add = need.has(nb.e.id) && !got.has(nb.e.id);
+      if(add) got.add(nb.e.id);
+      visited.add(nb.to); nodes.push(nb.to); edges.push(nb.e);
+      dfs(nb.to);
+      edges.pop(); nodes.pop(); visited.delete(nb.to);
+      if(add) got.delete(nb.e.id);
+      if(hitCap) return;
+    }
+  })(src);
+  out.hitCap=hitCap;
+  return out;
 }
 
 /** 「通道组件」选择器的候选清单：候选路径里出现过的通道，每条只列一项。
@@ -272,6 +383,7 @@ function pricingIssues(r,input,data,date){
     const inLoss=input.dstInLossPct ?? data.PV[input.to].inLoss;
     if(data.PV[input.to].fund==null) issues.push('受端基金及附加核定标准待补；手填值仅为测算输入。');
     if(inLoss==null) issues.push('受端上网环节线损未获取，当前未计此项。');
+    if(input.dstQtyLossPct!=null) issues.push('受端电网主体电价已含上网环节线损费用：终端电量按 '+input.dstQtyLossPct+'% 折算，不另计线损费用（1077号附件1 注2、注3）。');
     if(input.dstBilling==='twopart' && !(input.dstCapFee>0)) issues.push('受端按两部制计价，未含容量/需量电费，到户价偏低。');
     if(input.dstCapFee>0) issues.push('容量/需量电费按用户负荷假设分摊为度电费用，属估算，实际按月度账单计收。');
     if(input.dstSysOpFee==null) issues.push('系统运行费未计入（按月变化，可手填）。');

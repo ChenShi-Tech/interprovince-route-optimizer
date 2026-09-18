@@ -143,14 +143,24 @@ function renderLib(){
   document.getElementById('v-lib').innerHTML=out;
   restoreDetails(_host,_snap);
 }
-function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); state._res=null;
+/* 费率库改动后立即重算一次（H6）：只把 state._res 置 null 而不重算，切回测算页时
+   renderCalc 会落入「请选择不同的出发地与目的地」空态——参数其实完好，用户以为省对失效，
+   通道下拉、选方案、敏感性与导出随之全部不可用。这里改价即按新费率重算，
+   回到测算页直接看到结果（真没路线时 solve() 自会返回错误提示，不再是误导性空态）。 */
+function recalcAfterLib(){
+  state._res=solveState();
+  const n=(state._res&&state._res.rows)?state._res.rows.length:0;
+  if(state.sel>=n) state.sel=0;              // 路线数变少时夹取选中项
+  saveLast();
+}
+function setCh(i,k,v){ CH[i][k]=(v===''?null:+v); saveLib(); recalcAfterLib();
   const b=document.getElementById('verBadge'); b.textContent='费率已本地修改'; b.style.background='var(--blue-bg)'; b.style.color='var(--blue-ink)'; }
-function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); state._res=null; }
+function setPv(k,f,v){ PV[k][f]=+v||0; saveLib(); recalcAfterLib(); }
 function exportLib(){ const b=new Blob([JSON.stringify({ch:CH,pv:PV,sec:SEC},null,2)],{type:'application/json'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='费率库-v2.json'; a.click(); }
 function resetLib(){
   uiConfirm('恢复检索原始值','恢复为检索原始值？本地修改将丢失。','恢复原始值','取消').then(ok=>{
     if(!ok) return;
-    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); state._res=null;
+    CH=DATA.CH.map(c=>({...c})); saveLib(); renderLib(); recalcAfterLib();
   });
 }
