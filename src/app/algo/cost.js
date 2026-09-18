@@ -201,3 +201,39 @@ function evalPath(path, ctx, env){
     capUnknown:edges.filter(e=>e.cap==null || e.capBasis==='unknown' || e.capBasis==='estimate').length,
     capEqUsed:edges.filter(e=>e.capEq!=null).length};
 }
+
+/* ---- 到户辅助纯函数（可选，不属于 solve() 输入契约；界面与原生端均可按需复用）---- */
+
+/** 两部制容（需）量电费按负荷假设折成元/MWh：月单价 × 12 ÷（8.76 × 负荷率）。
+ *  tier 是 1077号附件1 的档位对象（月单价取 容量电价/需量电价 之一），capMode: 'none'|'demand'|'capacity'。
+ *  返回 null 仅表示该档没有对应月单价（原表空白，界面显示「—」），与 0（不计入口径 / 负荷率未填）区分；
+ *  ui/calc.js 的 dstCapFee() 包装本函数并把 null 归一为 0，保持历史行为不变。 */
+function dstCapFeeOf(tier, capMode, loadFactorPct){
+  if(!tier || !capMode || capMode==='none') return 0;
+  const price=capMode==='capacity'?tier.容量电价:tier.需量电价;
+  if(price==null) return null;
+  const lf=+loadFactorPct;
+  if(!(lf>0&&lf<=100)) return 0;
+  return price*12/(8.76*lf/100);
+}
+
+/** 到户价分档对照表：主体 ent 全部「电压档 × 计价方式」组合，原表空白（null）的格子不列。
+ *  行序按数据顺序（低电压→高电压），每档先单一制后两部制。
+ *  curNet/curCap 是当前方案的受端输配电价与容（需）量单价（与 landed 同口径，受端电价已含线损的
+ *  主体经 applyDstQtyLoss 改写后同样成立）。到户价(行) = landed − curNet − curCap + 该行输配电价 + 该行容需量折算；
+ *  因此当输配电价未手改时，与当前所选档同行的 landed 与 r.landed 之差为 0（纯展示变换，不影响排序）。
+ *  单一制行不计容（需）量，cap 恒为 0；两部制行经 dstCapFeeOf 折算，无月单价时为 null。 */
+function dstTierTable(ent, landed, curNet, curCap, capMode, loadFactorPct){
+  const rows=[];
+  if(!ent || !Array.isArray(ent.档位)) return rows;
+  const base=+landed-+(curNet||0)-+(curCap||0);
+  for(const t of ent.档位){
+    for(const billing of ['single','twopart']){
+      const net=t[billing==='single'?'单一制':'两部制'];
+      if(net==null) continue;
+      const cap=billing==='twopart'?dstCapFeeOf(t, capMode, loadFactorPct):0;
+      rows.push({档别:t.档别, billing, net, cap, landed:base+net+(cap||0)});
+    }
+  }
+  return rows;
+}

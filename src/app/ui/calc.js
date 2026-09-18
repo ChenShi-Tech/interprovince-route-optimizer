@@ -105,7 +105,7 @@ function renderCalc(){
     <p class="note"><b>区域网损</b>：默认「第三周期参考值」——长三角跨省中长期实施细则（2026）第三十六条规定落地侧价格含华东跨省输电网损，上网价格 =（落地侧成交价 − 华东跨省输电价格）×（1 − 华东跨省输电网损率）− 送出省外送输电价格。参考值为 ${Object.entries(DATA.RLOSS||{}).map(([k,v])=>esc(k)+' '+v.historicalPct+'%').join('、')}，来自国网第三监管周期历史公开表（转载来源），尚未确认适用于第四监管周期；「不计入」为缺项基准，不代表已核定为 0；「手填」为待核实假设。区域共用交流接口不再逐段计损。</p>
     <p class="note"><b>费用去重</b>：起点送出省费只计一次；报价已含则不再加。过境交流接口不单独收费，也不按每条抽象接口重复计损；独立专项工程按自身输电价与损耗口径。已含损耗的核价项目不再追加计费损耗。</p>
     <p class="note"><b>网损与合同约定</b>：默认买方承担跨省计费网损，可模拟双方分担。送端省内网损由报价边界选择是否另计，另计时以送端报价估算购损成本；实际合同、交易方案优先。现货规则中的卖方承担约定不自动套用于中长期。</p>
-    <p class="note"><b>自动带入值</b>：受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端报价未手填时随省份带入演示参考值，手填后保留。以上均可手动覆盖，点「恢复」还原核定值。送端报价是可修改的演示假设，不是实时市场报价；省级输配电价默认高压两部制，实际须匹配电网主体、用户类别与电压档。</p>
+    <p class="note"><b>自动带入值</b>：受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端报价未手填时随省份带入演示参考值，手填后保留。以上均可手动覆盖，点「恢复」还原核定值。送端报价是可修改的演示假设，不是实时市场报价；省级输配电价默认高压两部制，实际须匹配电网主体、用户类别与电压档，完整明细中可查看该主体各电压档的到户价对照。</p>
     <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
     </div></details>
   </div>`;
@@ -203,12 +203,18 @@ function dstAutoNet(){
 }
 /* 受端省基金及附加的核定值；官方未获取（西藏）时为 null，界面按缺项处理，不静默按 0。 */
 function dstAutoFund(){ const t=PV[state.to]; return (t&&t.fund!=null)?t.fund:null; }
-/* 两部制容（需）量电费按用户负荷假设折成度电：月单价 × 12 ÷（8760 h × 负荷率）→ 元/MWh。负荷率未填则不计。 */
+/* 两部制容（需）量电费按用户负荷假设折成度电：月单价 × 12 ÷（8760 h × 负荷率）→ 元/MWh。负荷率未填则不计。
+   折算公式在 algo/cost.js 的 dstCapFeeOf()（纯函数，供对照表复用）；这里按历史口径把「月单价为 null」
+   归一为 0（缺项主体如该档原表空白，照旧不计，不参与展示判断）。 */
 function dstCapFee(vt){
-  if(!vt||!vt.tier||vt.billing!=='twopart'||!state.dstCapMode||state.dstCapMode==='none') return 0;
-  const lf=+state.dstLoadFactor, price=state.dstCapMode==='capacity'?vt.tier.容量电价:vt.tier.需量电价;
-  if(!(lf>0&&lf<=100)||price==null) return 0;
-  return price*12/(8.76*lf/100);
+  if(!vt||!vt.tier||vt.billing!=='twopart') return 0;
+  const v=dstCapFeeOf(vt.tier, state.dstCapMode, state.dstLoadFactor);
+  return v==null?0:v;
+}
+/* 到户价分档对照的行数据：dstTierTable（纯函数）+ 当前方案与容（需）量口径，界面与导出报告共用同一份。 */
+function dstTierRows(r){
+  const vt=dstTariff();
+  return dstTierTable(vt.ent, r.landed, r.comp.net, r.comp.cap, state.dstCapMode, state.dstLoadFactor);
 }
 // 原文未给数值的条目（如蒙西送华北「按现行模式执行」）不提供选择
 function srcStations(){ const v=(DATA.SRCX||{})[state.from]; return Array.isArray(v)?v.filter(x=>x.送出价!=null):[]; }
@@ -287,6 +293,41 @@ function renderParamSheet(res){
   body.innerHTML=renderParamBody(state.includeDstCost===false);   // 正文常驻 DOM：readInputs 按 id 读取，面板收起时也要在
   const r=selectedRow(res);
   if(price) price.innerHTML=r?`${fmt(r.landed,2)}<small>元/MWh · ${state.includeDstCost===false?'省界价格':'到户价格'}</small>`:'—';
+}
+/* ---------- 到户价分档对照（完整明细 · 费用拆解之后） ----------
+   列出当前受端电网主体全部「电压档 × 计价方式」的到户价。依据 1490号附件2 第十五至十七条：
+   用户只按所在电压档交一档输配电价（上一等级成本已逐级传导进低电压档），因此电压档只影响到户价高低、
+   不影响路线排序。行数据来自 dstTierTable() 纯函数；共同部分 = 到户价 − 输配电价 − 容需量折算，
+   由「节点交付价计入受端线损＋基金＋系统运行费」构成。当前所选行高亮（与容量电费测算表同款蓝底）并带「当前」文字。 */
+function renderDstTierTable(r){
+  if(state.includeDstCost===false) return '';
+  const vt=dstTariff();
+  if(!vt.ent) return '';
+  const tiers=dstTiers(vt.ent);
+  if(!tiers.length)
+    return `<div class="sub">到户价分档对照<em>${esc(vt.ent.名称)}</em></div>
+      <p class="note">${esc(vt.ent.名称)}按用户容量类别与月度负荷率分档（1077号附件1 第 ${esc(vt.ent.页码)} 页），无标准电压档对照，到户价按手填输配电价计算。</p>`;
+  const rows=dstTierRows(r);
+  const fundTxt=state.fundMissing?'—（未获取）':fmt(r.comp.fund);
+  const sysTxt=state.dstSysOpFee==null?'—（未填）':fmt(r.comp.sysOp);
+  const hasTwoPart=rows.some(x=>x.billing==='twopart');
+  let out=`<div class="sub">到户价分档对照<em>单位 元/MWh · ${esc(vt.ent.名称)} · 附件1 第 ${esc(vt.ent.页码)} 页</em></div>
+    <p class="note" style="margin:0 0 6px">各档共同部分：节点交付价计入受端线损 ${fmt(r.border+r.comp.inLoss)} ＋ 基金及附加 ${fundTxt} ＋ 系统运行费 ${sysTxt}；以下只列随电压档变化的项。<b>电压档只影响到户价高低，不影响路线排序。</b></p>
+    <table>
+      <tr><th style="width:38%">电压档 · 计价方式</th><th>输配电价</th><th>容（需）量</th><th>到户价</th></tr>`;
+  for(const row of rows){
+    const cur=!!(vt.tier&&row.档别===vt.tier.档别&&row.billing===vt.billing);
+    // 首列放开换行：390px 下「220千伏及以上 · 两部制　当前」一行放不下，截断会把「当前」两字藏掉（不能只靠颜色区分）
+    out+=`<tr${cur?' style="background:var(--blue-bg)"':''}><td style="white-space:normal">${esc(row.档别)} · ${row.billing==='single'?'单一制':'两部制'}${cur?'　<b>当前</b>':''}</td><td>${fmt(row.net)}</td><td>${row.cap!=null&&row.cap>0?fmt(row.cap):'—'}</td><td>${fmt(row.landed)}</td></tr>`;
+  }
+  out+='</table>';
+  // 手填说明：pNet 被清空（手改后留空）时也要说清差异来源，不能渲染成「手填 — 元/MWh」
+  if(state.pNetManual)
+    out+=`<p class="note">${state.pNet==null?'主卡未填受端输配电价':'主卡使用手填输配电价 '+fmt(state.pNet)+' 元/MWh'}，本表各行按核定值计算，当前行的到户价与主卡价格可以不同。</p>`;
+  // 偏低注记：两部制一行容需量都没算出来（口径为不计入，或口径已选但负荷率未填）时就该点名
+  if(hasTwoPart && !rows.some(x=>x.billing==='twopart'&&x.cap>0))
+    out+=`<p class="note">两部制各行未含容（需）量电费${state.dstCapMode&&state.dstCapMode!=='none'?'（负荷率未填）':''}，偏低。</p>`;
+  return out;
 }
 function openParams(){
   const el=document.getElementById('param-sheet');
@@ -667,6 +708,7 @@ function renderDetail(res,r){
       ${state.includeDstCost===false?`<tr><td style="color:var(--ink3)">受端省内费用</td><td style="color:var(--ink3)">已按口径排除</td><td style="color:var(--ink3)">—</td><td style="color:var(--ink3)">—</td></tr>`:''}
       <tr><td><b>合计</b></td><td><b>${fmt(r.landed)}</b></td><td><b>${num(r.yuan.total)}</b></td><td>100%</td></tr>
     </table>
+    ${renderDstTierTable(r)}
 
     <div class="sub">电量与损耗<em>按 ${fmt(r.qty,0)} MWh 交付电量</em></div>
     <div class="g3">
@@ -825,6 +867,32 @@ function exportReport(){
   if(r.comp.sysOp>0) L.push('| 系统运行费（手填） | '+fmt(r.comp.sysOp)+' | '+num(r.yuan.sysOp)+' |');
   L.push('| **合计** | **'+fmt(r.landed)+'** | **'+num(r.yuan.total)+'** |');
   L.push('');
+  // 到户价分档对照：与界面「完整明细 → 到户价分档对照」同一份行数据（dstTierRows）
+  if(state.includeDstCost!==false){
+    const vt=dstTariff();
+    if(vt.ent && !dstTiers(vt.ent).length){
+      L.push('## 到户价分档对照');
+      L.push('');
+      L.push(vt.ent.名称+'按用户容量类别与月度负荷率分档（1077号附件1 第 '+vt.ent.页码+' 页），无标准电压档对照，到户价按手填输配电价计算。');
+      L.push('');
+    } else if(vt.ent){
+      const rows=dstTierRows(r);
+      L.push('## 到户价分档对照（'+vt.ent.名称+' · 附件1 第 '+vt.ent.页码+' 页）');
+      L.push('');
+      L.push('各档共同部分：节点交付价计入受端线损 '+fmt(r.border+r.comp.inLoss)+' ＋ 基金及附加 '+(state.fundMissing?'—（未获取）':fmt(r.comp.fund))+' ＋ 系统运行费 '+(state.dstSysOpFee==null?'—（未填）':fmt(r.comp.sysOp))+'；电压档只影响到户价高低，不影响路线排序。单位 元/MWh。');
+      L.push('');
+      L.push('| 电压档 · 计价方式 | 输配电价 | 容（需）量 | 到户价 |');
+      L.push('|---|---|---|---|');
+      for(const row of rows){
+        const cur=vt.tier&&row.档别===vt.tier.档别&&row.billing===vt.billing;
+        L.push('| '+row.档别+' '+(row.billing==='single'?'单一制':'两部制')+(cur?'（当前）':'')
+          +' | '+fmt(row.net)+' | '+(row.cap!=null&&row.cap>0?fmt(row.cap):'—')+' | '+fmt(row.landed)+' |');
+      }
+      if(state.pNetManual){ L.push(''); L.push((state.pNet==null?'主卡未填受端输配电价':'主卡使用手填输配电价 '+fmt(state.pNet)+' 元/MWh')+'，本表各行按核定值计算。'); }
+      if(rows.some(x=>x.billing==='twopart') && !rows.some(x=>x.billing==='twopart'&&x.cap>0)){ L.push(''); L.push('两部制各行未含容（需）量电费'+(state.dstCapMode&&state.dstCapMode!=='none'?'（负荷率未填）':'')+'，偏低。'); }
+      L.push('');
+    }
+  }
   L.push('## 逐段明细与溯源');
   r.segs.forEach((s,i)=>{
     const e=s.e;

@@ -192,6 +192,20 @@ const SCREENS = [
   /* ---- 扩展画面：覆盖上面 6 个画面照不到、但同样要保持像素不变的配色 ---- */
   { name: 'x-calc-full', target: 'full' },
   {
+    // 到户价分档对照（完整明细内）：说明行、对照表与当前行蓝底高亮、偏低注记。
+    // 元素高于视口时 sticky 页头 / fixed 底栏会被烘进元素中部，截图前临时隐藏（仅影响本画面）
+    name: 'x-dst-tiers', target: '#d-detail', async prepare(page) {
+      await page.evaluate(() => {
+        state.includeDstCost = true; state.to = 'JS'; applyToProv();
+        state._res = solveState(); renderCalc();
+        document.getElementById('d-detail').open = true;
+        document.querySelector('header').style.visibility = 'hidden';
+        document.querySelector('nav').style.visibility = 'hidden';
+      });
+      await page.waitForSelector('#d-detail table');
+    },
+  },
+  {
     // 价格组成条悬停提示（气泡底色 / 焦点环）
     name: 'x-pbar-tip', target: '.card.plan', async prepare(page) {
       await page.hover('.card.plan .pbar i');
