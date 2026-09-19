@@ -1056,6 +1056,52 @@ const tests = [
     },
   },
   {
+    id: 'DM-01', section: '受端到户', title: 'DM-01：受端用户组合（按电量加权到户价）',
+    steps: '打开参数面板 → 切到「到户已列费用」→ 口径切「用户组合」（自动生成 100% 单行）→ 添加两行并配平 30/50/20、两部制行填负荷率 → 断言合计提示与主卡价格变化 → 把合计改成 90% → 断言错误卡与「去填写」',
+    expected: '切组合瞬间主卡价格不变且不渲染 #i-pnet；配平后主卡价格按加权变化、合计提示 100%；合计 90% 时不出结果、错误文案含「当前 90%」、错误卡有「去填写」按钮',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await openParams(page);
+      await page.selectOption('#i-dstcost', '1');
+      await page.waitForTimeout(200);
+      const price0 = (await page.locator('.hero-v').first().innerText()).trim();
+      await page.selectOption('#i-dstmode', 'mix');
+      await page.waitForTimeout(200);
+      ok(await page.locator('#i-mix-share-0').count() === 1, '切到组合应自动生成一行');
+      ok(await page.locator('#i-mix-share-0').inputValue() === '100', '自动生成的组合行占比应为 100');
+      ok((await page.locator('.hero-v').first().innerText()).trim() === price0, '切换瞬间主卡价格不变');
+      ok(await page.locator('#i-pnet').count() === 0, '组合模式面板不渲染 #i-pnet（加权值只读展示）');
+      ok((await page.locator('#sheet-body').innerText()).includes('受端输配电价 · 加权'), '面板显示「受端输配电价 · 加权」只读值');
+      // 添加两行（共三行），配平 30/50/20；容（需）量按容量、两部制行填负荷率 60
+      const setField = (id, v) => page.evaluate(([id, v]) => {
+        const el = document.getElementById(id);
+        el.value = v;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }, [id, v]);
+      const addRow = async () => { await page.getByRole('button', { name: '添加一档' }).click(); await page.waitForTimeout(180); };
+      await addRow(); await addRow();
+      await setField('i-dstcapmode', 'capacity'); await page.waitForTimeout(180);
+      await setField('i-mix-share-0', '30'); await page.waitForTimeout(180);
+      await setField('i-mix-tier-1', '110千伏'); await page.waitForTimeout(180);
+      await setField('i-mix-bill-1', 'twopart'); await page.waitForTimeout(180);
+      await setField('i-mix-share-1', '50'); await page.waitForTimeout(180);
+      await setField('i-mix-lf-1', '60'); await page.waitForTimeout(180);
+      await setField('i-mix-tier-2', '1~10（20）千伏'); await page.waitForTimeout(180);
+      await setField('i-mix-bill-2', 'single'); await page.waitForTimeout(180);
+      await setField('i-mix-share-2', '20'); await page.waitForTimeout(180);
+      const sheetTxt = await page.locator('#sheet-body').innerText();
+      ok(sheetTxt.includes('占比合计 100%'), '配平后应提示「占比合计 100%」');
+      const price2 = (await page.locator('.hero-v').first().innerText()).trim();
+      ok(price2 !== price0, `组合加权后主卡价格应变化（${price0} → ${price2}）`);
+      // 合计改 90：不出结果，错误卡给出具体原因与「去填写」
+      await setField('i-mix-share-2', '10'); await page.waitForTimeout(250);
+      const mainTxt = await page.locator('#v-calc').innerText();
+      ok(mainTxt.includes('当前 90%'), '错误文案应含当前合计（90%）');
+      ok(await page.getByRole('button', { name: '去填写' }).count() > 0, '错误卡应有「去填写」按钮');
+      set('三行 30/50/20 加权生效；90% 时错误卡含「去填写」');
+    },
+  },
+  {
     id: 'RQ-401', section: 'PRD-IPRO', title: 'REQ-401：容量电费测算器（折叠卡 · 电压档选择 · 不参与路径比选）',
     steps: '打开测算页展开「容量电费测算」卡：断言默认档预选=1~10（20）千伏、P5 固定标注存在；容量方式输入 1000 kVA + 年用电量 12000 MWh → 年费用/分摊断言；切电压档 → 输出随之变化；年电量 0 → 分摊显示 —；西藏（D1 已补录 30/15）按需量校验；再临时移除条目验证缺数据时「暂无数据」',
     expected: '默认预选档规则（1~10（20）千伏，无此档取第一档）生效；北京按容量 33 元/kVA·月×1000×12=396,000 元/年、分摊 33.00 元/MWh；切 220千伏及以上档 → 336,000 元/年；P5 固定标注「容量电费与电量来自省内或省外无关，不参与路径比选」含发改价格〔2020〕1441号 / 〔2023〕532号；年电量 0 显示 — 不出 Infinity；西藏需量 30 元/千瓦·月、分摊 30.00 元/MWh；缺 CAP 条目时显示「暂无数据」不补估',

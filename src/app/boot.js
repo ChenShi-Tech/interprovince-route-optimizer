@@ -13,8 +13,8 @@ document.addEventListener('change',e=>{
     const isFrom=(id==='i-from');
     if(isFrom) state.from=e.target.value; else state.to=e.target.value;
     readInputs();                                   // 先读其余输入框的当前值
-    // 电网主体、电压档与电站专属送出价都是省份相关的，换省后回到该省默认
-    if(isFrom) state.srcStation=null; else { state.dstEntity=null; state.dstTier=null; }
+    // 电网主体、电压档、用户口径与电站专属送出价都是省份相关的，换省后回到该省默认（组合的档别表随省变化，重置回单一用户）
+    if(isFrom) state.srcStation=null; else { state.dstEntity=null; state.dstTier=null; state.dstMode='single'; state.dstMix=[]; }
     if(isFrom) applyFromProv(); else applyToProv(); // 再用该端的核定值覆盖受影响的项
     state.sel=0; saveLast(); state._res=solveState(); renderCalc();
     return;
@@ -25,7 +25,8 @@ document.addEventListener('change',e=>{
     readInputs();
     // 换主体等同重新核准：清手改标记，避免把上一主体的手填电价带进新主体
     // （广东↔深圳同属一省，applyToProv 的换省判定不触发，旧值会被当成深圳的手填值继续参与计算）
-    if(id==='i-dstentity'){ state.dstEntity=e.target.value; state.dstTier=null; state.pNetManual=false; }
+    // 换主体后档别表也变了：用户组合重置回单一用户并清空，避免按旧主体的档别继续加权
+    if(id==='i-dstentity'){ state.dstEntity=e.target.value; state.dstTier=null; state.pNetManual=false; state.dstMode='single'; state.dstMix=[]; }
     if(id==='i-dsttier') state.dstTier=e.target.value;
     if(id==='i-dstbilling') state.dstBilling=e.target.value;
     const vt=dstTariff(); state.dstBilling=vt.billing;
@@ -34,6 +35,28 @@ document.addEventListener('change',e=>{
     state.sel=0; state._res=solveState(); saveLast(); renderCalc();
     return;
   }
+  // 受端用户口径切换：切到组合且组合为空时按当前单一口径生成一行 100%（切换瞬间主卡价格不变）；
+  // 切回单一用户保留 dstMix，下次再切回组合时恢复；单一口径的 pNet 与手改标记不受影响
+  if(id==='i-dstmode'){
+    readInputs();
+    state.dstMode=e.target.value;
+    if(state.dstMode==='mix'&&!(Array.isArray(state.dstMix)&&state.dstMix.length)) seedMixRow();
+    state.sel=0; state._res=solveState(); saveLast(); renderCalc();
+    return;
+  }
+  // 组合行的档别 / 计价方式变化会改变可选项与负荷率框，须重画面板；换档后计价方式在新档无价时翻转到有价一侧
+  if(id.startsWith('i-mix-tier-')||id.startsWith('i-mix-bill-')){
+    readInputs();
+    if(id.startsWith('i-mix-tier-')){
+      const k=+id.slice('i-mix-tier-'.length), row=(state.dstMix||[])[k];
+      const t=row?(dstTiers(dstTariff().ent)||[]).find(x=>x.档别===row.tier):null;
+      if(t&&row&&t[row.billing==='single'?'单一制':'两部制']==null) row.billing=row.billing==='single'?'twopart':'single';
+    }
+    state.sel=0; state._res=solveState(); saveLast(); renderCalc();
+    return;
+  }
+  // 组合行的占比 / 负荷率是数值输入，走即时重算（readInputs 会读回整个编辑区）
+  if(id.startsWith('i-mix-share-')||id.startsWith('i-mix-lf-')){ state.sel=0; doSolve(); return; }
   if(id==='i-dstcapmode') state.dstCapMode=e.target.value;
   if(id==='i-srcstation') state.srcStation=e.target.value===''?null:e.target.value;
   if(id==='i-pgen') state.pGenManual=true;

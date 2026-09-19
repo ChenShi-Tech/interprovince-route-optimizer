@@ -486,7 +486,10 @@ console.log('══ 十一、参数弹出面板：主卡摘要、即时重算、
   // 恢复默认：参数回默认，受端核定值还原，省份与报价不动
   G("state.includeDstCost=true;state.pNet=1;state.pGen=333;state.pGenManual=true;state.tradableOnly=true;state.occPct=30;state._res=solveState();renderCalc();");
   G('resetParams()');
-  ok(Object.entries(G('PARAM_DEFAULTS')).every(([k, val]) => G('state')[k] === val), '恢复默认后参数全部回到默认值');
+  // dstMix 是数组：重置后须为**新**空数组（值相等但不得与 PARAM_DEFAULTS 同引用，否则 push 会污染默认值）
+  ok(Object.entries(G('PARAM_DEFAULTS')).every(([k, val]) => k === 'dstMix'
+    ? (Array.isArray(val) && val.length === 0 && Array.isArray(G('state')[k]) && G('state')[k] !== val)
+    : G('state')[k] === val), '恢复默认后参数全部回到默认值（dstMix 为新空数组，引用不共享）');
   ok(G('state.pNet') === PV.SH.net && G('state.pGen') === 333 && G('state.from') === 'XJ' && G('state.to') === 'SH', '恢复默认不改省份与送端报价，受端输配电价回到核定值');
   const v3 = G("document.getElementById('v-calc').innerHTML");
   ok(!v3.includes('<span class="chg">') && v3.indexOf('id="d-capfee"') > v3.indexOf('class="layout'), '恢复后摘要不再标色；容量电费测算位于方案之后');
@@ -646,6 +649,231 @@ console.log('══ 十四、受端到户：电网主体 × 电压档 × 计价�
   G("state.from='NM';state.srcStation=null;");
   ok(G('srcStations().length') === 0, '原文无数值的送出价条目（蒙西送华北）不提供选择');
   G("Object.assign(state,PARAM_DEFAULTS);state.from='SC';state.to='JS';applyBothProv();state._res=solveState();");
+}
+
+console.log('══ 十五、到户价分档对照：行数、当前行恒等、容需量口径、手填说明、深圳与口径切换、导出报告 ══');
+{
+  const VT = G('DATA.VT');
+  const cells = (ent) => ent.档位.reduce((a, t) => a + (t.单一制 != null) + (t.两部制 != null), 0);
+  const boot15 = () => G("Object.assign(state,PARAM_DEFAULTS);state.from='SC';state.to='JS';state.mustHave=[];state.sel=0;state.showBad=true;state.includeDstCost=true;state.pNetManual=false;applyBothProv();state._res=solveState();renderCalc();");
+  // 直接取完整明细片段（renderDetail 的返回值），避免在整页 HTML 里找 #d-detail
+  const det = () => G('renderDetail(state._res, selectedRow(state._res))');
+  const secOf = () => { const h = det(), k = h.indexOf('到户价分档对照'); return k < 0 ? '' : h.slice(k, h.indexOf('电量与损耗', k)); };
+  const jsEnt = VT.JS.主体[0], heEnt = VT.HE.主体.find((e) => e.id === 'HE');
+  boot15(); syncDom();
+  // ① 到户口径 + 江苏默认主体：行数 = 非 null 的（单一制、两部制）格子数（9 行）
+  ok(secOf() && secOf().includes('电压档只影响到户价高低，不影响路线排序'), '到户口径下完整明细渲染对照表与说明行');
+  ok(cells(jsEnt) === 9 && G('dstTierRows(state._res.rows[0]).length') === cells(jsEnt), `江苏默认主体对照 ${cells(jsEnt)} 行`);
+  ok((secOf().match(/<tr[\s>]/g) || []).length - 1 === cells(jsEnt), '渲染表格行数与数据格子数一致');
+  // ② 当前行：标「当前」+ 蓝底，pNet 未手改时到户价 = r.landed（与主卡/费用拆解合计同口径）
+  const r15 = G('state._res.rows[0]');
+  const cur15 = G("dstTierRows(state._res.rows[0]).find(x=>x.档别===dstTariff().tier.档别&&x.billing===dstTariff().billing)");
+  ok(!!cur15 && Math.abs(cur15.landed - r15.landed) < 1e-6, 'pNet 未手改时当前行到户价 = r.landed', `${cur15 && cur15.landed} vs ${r15.landed}`);
+  ok((secOf().match(/<b>当前<\/b>/g) || []).length === 1 && secOf().includes('background:var(--blue-bg)'), '当前行唯一，带「当前」文字与高亮（不只靠颜色）');
+  // ③ 任意两行恒等：到户价ᵢ − 到户价ⱼ =（输配ᵢ+容需ᵢ）−（输配ⱼ+容需ⱼ）
+  G("state.dstCapMode='capacity';state.dstLoadFactor=60;state._res=solveState();renderCalc();");
+  const rows15 = G('dstTierRows(state._res.rows[0])');
+  let badEq = 0;
+  for (let a = 0; a < rows15.length; a++) for (let b = 0; b < rows15.length; b++) {
+    if (Math.abs((rows15[a].landed - rows15[b].landed) - ((rows15[a].net + (rows15[a].cap || 0)) - (rows15[b].net + (rows15[b].cap || 0)))) > 1e-6) badEq++;
+  }
+  ok(badEq === 0, `任意两行满足到户价差 =（输配+容需）差（${rows15.length} 行全对）`);
+  // ④ 容（需）量口径：不计入 → 容需量格全「—」并出现偏低注记；按容量 60% → 两部制行 = 容量电价×12/(8.76×0.6)，单一制行仍「—」
+  boot15();
+  const rowsNone = G('dstTierRows(state._res.rows[0])');
+  ok((secOf().match(/<td>—<\/td>/g) || []).length === rowsNone.length
+    && secOf().includes('两部制各行未含容（需）量电费'), '不计入口径：容需量格全「—」并出现偏低注记');
+  // 口径已选（按需量）但负荷率未填：同样偏低，注记须写明原因
+  G("state.dstCapMode='demand';state.dstLoadFactor=null;state._res=solveState();renderCalc();");
+  ok(secOf().includes('两部制各行未含容（需）量电费（负荷率未填）'), '口径已选但负荷率未填：偏低注记写明原因');
+  G("state.dstCapMode='capacity';state.dstLoadFactor=60;state._res=solveState();renderCalc();");
+  const expCaps = jsEnt.档位.filter((t) => t.两部制 != null).map((t) => G('fmt')(t.容量电价 * 12 / (8.76 * 0.6)));
+  const sec60 = secOf();
+  ok(expCaps.length && expCaps.every((c) => sec60.includes('<td>' + c + '</td>')), `按容量 60%：两部制行容需量 = ${expCaps.join(' / ')}`);
+  ok(/不满1千伏 · 单一制<\/td><td>[\d.]+<\/td><td>—<\/td>/.test(sec60), '单一制行容需量显示 —');
+  ok(!sec60.includes('未含容（需）量电费'), '容需量已计入时不再出现偏低注记');
+  // ⑤ 手改 #i-pnet：出现手填说明，表内各行仍是核定值；清空手填值时说明不得写成「手填 —」
+  // （pNet 清空时 solve 直接报错、明细不渲染，这里直接调 renderDstTierTable 验证防御性文案）
+  G("state.pNet=null;state.pNetManual=true;");
+  ok(G("renderDstTierTable({landed:600,comp:{net:100,cap:0,inLoss:0,fund:29.4,sysOp:0},border:570})").includes('主卡未填受端输配电价'),
+    '清空手填值：说明行写「主卡未填」');
+  G("state.pNet=600;state.pNetManual=true;state._res=solveState();renderCalc();");
+  ok(secOf().includes('本表各行按核定值计算') && secOf().includes(G('fmt')(600)), '手填后出现说明行（写明主卡用手填值）');
+  ok(G('dstTierRows(state._res.rows[0])[0].net') === jsEnt.档位[0].单一制, '手填后表内各行仍为核定值');
+  // ⑥ 深圳：无标准电压档 → 只渲染说明行；省间口径 → 不渲染该节；切回后恢复且无残留
+  // （换省触发 applyToProv 清手改标记、深圳无自动带入值，故切换后须重设手填价才能出结果——与真实界面一致）
+  G("state.to='GD';state.dstEntity='GD_SZ';state.dstTier=null;applyToProv();state.pNet=150;state.pNetManual=true;state._res=solveState();renderCalc();");
+  const detSZ = det();
+  const szSec = detSZ.includes('到户价分档对照') ? detSZ.slice(detSZ.indexOf('到户价分档对照'), detSZ.indexOf('电量与损耗', detSZ.indexOf('到户价分档对照'))) : '';
+  ok(!!szSec && szSec.includes('无标准电压档对照') && !szSec.includes('<table') && !szSec.includes('<b>当前</b>'),
+    '深圳主体只渲染说明行，不渲染表格');
+  G("state.includeDstCost=false;state._res=solveState();renderCalc();");
+  ok(!det().includes('到户价分档对照'), '省间交易节点口径不渲染该节');
+  G("state.includeDstCost=true;state.to='JS';state.dstEntity=null;state.dstTier=null;applyToProv();state._res=solveState();renderCalc();");
+  ok((det().match(/到户价分档对照/g) || []).length === 1, '切回到户口径后恢复渲染，无残留旧表');
+  // 河北南网：10 行（不满 1 千伏也有两部制）
+  G("state.to='HE';state.dstEntity=null;state.dstTier=null;applyToProv();state._res=solveState();renderCalc();");
+  ok(cells(heEnt) === 10 && G('dstTierRows(state._res.rows[0]).length') === cells(heEnt), `河北南网对照 ${cells(heEnt)} 行`);
+  // ⑦ 导出报告：同一张表，列与数值和界面一致
+  const prevBlob = ctx.Blob;
+  let report15 = null;
+  ctx.Blob = function (parts) { report15 = parts[0]; };
+  G('exportReport()');
+  ctx.Blob = prevBlob;
+  const curRep = G("dstTierRows(state._res.rows[0]).find(x=>x.档别===dstTariff().tier.档别&&x.billing===dstTariff().billing)");
+  ok(!!report15 && report15.includes('## 到户价分档对照'), '导出报告含对照表小节');
+  ok(report15.includes('| 电压档 · 计价方式 | 输配电价 | 容（需）量 | 到户价 |'), '导出报告列与界面一致');
+  ok(report15.includes('（当前）') && report15.includes('| 220千伏及以上 两部制（当前） | ' + G('fmt')(curRep.net) + ' | ' + (curRep.cap > 0 ? G('fmt')(curRep.cap) : '—') + ' | ' + G('fmt')(curRep.landed) + ' |'),
+    '导出报告当前行标注与数值和界面一致');
+  boot15();
+}
+
+console.log('══ 十六、受端用户组合：加权等价、示例组合、五条校验、衔接与存档 ══');
+{
+  const boot16 = () => G("Object.assign(state,PARAM_DEFAULTS);state.from='SC';state.to='JS';state.mustHave=[];state.sel=0;state.showBad=true;state.includeDstCost=true;applyBothProv();state._res=solveState();renderCalc();");
+  const sheet = () => G("document.getElementById('sheet-body').innerHTML");
+  const page = () => G("document.getElementById('v-calc').innerHTML");
+  boot16(); syncDom();
+
+  // ② 每个「档 × 计价方式」单行 100% 组合与单一口径同档的 landed 全等（江苏 9 行循环）
+  const combos = G("(function(){const out=[];for(const t of dstTiers(dstEntity())){for(const b of ['single','twopart']){if(t[b==='single'?'单一制':'两部制']!=null)out.push([t.档别,b]);}}return out;})()");
+  let badEq = 0;
+  for (const [tier, billing] of combos) {
+    G(`state.dstMode='single';state.dstTier=${JSON.stringify(tier)};state.dstBilling='${billing}';{const vt=dstTariff();state.dstBilling=vt.billing;if(vt.net!=null)state.pNet=vt.net;}state._res=solveState();`);
+    const a = G('state._res.byA[0].landed');
+    G(`state.dstMode='mix';state.dstMix=[{tier:${JSON.stringify(tier)},billing:'${billing}',share:100,lf:null}];state._res=solveState();`);
+    const b = G('state._res.byA[0].landed');
+    if (!(Number.isFinite(a) && Math.abs(a - b) < 1e-6)) badEq++;
+  }
+  ok(badEq === 0 && combos.length === 9, `单行 100% 组合与单一口径同档全等（${combos.length} 行循环）`);
+
+  // ③ 第 2.6 节示例组合：110 两部制 30% + 1~10 两部制 50% + 1~10 单一制 20%
+  boot16();
+  const baseLanded = G('state._res.byA[0].landed');
+  G("state.dstMode='mix';state.dstMix=[{tier:'110千伏',billing:'twopart',share:30,lf:null},{tier:'1~10（20）千伏',billing:'twopart',share:50,lf:null},{tier:'1~10（20）千伏',billing:'single',share:20,lf:null}];state._res=solveState();");
+  const mix30 = G('dstMixOf()'), r30 = G('state._res.byA[0]');
+  ok(mix30.ok && Math.abs(mix30.net - 131.16) < 0.005, `加权输配 ${mix30.net.toFixed(3)} ≈ 131.16`);
+  ok(Math.abs((r30.landed - baseLanded) - (131.16 - 51.8)) < 1e-6, '组合到户价 − 默认档到户价 = 加权输配 − 51.8（误差 < 1e-6）');
+  G("state.dstCapMode='capacity';state.dstMix[0].lf=60;state.dstMix[1].lf=60;state._res=solveState();");
+  const mixCap = G('dstMixOf()'), rCap = G('state._res.byA[0]');
+  ok(Math.abs(mixCap.cap - 55.71) < 0.005 && Math.abs(rCap.landed - r30.landed - mixCap.cap) < 0.005, `按容量 60%：加权容需量 ${mixCap.cap.toFixed(2)} ≈ 55.71 并计入到户价`);
+  // ④ 金额闭合；组合模式不写回 state.pNet
+  ok(Math.abs(rCap.yuan.total / rCap.consumerQty - rCap.landed) < 1e-6, '金额闭合 yuan.total ÷ consumerQty = landed');
+  ok(G('state.pNet') === G('PV.JS.net') && G('state.pNetManual') === false, '组合模式不写回 state.pNet、不动手改标记');
+
+  // ⑥ 切到组合自动生成单行 100%（主卡价格不变）；切回单一保留组合、价格恢复
+  boot16();
+  const single0 = G('state._res.byA[0].landed');
+  G("state.dstMode='mix';seedMixRow();state._res=solveState();renderCalc();");
+  ok(G('state.dstMix.length') === 1 && G('state.dstMix[0].share') === 100 && Math.abs(G('state._res.byA[0].landed') - single0) < 1e-9,
+    '切到组合自动生成当前档 100% 单行，主卡价格不变');
+  G("state.dstMode='single';state._res=solveState();renderCalc();");
+  ok(Math.abs(G('state._res.byA[0].landed') - single0) < 1e-9 && G('state.dstMix.length') === 1, '切回单一后价格恢复、组合保留');
+
+  // ⑤ 五条校验：返回 err、needParams、文案具体；错误卡带「去填写」；纵深防御 pNet=NaN
+  const mixErr = (patch) => { G(`state.dstMode='mix';${patch}state._res=solveState();`); return G('state._res'); };
+  let res5 = mixErr('state.dstMix=[];');
+  ok(!!res5.err && res5.err.includes('至少要有一行') && res5.needParams === true, '校验1 空组合：不出结果并给文案');
+  res5 = mixErr("state.dstMix=[{tier:'旧档名',billing:'twopart',share:100,lf:60}];");
+  ok(/第 1 行[\s\S]*不在当前电网主体的价表中/.test(res5.err || ''), '校验2 档别不存在：文案具体到行');
+  res5 = mixErr("state.dstMix=[{tier:'不满1千伏',billing:'twopart',share:100,lf:60}];");
+  ok(/第 1 行[\s\S]*没有两部制价格/.test(res5.err || ''), '校验2b 该档无此计价方式价格');
+  res5 = mixErr("state.dstMix=[{tier:'110千伏',billing:'twopart',share:0,lf:60}];");
+  ok(/电量占比须为大于 0/.test(res5.err || ''), '校验3 占比 0 拒绝');
+  res5 = mixErr("state.dstMix=[{tier:'110千伏',billing:'twopart',share:90,lf:60}];");
+  ok(/合计须为 100%（当前 90%）/.test(res5.err || ''), '校验4 合计 90%：文案含当前值且不自动缩放');
+  res5 = mixErr("state.dstMix=[{tier:'110千伏',billing:'twopart',share:50,lf:60},{tier:'110千伏',billing:'twopart',share:50,lf:60}];");
+  ok(/重复出现/.test(res5.err || ''), '校验5 同档同计价方式重复拒绝');
+  G("state.dstMix=[{tier:'110千伏',billing:'twopart',share:90,lf:60}];state._res=solveState();renderCalc();");
+  ok(page().includes('onclick="openParams()">去填写') && page().includes('（当前 90%）'), '错误卡带「去填写」并显示具体原因');
+  ok(!Number.isFinite(G('solveInput().pNet')), '纵深防御：组合无效时 solveInput() 传 pNet=NaN（通道优选/敏感性不会静默出数）');
+
+  // ⑦ 换受端省 / 换主体（boot.js 分支行为）/ 恢复默认 → 单一用户 + 组合清空；默认值引用不污染
+  G("state.dstMode='mix';state.dstMix=[{tier:'110千伏',billing:'twopart',share:100,lf:60}];state._res=solveState();");
+  G("state.to='GD';state.dstEntity=null;state.dstTier=null;state.dstMode='single';state.dstMix=[];applyToProv();state._res=solveState();");
+  ok(G('state.dstMode') === 'single' && G('state.dstMix.length') === 0, '换受端省后重置为单一用户、组合清空');
+  G("state.dstMode='mix';state.dstMix=[{tier:'220千伏及以上',billing:'twopart',share:100,lf:60}];state._res=solveState();");
+  G("readInputs();state.dstEntity='GD_SZ';state.dstTier=null;state.pNetManual=false;state.dstMode='single';state.dstMix=[];state._res=solveState();");
+  ok(G('state.dstMode') === 'single' && G('state.dstMix.length') === 0, '换主体（含深圳）后重置为单一用户、组合清空');
+  G("state.dstMode='mix';state.dstMix=[{tier:'110千伏',billing:'twopart',share:100,lf:60}];");
+  G('resetParams()');
+  ok(G('state.dstMode') === 'single' && G('state.dstMix.length') === 0 && JSON.stringify(G('PARAM_DEFAULTS.dstMix')) === '[]',
+    '恢复默认：回到单一用户、组合清空、PARAM_DEFAULTS.dstMix 引用未被污染');
+
+  // ⑧ 存档往返；存档里档别失效 → 校验错误、不崩溃
+  G("state.dstMode='mix';state.dstMix=[{tier:'110千伏',billing:'twopart',share:60,lf:60},{tier:'1~10（20）千伏',billing:'single',share:40,lf:null}];state._res=solveState();saveLast();");
+  G("Object.assign(state,PARAM_DEFAULTS);state.dstMix=[];");
+  G('loadStored();applyBothProv();state._res=solveState();');
+  ok(G('state.dstMode') === 'mix' && G('state.dstMix.length') === 2 && !G('state._res.err'), '存档往返恢复 dstMode 与 dstMix 并正常出结果');
+  store['iproute.v2.last'] = JSON.stringify({ from: 'SC', to: 'JS', marketMode: 'mlt', includeDstCost: true, dstMode: 'mix', dstMix: [{ tier: '旧档名', billing: 'twopart', share: 100, lf: 60 }], _bt: 'x' });
+  G('loadStored();applyBothProv();state._res=solveState();renderCalc();');
+  ok(/不在当前电网主体的价表中/.test(G('state._res.err') || '') && page().includes('去填写'), '存档档别失效：校验错误不崩溃，错误卡可去填写');
+
+  // ⑨ 组合模式面板无 #i-pnet；切回单一后 pNetManual 与切换前一致
+  boot16();
+  G("state.pNet=123.4;state.pNetManual=true;state._res=solveState();renderCalc();"); syncDom();
+  ok(sheet().includes('id="i-pnet"'), '单一口径面板渲染 #i-pnet');
+  G("state.dstMode='mix';seedMixRow();state._res=solveState();renderCalc();"); syncDom();
+  ok(!sheet().includes('id="i-pnet"') && sheet().includes('受端输配电价 · 加权'), '组合模式面板不渲染 #i-pnet，显示加权只读值');
+  ok(G('state.pNet') === 123.4 && G('state.pNetManual') === true, '组合模式不动 pNet 与手改标记');
+  G("state.dstMode='single';state._res=solveState();renderCalc();"); syncDom();
+  ok(G('state.pNetManual') === true && G('state.pNet') === 123.4, '切回单一后 pNetManual 与切换前一致');
+
+  // readInputs：编辑区渲染时按容器 data-rows 读回 #i-mix-*；组合未生效时不读，state.dstMix 不动
+  G("state.dstMode='mix';seedMixRow();state._res=solveState();renderCalc();");
+  mk('dst-mix-rows').dataset = { rows: '1' };   // 模拟 DOM 桩不解析 HTML，手动给行数计数
+  mk('i-mix-tier-0').value = '110千伏'; mk('i-mix-bill-0').value = 'twopart'; mk('i-mix-share-0').value = '70'; mk('i-mix-lf-0').value = '60';
+  G('readInputs();');
+  ok(G('state.dstMix.length') === 1 && G('state.dstMix[0].share') === 70 && G('state.dstMix[0].lf') === 60 && G('state.dstMix[0].tier') === '110千伏',
+    '组合编辑区渲染时 readInputs 按 data-rows 读回各行');
+  // 清理为 readInputs 造的桩节点（模拟 DOM 不解析 innerHTML，节点与 data-rows 会跨块残留、污染后续 mixAdd/mixDel 用例）
+  for (const k of Object.keys(dom)) if (k === 'dst-mix-rows' || k.startsWith('i-mix-')) delete dom[k];
+
+  // 「添加一档 / 删除」入口函数：新行必须是有效的「档 × 计价方式」组合（不能出现空档别的坏行）
+  boot16();
+  G("state.dstMode='mix';seedMixRow();state._res=solveState();renderCalc();");
+  G('mixAdd()');
+  ok(G('state.dstMix.length') === 2 && G('state.dstMix[1].tier') === '220千伏及以上' && G('state.dstMix[1].billing') === 'single',
+    '添加一档：新行预填当前档尚未使用的计价方式（非空组合）');
+  ok(/第 2 行[\s\S]*电量占比/.test(G('state._res.err') || ''), '新行占比待填时提示具体到行（不是「档别未选」）');
+  G("state.dstMix[0].share=70;state.dstMix[1].share=30;state._res=solveState();");
+  ok(!G('state._res.err'), '补足占比后恢复出结果');
+  G('mixDel(0)');
+  ok(G('state.dstMix.length') === 1 && G('state.dstMix[0].tier') === '220千伏及以上' && /合计须为 100%/.test(G('state._res.err') || ''),
+    '删除后行序重排（剩余行不再配平时按合计校验提示）');
+
+  // ⑩ 口径摘要 / 副标题 / 费用拆解行名 / 缺项提示 / 对照表占比与加权行 / 导出报告
+  G("state.includeDstCost=true;state.dstMode='mix';state.dstCapMode='none';state.dstMix=[{tier:'110千伏',billing:'twopart',share:30,lf:60},{tier:'1~10（20）千伏',billing:'twopart',share:50,lf:60},{tier:'1~10（20）千伏',billing:'single',share:20,lf:null}];state._res=solveState();renderCalc();");
+  const v10 = page();
+  ok(v10.includes('用户组合 3 档 · 加权输配 ' + G('fmt')(131.16)), '主卡摘要显示组合档数与加权输配');
+  ok(v10.includes('到户价格 · 用户组合加权'), '主卡价格副标题标注用户组合加权');
+  ok(v10.includes('受端省网输配电价（用户组合加权）'), '费用拆解输配电价行名按组合口径');
+  ok(v10.includes('组合含两部制档，未含容（需）量电费'), '组合两部制未计容需量时醒目提示');
+  const det10 = G('renderDetail(state._res, selectedRow(state._res))');
+  const sec10 = det10.slice(det10.indexOf('到户价分档对照'), det10.indexOf('电量与损耗', det10.indexOf('到户价分档对照')));
+  ok(sec10.includes('占 30%') && sec10.includes('占 50%') && sec10.includes('占 20%'), '对照表组合行标注占比');
+  const wLanded = G('state._res.byA[0].landed');
+  ok(sec10.includes('<b>用户组合加权</b>') && sec10.includes('<td>' + G('fmt')(wLanded) + '</td>') && !sec10.includes('<b>当前</b>'),
+    '对照表末行为「用户组合加权」（到户价 = r.landed），组合模式无单一「当前」行');
+  // 缺负荷率：不算校验失败，按 0 计并按行数提示（口径为按需量时才涉及负荷率）
+  G("state.dstCapMode='demand';state.dstMix[1].lf=null;state._res=solveState();renderCalc();");
+  ok(!G('state._res.err') && page().includes('组合中 1 行两部制未填负荷率'), '组合缺负荷率：按 0 计并按行数提示（不拦截结果）');
+  ok(page().includes('容（需）量电费分摊（按各档负荷率假设加权）'), '费用拆解容需量行名按组合口径');
+  // 导出报告：组合行（占比、负荷率）+ 加权结果
+  G("state.dstMix[1].lf=60;state.dstCapMode='capacity';state._res=solveState();renderCalc();");
+  let rep16 = null;
+  const prevBlob16 = ctx.Blob;
+  ctx.Blob = function (parts) { rep16 = parts[0]; };
+  G('exportReport()');
+  ctx.Blob = prevBlob16;
+  ok(!!rep16 && rep16.includes('| 电压档 · 计价方式 | 占比 % | 负荷率 % | 输配电价 | 容（需）量 | 到户价 |'), '导出报告组合表含占比与负荷率列');
+  ok(rep16.includes('**用户组合加权**') && rep16.includes('受端到户：用户组合 3 档按电量加权'), '导出报告含加权结果与组合摘要行');
+  // 省间口径：组合配置残留不参与计算也不报错
+  G("state.includeDstCost=false;state._res=solveState();renderCalc();");
+  ok(!G('state._res.err') && G('state.dstMode') === 'mix', '省间口径下组合配置残留不报错（组合不生效）');
+  G("state.includeDstCost=true;state._res=solveState();");
+  ok(G('dstMixActive()') === true && !G('state._res.err'), '切回到户后组合自动恢复生效');
+  boot16();
 }
 
 console.log(`\n${fail ? '❌' : '✅'} 结果：${pass} 项通过，${fail} 项失败`);

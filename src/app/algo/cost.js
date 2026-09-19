@@ -201,3 +201,88 @@ function evalPath(path, ctx, env){
     capUnknown:edges.filter(e=>e.cap==null || e.capBasis==='unknown' || e.capBasis==='estimate').length,
     capEqUsed:edges.filter(e=>e.capEq!=null).length};
 }
+
+/* ---- 到户辅助纯函数（可选，不属于 solve() 输入契约；界面与原生端均可按需复用）---- */
+
+/** 两部制容（需）量电费按负荷假设折成元/MWh：月单价 × 12 ÷（8.76 × 负荷率）。
+ *  tier 是 1077号附件1 的档位对象（月单价取 容量电价/需量电价 之一），capMode: 'none'|'demand'|'capacity'。
+ *  返回 null 仅表示该档没有对应月单价（原表空白，界面显示「—」），与 0（不计入口径 / 负荷率未填）区分；
+ *  ui/calc.js 的 dstCapFee() 包装本函数并把 null 归一为 0，保持历史行为不变。 */
+function dstCapFeeOf(tier, capMode, loadFactorPct){
+  if(!tier || !capMode || capMode==='none') return 0;
+  const price=capMode==='capacity'?tier.容量电价:tier.需量电价;
+  if(price==null) return null;
+  const lf=+loadFactorPct;
+  if(!(lf>0&&lf<=100)) return 0;
+  return price*12/(8.76*lf/100);
+}
+
+/** 到户价分档对照表：主体 ent 全部「电压档 × 计价方式」组合，原表空白（null）的格子不列。
+ *  行序按数据顺序（低电压→高电压），每档先单一制后两部制。
+ *  curNet/curCap 是当前方案的受端输配电价与容（需）量单价（与 landed 同口径，受端电价已含线损的
+ *  主体经 applyDstQtyLoss 改写后同样成立）。到户价(行) = landed − curNet − curCap + 该行输配电价 + 该行容需量折算；
+ *  因此当输配电价未手改时，与当前所选档同行的 landed 与 r.landed 之差为 0（纯展示变换，不影响排序）。
+ *  单一制行不计容（需）量，cap 恒为 0；两部制行经 dstCapFeeOf 折算，无月单价时为 null。 */
+function dstTierTable(ent, landed, curNet, curCap, capMode, loadFactorPct){
+  const rows=[];
+  if(!ent || !Array.isArray(ent.档位)) return rows;
+  const base=+landed-+(curNet||0)-+(curCap||0);
+  for(const t of ent.档位){
+    for(const billing of ['single','twopart']){
+      const net=t[billing==='single'?'单一制':'两部制'];
+      if(net==null) continue;
+      const cap=billing==='twopart'?dstCapFeeOf(t, capMode, loadFactorPct):0;
+      rows.push({档别:t.档别, billing, net, cap, landed:base+net+(cap||0)});
+    }
+  }
+  return rows;
+}
+
+/** 受端用户组合（售电公司 / 电网代理购电 / 多受电点，中长期规则第四条、第十二条）：按电量占比加权。
+ *  rows 每项 {tier:档别名, billing:'single'|'twopart', share:电量占比百分数, lf:该行负荷率百分数|null}，
+ *  capMode 是全局容（需）量口径（'none'|'demand'|'capacity'）。纯校验＋纯加权，界面只负责展示。
+ *  校验（任一不满足 ok:false，err 具体到行）：至少一行；档别在主体价表内；计价方式该档有价；
+ *  每行占比 (0,100]；同一「档 × 计价方式」不重复；合计＝100（±0.01，不自动按比例缩放）。
+ *  两部制行在口径非「不计入」但负荷率未填：不算校验失败，该行容需量按 0 计，missingLf 计数供界面提示；
+ *  该档没有对应月单价（dstCapFeeOf 为 null）同样按 0 计，计入 nullPrice。
+ *  加权是线性的：把返回的 net/cap 当作 solve() 的 pNet/dstCapFee，与逐户分别计算再加权完全相等。
+ *  hasTwoPart 供调用方决定 dstBilling；本函数不读写 solve() 的任何输入。 */
+function dstMixTariff(ent, rows, capMode){
+  if(!Array.isArray(rows) || !rows.length) return {ok:false, err:'用户组合至少要有一行电压档'};
+  const tiers=ent && Array.isArray(ent.档位) ? ent.档位 : [];
+  const seen=new Set(), out=[];
+  let share=0, hasTwoPart=false, missingLf=0, nullPrice=0;
+  for(let i=0;i<rows.length;i++){
+    const raw=rows[i]||{}, billing=raw.billing==='single'?'single':'twopart';
+    const tier=tiers.find(t=>t.档别===raw.tier);
+    if(!tier) return {ok:false, err:`用户组合第 ${i+1} 行：电压档${raw.tier==null||raw.tier===''?'未选':'「'+raw.tier+'」'}不在当前电网主体的价表中（数据可能已更新），请重新选择`};
+    if(tier[billing==='single'?'单一制':'两部制']==null)
+      return {ok:false, err:`用户组合第 ${i+1} 行：${tier.档别}没有${billing==='single'?'单一制':'两部制'}价格`};
+    const sh=+raw.share;
+    if(!Number.isFinite(sh) || sh<=0 || sh>100)
+      return {ok:false, err:`用户组合第 ${i+1} 行：电量占比须为大于 0、不超过 100 的数`};
+    const key=tier.档别+'|'+billing;
+    if(seen.has(key)) return {ok:false, err:`用户组合第 ${i+1} 行：${tier.档别} ${billing==='single'?'单一制':'两部制'} 重复出现，同一档同一计价方式只能有一行`};
+    seen.add(key);
+    const net=tier[billing==='single'?'单一制':'两部制'];
+    let cap=0, lf=null;
+    if(billing==='twopart'){
+      hasTwoPart=true;
+      if(capMode && capMode!=='none'){
+        lf=+raw.lf;
+        if(!(lf>0 && lf<=100)){ lf=null; missingLf++; }
+        else{ const c=dstCapFeeOf(tier, capMode, lf); if(c==null) nullPrice++; else cap=c; }
+      }
+    }
+    out.push({档别:tier.档别, billing, share:sh, net, cap, lf});
+    share+=sh;
+  }
+  if(Math.abs(share-100)>0.01)
+    return {ok:false, err:`用户组合的电量占比合计须为 100%（当前 ${Math.round(share*10)/10}%），请把各档占比配平，工具不会自动按比例缩放`, rows:out};
+  return {
+    ok:true,
+    net:out.reduce((a,x)=>a+x.share/100*x.net,0),
+    cap:out.reduce((a,x)=>a+x.share/100*x.cap,0),
+    hasTwoPart, missingLf, nullPrice, rows:out,
+  };
+}
