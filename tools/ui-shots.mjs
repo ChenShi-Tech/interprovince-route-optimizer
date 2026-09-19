@@ -206,6 +206,44 @@ const SCREENS = [
     },
   },
   {
+    // 到户价分档对照（组合模式）：组合行占比标注、按各行负荷率折算的容（需）量与「用户组合加权」行
+    name: 'x-dst-tiers-mix', target: '#d-detail', async prepare(page) {
+      await page.evaluate(() => {
+        state.includeDstCost = true; state.to = 'JS'; applyToProv();
+        state.dstMode = 'mix'; state.dstCapMode = 'capacity';
+        state.dstMix = [
+          { tier: '110千伏', billing: 'twopart', share: 30, lf: 60 },
+          { tier: '1~10（20）千伏', billing: 'twopart', share: 50, lf: 60 },
+          { tier: '1~10（20）千伏', billing: 'single', share: 20, lf: null },
+        ];
+        state._res = solveState(); renderCalc();
+        document.getElementById('d-detail').open = true;
+        document.querySelector('header').style.visibility = 'hidden';
+        document.querySelector('nav').style.visibility = 'hidden';
+      });
+      await page.waitForSelector('#d-detail table');
+    },
+  },
+  {
+    // 参数弹层 · 用户组合三行：口径选择、加权输配只读值、组合编辑区卡片与占比合计
+    name: 'x-dst-mix', target: 'viewport', async prepare(page) {
+      await page.click('#btn-params');
+      await page.waitForSelector('#param-sheet.open');
+      await page.evaluate(() => {
+        state.includeDstCost = true; state.to = 'JS'; applyToProv();
+        state.dstMode = 'mix'; state.dstCapMode = 'capacity';
+        state.dstMix = [
+          { tier: '110千伏', billing: 'twopart', share: 30, lf: 60 },
+          { tier: '1~10（20）千伏', billing: 'twopart', share: 50, lf: 60 },
+          { tier: '1~10（20）千伏', billing: 'single', share: 20, lf: null },
+        ];
+        state._res = solveState(); renderCalc();
+      });
+      await page.waitForSelector('#dst-mix-rows');
+      await page.waitForTimeout(350);
+    },
+  },
+  {
     // 价格组成条悬停提示（气泡底色 / 焦点环）
     name: 'x-pbar-tip', target: '.card.plan', async prepare(page) {
       await page.hover('.card.plan .pbar i');

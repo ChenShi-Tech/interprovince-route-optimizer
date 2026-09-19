@@ -43,6 +43,8 @@ function renderCalc(){
     `<option value="${k}" ${k===sel?'selected':''} ${k===ex?'disabled':''}>${PV[k].n}</option>`).join('');
   // 只算到受端省界：受端省内两项（省网输配电价 / 基金及附加）不参与计算，界面上置灰并标注
   const noDst=state.includeDstCost===false;
+  // 组合口径下「取值依据」行显示加权输配（state.pNet 未参与计算）
+  const _mixFoot=noDst?null:(dstMixActive()?dstMixOf():null);
 
   // 存储故障可见化（spec: local-persistence）：写入失败后常驻提示，测算功能不受影响
   const _sbHead=_storageBroken?`<div class="warn">⚠ 本机存储不可用（隐私模式或空间已满），本次的参数与费率修改在重开应用后不会保留。</div>`:'';
@@ -84,7 +86,8 @@ function renderCalc(){
     // 通道筛空或候选全部越限时，顶部通道选择器仍在；错误卡再给出可直接点的退路，避免困在错误态
     const _chanOn=(res.mustHave||[]).length>0;
     const _acts=(_chanOn?'<button class="btn ghost" type="button" onclick="clearChannel()">取消通道筛选</button>':'')
-      +(res.allInfeasible?'<button class="btn ghost" type="button" onclick="state.showBad=true;state.sel=0;doSolve()">显示越限方案</button>':'');
+      +(res.allInfeasible?'<button class="btn ghost" type="button" onclick="state.showBad=true;state.sel=0;doSolve()">显示越限方案</button>':'')
+      +(res.needParams?'<button class="btn ghost" type="button" onclick="openParams()">去填写</button>':'');
     out+=`<div class="card"><div class="empty">${esc(res.err)}${_acts?`<div class="empty-acts">${_acts}</div>`:''}</div></div>`;
   } else if(res&&res.rows&&res.rows.length){
     // 左＝路线列表，中＝方案详情，右＝智能推荐（宽屏，AI_ENABLED 关闭时不渲染）；手机端纵向堆叠，布局由 .layout 的 CSS 决定
@@ -105,8 +108,8 @@ function renderCalc(){
     <p class="note"><b>区域网损</b>：默认「第三周期参考值」——长三角跨省中长期实施细则（2026）第三十六条规定落地侧价格含华东跨省输电网损，上网价格 =（落地侧成交价 − 华东跨省输电价格）×（1 − 华东跨省输电网损率）− 送出省外送输电价格。参考值为 ${Object.entries(DATA.RLOSS||{}).map(([k,v])=>esc(k)+' '+v.historicalPct+'%').join('、')}，来自国网第三监管周期历史公开表（转载来源），尚未确认适用于第四监管周期；「不计入」为缺项基准，不代表已核定为 0；「手填」为待核实假设。区域共用交流接口不再逐段计损。</p>
     <p class="note"><b>费用去重</b>：起点送出省费只计一次；报价已含则不再加。过境交流接口不单独收费，也不按每条抽象接口重复计损；独立专项工程按自身输电价与损耗口径。已含损耗的核价项目不再追加计费损耗。</p>
     <p class="note"><b>网损与合同约定</b>：默认买方承担跨省计费网损，可模拟双方分担。送端省内网损由报价边界选择是否另计，另计时以送端报价估算购损成本；实际合同、交易方案优先。现货规则中的卖方承担约定不自动套用于中长期。</p>
-    <p class="note"><b>自动带入值</b>：受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端报价未手填时随省份带入演示参考值，手填后保留。以上均可手动覆盖，点「恢复」还原核定值。送端报价是可修改的演示假设，不是实时市场报价；省级输配电价默认高压两部制，实际须匹配电网主体、用户类别与电压档，完整明细中可查看该主体各电压档的到户价对照。</p>
-    <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
+    <p class="note"><b>自动带入值</b>：受端省网输配电价与基金及附加在选定<b>受端省</b>时自动带入该省核定价（输配电价取 220kV 及以上两部制电量电价）；送端报价未手填时随省份带入演示参考值，手填后保留。以上均可手动覆盖，点「恢复」还原核定值。送端报价是可修改的演示假设，不是实时市场报价；省级输配电价默认高压两部制，实际须匹配电网主体、用户类别与电压档，完整明细中可查看该主体各电压档的到户价对照。受端用户口径可选「用户组合」：多个电压档按电量占比加权出输配电价与容（需）量折算（适用售电公司、电网代理购电与多受电点用户，组合不预置、由用户按实际情况填写），加权只改到户价高低，不影响路线排序。</p>
+    <div class="lib-src" style="margin-top:6px">当前取值依据：受端 <b>${esc(PV[state.to]?PV[state.to].n:'—')}</b>　输配电价 ${_mixFoot?((_mixFoot.ok?fmt(_mixFoot.net):'—')+'（用户组合加权）'):fmt(state.pNet)} 元/MWh　基金及附加 ${state.fundMissing?'<span style="color:var(--red)">未获取</span>':fmt(state.fund)+' 元/MWh'}${noDst?'　<span style="color:var(--ink3)">（当前口径不计入以上两项）</span>':''}<br>${esc(PV[state.to]?PV[state.to].netSrc:'—')}</div>
     </div></details>
   </div>`;
   document.getElementById('v-calc').innerHTML=out;
@@ -133,19 +136,29 @@ function renderParamBody(noDst){
   let dst='';
   if(!noDst){
     const vt=dstTariff(), ents=dstEntities(), tiers=dstTiers(vt.ent), cap=dstCapFee(vt);
+    const isMix=dstMixActive();
+    const mix=isMix?dstMixOf():null;
     const twoOk=!!(vt.tier&&vt.tier.两部制!=null), oneOk=!!(vt.tier&&vt.tier.单一制!=null);
+    // 组合口径的容（需）量选项可用性看全主体：只要有两部制档带该月单价就可选（单一制行自然按 0 计）。
+    // 口径框是否显示看 state.dstMix 里有没有两部制行（编辑中间态占比未配平时校验失败，也不能丢这个控件）
+    const anyDemand=tiers.some(t=>t.需量电价!=null), anyCapacity=tiers.some(t=>t.容量电价!=null);
+    const mixHasTwoPart=isMix&&(Array.isArray(state.dstMix)?state.dstMix:[]).some(r=>r&&r.billing!=='single');
+    const showCap=(!isMix&&vt.tier&&vt.billing==='twopart')||mixHasTwoPart;
     dst=`<div class="psub">受端到户${vt.ent?`<em>${esc(vt.ent.名称)} · 附件1 第 ${esc(vt.ent.页码)} 页${vt.ent.电价含线损?' · 电价已含线损':''}</em>`:''}</div>
     ${vt.ent&&!tiers.length?`<p class="p-note">${esc(vt.ent.名称)}输配电价按用户容量类别分档（附件1 第 ${esc(vt.ent.页码)} 页），不适用标准电压档，请手填受端输配电价。</p>`:''}
     <div class="pgrid">
       ${ents.length>1?`<label class="f"><span>受端电网主体</span>${sel('i-dstentity',vt.ent.id,ents.map(e=>[e.id,esc(e.名称)]))}</label>`:''}
-      ${tiers.length?`<label class="f"><span>电压等级</span>${sel('i-dsttier',vt.tier.档别,tiers.map(t=>[t.档别,esc(t.档别)]))}</label>
+      ${tiers.length?`<label class="f" style="grid-column:1/-1"><span>受端用户口径</span>${sel('i-dstmode',isMix?'mix':'single',[['single','单一用户'],['mix','用户组合']])}</label>`:''}
+      ${tiers.length&&!isMix?`<label class="f"><span>电压等级</span>${sel('i-dsttier',vt.tier.档别,tiers.map(t=>[t.档别,esc(t.档别)]))}</label>
       <label class="f"><span>计价方式</span>${sel('i-dstbilling',vt.billing,[['twopart','两部制',!twoOk],['single','单一制',!oneOk]])}</label>`:''}
-      <label class="f"><span>受端输配电价 ${resetLink('pNet')}</span><input id="i-pnet" type="number" value="${state.pNet??''}" step="0.1"${vt.special?' placeholder="结构特殊，须手填"':''}></label>
+      ${isMix?`<label class="f"><span>受端输配电价 · 加权</span><b style="font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:15px">${mix&&mix.ok?fmt(mix.net):'—'} 元/MWh</b></label>`
+        :`<label class="f"><span>受端输配电价 ${resetLink('pNet')}</span><input id="i-pnet" type="number" value="${state.pNet??''}" step="0.1"${vt.special?' placeholder="结构特殊，须手填"':''}></label>`}
       <label class="f"><span>基金及附加 ${resetLink('fund')}</span><input id="i-fund" type="number" value="${state.fund??''}" step="0.1"></label>
-      ${vt.tier&&vt.billing==='twopart'?`<label class="f"><span>容（需）量电费</span>${sel('i-dstcapmode',state.dstCapMode||'none',[['none','不计入'],['demand','按需量分摊',vt.tier.需量电价==null],['capacity','按容量分摊',vt.tier.容量电价==null]])}</label>
-      ${state.dstCapMode&&state.dstCapMode!=='none'?`<label class="f"><span>${state.dstCapMode==='capacity'?'容量利用率':'负荷率'} %${cap>0?`<em class="p-calc">≈ ${fmt(cap,1)} 元/MWh</em>`:''}</span><input id="i-dstlf" type="number" min="1" max="100" step="5" value="${state.dstLoadFactor??''}" placeholder="必填，如 60"></label>`:''}`:''}
+      ${showCap?`<label class="f"><span>容（需）量电费</span>${sel('i-dstcapmode',state.dstCapMode||'none',[['none','不计入'],['demand','按需量分摊',isMix?!anyDemand:vt.tier.需量电价==null],['capacity','按容量分摊',isMix?!anyCapacity:vt.tier.容量电价==null]])}</label>
+      ${!isMix&&state.dstCapMode&&state.dstCapMode!=='none'?`<label class="f"><span>${state.dstCapMode==='capacity'?'容量利用率':'负荷率'} %${cap>0?`<em class="p-calc">≈ ${fmt(cap,1)} 元/MWh</em>`:''}</span><input id="i-dstlf" type="number" min="1" max="100" step="5" value="${state.dstLoadFactor??''}" placeholder="必填，如 60"></label>`:''}`:''}
       <label class="f"><span>系统运行费 元/MWh</span><input id="i-dstsysop" type="number" min="0" step="0.1" value="${state.dstSysOpFee??''}" placeholder="未填即缺项"></label>
-    </div>`;
+    </div>
+    ${isMix?renderMixEditor(vt,mix):''}`;
   }
   return `
     <div class="psub">费用口径</div>
@@ -216,6 +229,111 @@ function dstTierRows(r){
   const vt=dstTariff();
   return dstTierTable(vt.ent, r.landed, r.comp.net, r.comp.cap, state.dstCapMode, state.dstLoadFactor);
 }
+/* ---------- 受端用户口径：单一用户 / 用户组合（按电量加权） ----------
+   组合只复用 solve() 既有的 pNet / dstCapFee / dstBilling 入参（加权是线性的，与逐户计算再加权完全等价），
+   不写回 state.pNet，也不进入选路排序。 */
+/* 组合口径是否生效：费用边界为到户、显式选了「用户组合」、且当前主体有标准电压档
+   （省间口径与深圳等结构特殊主体一律按单一用户处理，存档里残留的组合配置不参与计算也不报错）。 */
+function dstMixActive(){
+  if(state.includeDstCost===false) return false;
+  if(state.dstMode!=='mix') return false;
+  return dstTiers(dstTariff().ent).length>0;
+}
+/* 组合的校验＋加权（cost.js 纯函数 dstMixTariff），界面与导出共用；不写回 state。 */
+function dstMixOf(){
+  const vt=dstTariff();
+  return dstMixTariff(vt.ent, state.dstMix, state.dstCapMode);
+}
+/* 切到用户组合且组合为空：按当前单一口径所选档生成一行 100%（负荷率沿用），切换瞬间主卡价格不变。 */
+function seedMixRow(){
+  const vt=dstTariff();
+  state.dstMix=[{tier:vt.tier?vt.tier.档别:'', billing:vt.billing, share:100, lf:state.dstLoadFactor??null}];
+}
+/* 组合编辑区：新增一行（占比预填 100−当前合计，可为 0 待用户配平）；行数达该主体组合数上限时不再加。 */
+function mixAdd(){
+  readMixInputs();   // 先读回编辑区已填的行，避免覆盖未保存的输入
+  if(!Array.isArray(state.dstMix)) state.dstMix=[];
+  const tiers=dstTiers(dstTariff().ent);
+  const maxRows=tiers.reduce((a,t)=>a+(t.单一制!=null)+(t.两部制!=null),0);
+  if(state.dstMix.length>=maxRows) return;
+  const used=new Set(state.dstMix.map(r=>((r&&r.tier)||'')+'|'+(r&&r.billing==='single'?'single':'twopart')));
+  const vt=dstTariff();
+  // 新行默认取一个尚未使用的组合：优先当前单一口径所选档，其次按价表顺序（两处都必须构造对象——find 返回的是计价方式字符串本身）
+  let pick=null;
+  if(vt.tier){
+    const b=['twopart','single'].find(x=>!used.has(vt.tier.档别+'|'+x)&&vt.tier[x==='single'?'单一制':'两部制']!=null);
+    if(b) pick={tier:vt.tier.档别,billing:b};
+  }
+  if(!pick) for(const t of tiers){
+    const b=['twopart','single'].find(x=>!used.has(t.档别+'|'+x)&&t[x==='single'?'单一制':'两部制']!=null);
+    if(b){ pick={tier:t.档别,billing:b}; break; }
+  }
+  const rest=Math.round((100-state.dstMix.reduce((s,r)=>s+(+r.share||0),0))*10)/10;
+  state.dstMix=state.dstMix.concat([{tier:pick?pick.tier:'', billing:pick?pick.billing:'twopart', share:rest>0?rest:0, lf:state.dstLoadFactor??null}]);
+  state.sel=0; state._res=solveState(); saveLast(); renderCalc();
+}
+function mixDel(k){
+  readMixInputs();
+  state.dstMix=state.dstMix.filter((_,i)=>i!==k);
+  state.sel=0; state._res=solveState(); saveLast(); renderCalc();
+}
+/* 从渲染好的组合编辑区读回各行；行数以容器上的 data-rows 计数为准（不按「节点是否存在」探测，
+   模拟 DOM / 部分渲染环境下都不会误读），容器不存在或计数为 0 时保留 state.dstMix 不动，
+   与 #i-pnet「只在渲染时读取」的口径一致。 */
+function readMixInputs(){
+  if(!dstMixActive()) return;
+  const box=document.getElementById('dst-mix-rows');
+  const n=box&&box.dataset?(+box.dataset.rows||0):0;
+  if(!(n>0)) return;
+  const val=id=>{ const el=document.getElementById(id); return el?String(el.value??'').trim():''; };
+  const num=id=>{ const s=val(id); return s===''||!Number.isFinite(+s)?null:+s; };
+  const rows=[];
+  for(let k=0;k<n;k++){
+    if(document.getElementById('i-mix-tier-'+k)==null) break;   // 真实 DOM 中与 data-rows 一致，防御性提前结束
+    rows.push({tier:val('i-mix-tier-'+k), billing:val('i-mix-bill-'+k)==='single'?'single':'twopart', share:num('i-mix-share-'+k), lf:num('i-mix-lf-'+k)});
+  }
+  if(rows.length) state.dstMix=rows;
+}
+/* 组合编辑区：每行一张小卡片（电压档 × 计价方式 × 电量占比 × 负荷率）。负荷率只在两部制行且口径非「不计入」时出现；
+   占比合计 ≠100% 时红字＋文字原因（不只靠颜色）。错误说明来自 dstMixTariff 的校验文案（具体到行）。 */
+function renderMixEditor(vt,mix){
+  const sel=(id,cur,opts)=>`<select id="${id}">${opts.map(([v,t,dis])=>`<option value="${esc(v)}" ${String(cur)===String(v)?'selected':''}${dis?' disabled':''}>${t}</option>`).join('')}</select>`;
+  const tiers=dstTiers(vt.ent);
+  const rows=Array.isArray(state.dstMix)?state.dstMix:[];
+  const maxRows=tiers.reduce((a,t)=>a+(t.单一制!=null)+(t.两部制!=null),0);
+  const total=rows.reduce((s,r)=>s+(+r.share||0),0);
+  const bad=Math.abs(total-100)>0.01;
+  let out=`${mix&&!mix.ok?`<p class="p-note">${esc(mix.err)}</p>`:''}<div id="dst-mix-rows" data-rows="${rows.length}">`;
+  rows.forEach((r,k)=>{
+    const tier=tiers.find(t=>t.档别===r.tier);
+    const twoDis=!tier||tier.两部制==null, oneDis=!tier||tier.单一制==null;
+    const needLf=r.billing!=='single'&&state.dstCapMode&&state.dstCapMode!=='none';
+    out+=`<div style="border:var(--hairline) solid var(--line2);border-radius:var(--radius-field);padding:9px 10px 4px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+        <b style="font-size:12px;color:var(--ink2)">第 ${k+1} 档</b>
+        <button class="btn ghost" type="button" style="width:auto;padding:5px 12px;font-size:12px" onclick="mixDel(${k})" aria-label="删除第 ${k+1} 档">删除</button>
+      </div>
+      <div class="pgrid">
+        <label class="f"><span>电压档</span>${sel('i-mix-tier-'+k,r.tier,tiers.map(t=>[t.档别,esc(t.档别)]))}</label>
+        <label class="f"><span>计价方式</span>${sel('i-mix-bill-'+k,r.billing,[['twopart','两部制',twoDis],['single','单一制',oneDis]])}</label>
+        <label class="f"><span>电量占比 %</span><input id="i-mix-share-${k}" type="number" min="0" max="100" step="1" value="${r.share??''}" placeholder="如 30"></label>
+        ${needLf?`<label class="f"><span>负荷率 %</span><input id="i-mix-lf-${k}" type="number" min="1" max="100" step="5" value="${r.lf??''}" placeholder="必填，如 60"></label>`:''}
+      </div>
+    </div>`;
+  });
+  out+='</div>';
+  out+=`<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:2px 0 10px">
+    <span style="font-size:12px;color:var(--ink2)">占比合计 <b style="font-family:var(--font-num);font-variant-numeric:tabular-nums">${Math.round(total*10)/10}%</b></span>
+    ${bad?`<span style="font-size:11.5px;color:var(--red)">合计须为 100%（当前 ${Math.round(total*10)/10}%），结果暂不出，请把各档占比配平，工具不会自动缩放</span>`:''}
+  </div>`;
+  if(rows.length<maxRows)
+    out+=`<button class="btn ghost" type="button" style="width:auto;padding:8px 14px;font-size:12.5px" onclick="mixAdd()">添加一档</button>`;
+  return out;
+}
+/* 价格副标题：费用边界＋组合口径（组合模式标注「用户组合加权」，主卡与方案卡共用）。 */
+function dstPriceLabel(){
+  return state.includeDstCost===false?'省界价格':(dstMixActive()?'到户价格 · 用户组合加权':'到户价格');
+}
 // 原文未给数值的条目（如蒙西送华北「按现行模式执行」）不提供选择
 function srcStations(){ const v=(DATA.SRCX||{})[state.from]; return Array.isArray(v)?v.filter(x=>x.送出价!=null):[]; }
 function srcStation(){ const k=state.srcStation; return k!=null&&k!==''?srcStations()[+k]||null:null; }
@@ -230,8 +348,22 @@ function solveInput(){
       // dstInLossPct=0（不另计费）+ dstQtyLossPct=注3 线损率（扣电量）
       if(vt.qtyLossPct!=null) extra.dstQtyLossPct=vt.qtyLossPct;
     }
-    if(vt.tier){ extra.dstBilling=vt.billing; }
-    extra.dstCapFee=dstCapFee(vt);
+    if(dstMixActive()){
+      const mix=dstMixOf();
+      if(mix.ok){
+        // 组合加权是线性的：加权值直接走 solve() 既有的 pNet / dstCapFee / dstBilling 入参，
+        // 与逐户分别计算再加权完全相等；不写回 state.pNet（手改标记与单一口径互不影响）
+        extra.pNet=mix.net;
+        extra.dstCapFee=mix.cap;
+        extra.dstBilling=mix.hasTwoPart?'twopart':'single';
+      }else{
+        // 纵深防御：绕过 solveState 预检的调用（通道优选、敏感性扫描）拿到 NaN 后 solve 必报错，不静默出数
+        extra.pNet=NaN;
+      }
+    }else{
+      if(vt.tier){ extra.dstBilling=vt.billing; }
+      extra.dstCapFee=dstCapFee(vt);
+    }
     extra.dstSysOpFee=state.dstSysOpFee??null;
   }
   const st=srcStation();
@@ -245,15 +377,20 @@ function paramSummary(){
     ['报价边界',state.sourceQuote==='export'?'含省内费用':'不含省内输电费',state.sourceQuote!==PARAM_DEFAULTS.sourceQuote],
   ];
   if(state.includeDstCost){
-    const vt=dstTariff(), def=((DATA.VT||{})[state.to]||{}).默认主体;
-    if(vt.tier){
+    const vt=dstTariff();
+    if(dstMixActive()){
+      // 组合口径：加权输配写进「到户」一项；单一口径的受端输配电价 / 容（需）量两项不适用（state.pNet 未参与计算）
+      const mix=dstMixOf();
+      items.push(['到户', mix.ok?`用户组合 ${mix.rows.length} 档 · 加权输配 ${fmt(mix.net)}`:`用户组合 ${Array.isArray(state.dstMix)?state.dstMix.length:0} 档`, true]);
+    }else if(vt.tier){
+      const def=((DATA.VT||{})[state.to]||{}).默认主体;
       const tiers=dstTiers(vt.ent), chg=(vt.ent&&vt.ent.id!==def)||vt.tier!==tiers[tiers.length-1]||vt.billing!=='twopart';
       items.push(['到户',(vt.ent&&vt.ent.id!==def?vt.ent.名称+' ':'')+vt.tier.档别+' '+(vt.billing==='single'?'单一制':'两部制'),chg]);
+      const base=vt.net??(t&&t.net);
+      if(base!=null && state.pNet!==base) items.push(['受端输配电价',fmt(state.pNet,2),true]);
+      const cap=dstCapFee(vt);
+      if(cap>0) items.push(['容（需）量电费',fmt(cap,1)+' 元/MWh',true]);
     }
-    const base=vt.net??(t&&t.net);
-    if(base!=null && state.pNet!==base) items.push(['受端输配电价',fmt(state.pNet,2),true]);
-    const cap=dstCapFee(vt);
-    if(cap>0) items.push(['容（需）量电费',fmt(cap,1)+' 元/MWh',true]);
     if(state.dstSysOpFee!=null) items.push(['系统运行费',fmt(state.dstSysOpFee,1)+' 元/MWh',true]);
   }
   if(srcStation() && state.sourceQuote!=='export') items.push(['送出价',srcStation().范围,true]);
@@ -283,6 +420,19 @@ function renderDstWarn(){
   const vt=dstTariff();
   if(vt.special)
     return `<div class="cfg-warn">⚠ ${esc(vt.ent.名称)}输配电价按用户容量类别与月度负荷率分档（1077号附件1 第 ${esc(vt.ent.页码)} 页），本工具不能自动带入（不沿用其它主体值）：${state.pNet==null?'<b>请手填受端输配电价</b>':'当前为手填值，请核对适用档'}　<a onclick="openParams()">去填写</a></div>`;
+  // 组合口径：两部制行在「不计入」或缺负荷率（或缺月单价按 0 计）时到户价偏低——不算校验失败，但必须醒目
+  if(dstMixActive()){
+    const mix=dstMixOf();
+    if(mix.ok){
+      if(!state.dstCapMode||state.dstCapMode==='none')
+        return `<div class="cfg-warn">⚠ 组合含两部制档，未含容（需）量电费，到户价偏低　<a onclick="openParams()">去填写</a></div>`;
+      if(mix.missingLf>0)
+        return `<div class="cfg-warn">⚠ 组合中 ${mix.missingLf} 行两部制未填负荷率，到户价偏低　<a onclick="openParams()">填写负荷假设</a></div>`;
+      if(mix.nullPrice>0)
+        return `<div class="cfg-warn">⚠ 组合中 ${mix.nullPrice} 行两部制没有对应容（需）量月单价（1077号附件1 原表空白），按 0 计　<a onclick="openParams()">去核对</a></div>`;
+    }
+    return '';
+  }
   if(vt.tier && vt.billing==='twopart' && !(dstCapFee(vt)>0))
     return `<div class="cfg-warn">⚠ 两部制未含容量/需量电费，到户价偏低　<a onclick="openParams()">填写负荷假设</a></div>`;
   return '';
@@ -292,7 +442,7 @@ function renderParamSheet(res){
   if(!body) return;
   body.innerHTML=renderParamBody(state.includeDstCost===false);   // 正文常驻 DOM：readInputs 按 id 读取，面板收起时也要在
   const r=selectedRow(res);
-  if(price) price.innerHTML=r?`${fmt(r.landed,2)}<small>元/MWh · ${state.includeDstCost===false?'省界价格':'到户价格'}</small>`:'—';
+  if(price) price.innerHTML=r?`${fmt(r.landed,2)}<small>元/MWh · ${dstPriceLabel()}</small>`:'—';
 }
 /* ---------- 到户价分档对照（完整明细 · 费用拆解之后） ----------
    列出当前受端电网主体全部「电压档 × 计价方式」的到户价。依据 1490号附件2 第十五至十七条：
@@ -308,24 +458,36 @@ function renderDstTierTable(r){
     return `<div class="sub">到户价分档对照<em>${esc(vt.ent.名称)}</em></div>
       <p class="note">${esc(vt.ent.名称)}按用户容量类别与月度负荷率分档（1077号附件1 第 ${esc(vt.ent.页码)} 页），无标准电压档对照，到户价按手填输配电价计算。</p>`;
   const rows=dstTierRows(r);
+  const isMix=dstMixActive();
+  const mix=isMix?dstMixOf():null;
+  const mixRows=(mix&&mix.ok&&Array.isArray(mix.rows))?mix.rows:[];
+  const byKey={};
+  mixRows.forEach(x=>{ byKey[x.档别+'|'+x.billing]=x; });
+  const base=r.landed-r.comp.net-r.comp.cap;
   const fundTxt=state.fundMissing?'—（未获取）':fmt(r.comp.fund);
   const sysTxt=state.dstSysOpFee==null?'—（未填）':fmt(r.comp.sysOp);
   const hasTwoPart=rows.some(x=>x.billing==='twopart');
   let out=`<div class="sub">到户价分档对照<em>单位 元/MWh · ${esc(vt.ent.名称)} · 附件1 第 ${esc(vt.ent.页码)} 页</em></div>
-    <p class="note" style="margin:0 0 6px">各档共同部分：节点交付价计入受端线损 ${fmt(r.border+r.comp.inLoss)} ＋ 基金及附加 ${fundTxt} ＋ 系统运行费 ${sysTxt}；以下只列随电压档变化的项。<b>电压档只影响到户价高低，不影响路线排序。</b></p>
+    <p class="note" style="margin:0 0 6px">各档共同部分：节点交付价计入受端线损 ${fmt(r.border+r.comp.inLoss)} ＋ 基金及附加 ${fundTxt} ＋ 系统运行费 ${sysTxt}；以下只列随电压档变化的项。<b>电压档只影响到户价高低，不影响路线排序。</b>${isMix?'当前为用户组合口径，组合行标注占比，表末「用户组合加权」即主卡价格。':''}</p>
     <table>
       <tr><th style="width:38%">电压档 · 计价方式</th><th>输配电价</th><th>容（需）量</th><th>到户价</th></tr>`;
   for(const row of rows){
-    const cur=!!(vt.tier&&row.档别===vt.tier.档别&&row.billing===vt.billing);
+    const mr=byKey[row.档别+'|'+row.billing];
+    const cur=!isMix&&!!(vt.tier&&row.档别===vt.tier.档别&&row.billing===vt.billing);
+    // 组合模式：容（需）量按该行自己的负荷率折算（不在组合内的行显示 —）；单一口径：按全局口径与负荷率
+    const cap=isMix?(mr?mr.cap:0):row.cap;
     // 首列放开换行：390px 下「220千伏及以上 · 两部制　当前」一行放不下，截断会把「当前」两字藏掉（不能只靠颜色区分）
-    out+=`<tr${cur?' style="background:var(--blue-bg)"':''}><td style="white-space:normal">${esc(row.档别)} · ${row.billing==='single'?'单一制':'两部制'}${cur?'　<b>当前</b>':''}</td><td>${fmt(row.net)}</td><td>${row.cap!=null&&row.cap>0?fmt(row.cap):'—'}</td><td>${fmt(row.landed)}</td></tr>`;
+    out+=`<tr${cur?' style="background:var(--blue-bg)"':''}><td style="white-space:normal">${esc(row.档别)} · ${row.billing==='single'?'单一制':'两部制'}${mr?`　占 ${mr.share}%`:''}${cur?'　<b>当前</b>':''}</td><td>${fmt(row.net)}</td><td>${cap!=null&&cap>0?fmt(cap):'—'}</td><td>${fmt(base+row.net+(cap||0))}</td></tr>`;
   }
+  if(isMix&&mix&&mix.ok)
+    out+=`<tr style="background:var(--blue-bg)"><td style="white-space:normal"><b>用户组合加权</b>${mix.missingLf?`　${mix.missingLf} 行未填负荷率`:''}</td><td>${fmt(mix.net)}</td><td>${mix.cap>0?fmt(mix.cap):'—'}</td><td>${fmt(r.landed)}</td></tr>`;
   out+='</table>';
-  // 手填说明：pNet 被清空（手改后留空）时也要说清差异来源，不能渲染成「手填 — 元/MWh」
-  if(state.pNetManual)
+  // 手填说明：仅单一口径（组合口径没有 #i-pnet，加权值即口径本身）
+  if(!isMix&&state.pNetManual)
     out+=`<p class="note">${state.pNet==null?'主卡未填受端输配电价':'主卡使用手填输配电价 '+fmt(state.pNet)+' 元/MWh'}，本表各行按核定值计算，当前行的到户价与主卡价格可以不同。</p>`;
   // 偏低注记：两部制一行容需量都没算出来（口径为不计入，或口径已选但负荷率未填）时就该点名
-  if(hasTwoPart && !rows.some(x=>x.billing==='twopart'&&x.cap>0))
+  const capApplied=isMix?!!(mix&&mix.ok&&mix.cap>0):rows.some(x=>x.billing==='twopart'&&x.cap>0);
+  if(hasTwoPart && !capApplied)
     out+=`<p class="note">两部制各行未含容（需）量电费${state.dstCapMode&&state.dstCapMode!=='none'?'（负荷率未填）':''}，偏低。</p>`;
   return out;
 }
@@ -354,6 +516,8 @@ function closeParams(fromHistory){
    不走 doSolve —— readInputs 会把面板里的旧值读回来。 */
 function resetParams(){
   Object.assign(state,PARAM_DEFAULTS);
+  // 展开会把 state.dstMix 指到 PARAM_DEFAULTS.dstMix 同一引用，之后 push 就污染默认值——必须显式给新数组
+  state.dstMix=[];
   state.pNetManual=false; state.fundManual=false;   // 恢复默认：受端两项回到核定值（清除手改标记）
   applyToProv();
   state.sel=0; state._res=solveState(); saveLast(); renderCalc();
@@ -367,7 +531,7 @@ function selectedRow(res){
 }
 function renderHeroResult(res){
   const r=selectedRow(res);
-  const costName=state.includeDstCost===false?'省界价格':'到户价格';
+  const costName=dstPriceLabel();
   if(!r) return `<div class="hero-res empty-res"><div class="hero-lb">${costName}</div><div class="hero-v">—</div>
     <div class="hero-sub">${res&&res.err?esc(res.err):'请选择不同的出发地与目的地'}</div></div>`;
   const stops=routeStops(r), landings=stops.filter(s=>s.landing);
@@ -394,7 +558,7 @@ function renderPriceComposition(res){
     <div class="cmp-bar">${items.map(x=>`<i style="width:${(Math.abs(x.v)/tot*100).toFixed(2)}%;background:${x.color}" title="${esc(x.label)} ${fmt(x.v,2)}"></i>`).join('')}</div>
     <div class="cmp-list">
       ${items.map((x,i)=>`<div class="cmp-item"><div class="l"><i style="background:${x.color}"></i>${i?'+ ':''}${esc(x.label)}</div><div class="v">${fmt(x.v,2)}</div><div class="p">${fmt(x.v/r.landed*100,1)}%</div></div>`).join('')}
-      <div class="cmp-item tot"><div class="l">= ${state.includeDstCost===false?'省界价格':'到户价格'}</div><div class="v">${fmt(r.landed,2)}</div><div class="p">100%</div></div>
+      <div class="cmp-item tot"><div class="l">= ${dstPriceLabel()}</div><div class="v">${fmt(r.landed,2)}</div><div class="p">100%</div></div>
     </div>
   </div>`;
 }
@@ -493,6 +657,11 @@ function solveState(){
   // M13/M9：boot.js 的主体/档位分支只写入非空自动值；结构特殊的主体（深圳）在这里回到「缺项须手填」，
   // 避免静默沿用上一个主体的输配电价。手改值（pNetManual/fundManual）不受影响。
   syncDstAuto();
+  // 用户组合校验（6.3）：任一条不满足就不调用 solve()，错误文案具体到行；错误卡给「去填写」退路
+  if(dstMixActive()){
+    const mix=dstMixOf();
+    if(!mix.ok) return {err:mix.err, needParams:true};
+  }
   let res=solve(solveInput(), algoData());
   const avail=new Set((res.availChannels||[]).map(c=>c.id));
   if(avail.size && (state.mustHave||[]).some(id=>!avail.has(id))){
@@ -645,7 +814,7 @@ function renderRouteTimeline(r){
 function renderDetail(res,r){
   if(!r) return '';
   const costName=state.includeDstCost!==false?'落地成本':'省界成本';
-  const priceName=state.includeDstCost===false?'省界价格':'到户价格';
+  const priceName=dstPriceLabel();
   const blocks=routeDisplayBlocks(r), own=ownEdges(r);
   // REQ-201：未确认可用于本笔中长期交易的通道——只看方案自有通道，区域网架内的联络线不告警
   const ntSegs=own.filter(e=>e.tradable===false);
@@ -701,9 +870,9 @@ function renderDetail(res,r){
       ${r.comp.reg>0?`<tr><td>区域电网输电费</td><td>${fmt(r.comp.reg)}</td><td>${num(r.yuan.reg)}</td><td>${fmt(r.yuan.reg/r.yuan.total*100,1)}%</td></tr>`:''}
       <tr><td>网损折价（受端承担部分${r.Dphys!==r.D?'，含线损段不另收':''}）</td><td>${fmt(r.comp.loss)}</td><td>${num(r.yuan.loss)}</td><td>${fmt(r.yuan.loss/r.yuan.total*100,1)}%</td></tr>
       ${r.comp.inLoss>0?`<tr><td>受端省内上网环节线损费用（线损率 ${fmt(r.inLossPct,2)}%）</td><td>${fmt(r.comp.inLoss)}</td><td>${num(r.yuan.inLoss)}</td><td>${fmt(r.yuan.inLoss/r.yuan.total*100,1)}%</td></tr>`:''}
-      ${r.comp.net>0?`<tr><td>受端省网输配电价</td><td>${fmt(r.comp.net)}</td><td>${num(r.yuan.net)}</td><td>${fmt(r.yuan.net/r.yuan.total*100,1)}%</td></tr>`:''}
+      ${r.comp.net>0?`<tr><td>受端省网输配电价${dstMixActive()?'（用户组合加权）':''}</td><td>${fmt(r.comp.net)}</td><td>${num(r.yuan.net)}</td><td>${fmt(r.yuan.net/r.yuan.total*100,1)}%</td></tr>`:''}
       ${r.comp.fund>0?`<tr><td>政府性基金及附加</td><td>${fmt(r.comp.fund)}</td><td>${num(r.yuan.fund)}</td><td>${fmt(r.yuan.fund/r.yuan.total*100,1)}%</td></tr>`:''}
-      ${r.comp.cap>0?`<tr><td>容（需）量电费分摊（负荷率 ${fmt(state.dstLoadFactor,0)}% 假设）</td><td>${fmt(r.comp.cap)}</td><td>${num(r.yuan.cap)}</td><td>${fmt(r.yuan.cap/r.yuan.total*100,1)}%</td></tr>`:''}
+      ${r.comp.cap>0?`<tr><td>容（需）量电费分摊${dstMixActive()?'（按各档负荷率假设加权）':`（负荷率 ${fmt(state.dstLoadFactor,0)}% 假设）`}</td><td>${fmt(r.comp.cap)}</td><td>${num(r.yuan.cap)}</td><td>${fmt(r.yuan.cap/r.yuan.total*100,1)}%</td></tr>`:''}
       ${r.comp.sysOp>0?`<tr><td>系统运行费（手填）</td><td>${fmt(r.comp.sysOp)}</td><td>${num(r.yuan.sysOp)}</td><td>${fmt(r.yuan.sysOp/r.yuan.total*100,1)}%</td></tr>`:''}
       ${state.includeDstCost===false?`<tr><td style="color:var(--ink3)">受端省内费用</td><td style="color:var(--ink3)">已按口径排除</td><td style="color:var(--ink3)">—</td><td style="color:var(--ink3)">—</td></tr>`:''}
       <tr><td><b>合计</b></td><td><b>${fmt(r.landed)}</b></td><td><b>${num(r.yuan.total)}</b></td><td>100%</td></tr>
@@ -836,8 +1005,14 @@ function exportReport(){
   L.push('- 测算日期：'+state.tradeDate);
   L.push('- 电量（省间节点交付）：'+state.qty+' MWh / '+state.hours+' h　网损承担：'+(state.lossBearer==1?'受端':state.lossBearer==0.5?'两端各半':'送端'));
   L.push('- 产品：省间中长期；送端报价边界：'+state.sourceQuote+'；送端省内网损：'+state.originLossMode+'；区域计费范围：'+state.regionChargeMode);
-  L.push('- 价格参数：送端报价 '+state.pGen+' / 受端输配电价 '+state.pNet+' / 基金及附加 '+state.fund+' 元/MWh');
-  if(state.includeDstCost!==false){ const vt=dstTariff(); if(vt.tier) L.push('- 受端到户：'+(vt.ent?vt.ent.名称+' ':'')+vt.tier.档别+' '+(vt.billing==='single'?'单一制':'两部制')+'（1077号附件1 第 '+vt.ent.页码+' 页）；省内上网环节线损率 '+fmt(vt.inLoss,2)+'%'); }
+  L.push('- 价格参数：送端报价 '+state.pGen+' / 受端输配电价 '+(dstMixActive()?'(用户组合加权) '+fmt(dstMixOf().net):state.pNet)+' / 基金及附加 '+state.fund+' 元/MWh');
+  if(state.includeDstCost!==false){
+    const vt=dstTariff();
+    if(dstMixActive()){
+      const mix=dstMixOf();
+      L.push('- 受端到户：用户组合 '+(mix.ok?mix.rows.length:0)+' 档按电量加权'+(mix.ok?'（加权输配电价 '+fmt(mix.net)+' / 加权容需量折算 '+fmt(mix.cap)+' 元/MWh）':'（占比未配平，当前不出结果）'));
+    }else if(vt.tier) L.push('- 受端到户：'+(vt.ent?vt.ent.名称+' ':'')+vt.tier.档别+' '+(vt.billing==='single'?'单一制':'两部制')+'（1077号附件1 第 '+vt.ent.页码+' 页）；省内上网环节线损率 '+fmt(vt.inLoss,2)+'%');
+  }
   if(srcStation() && state.sourceQuote!=='export') L.push('- 送出价口径：'+srcStation().范围+' '+fmt(srcStation().送出价,2)+' 元/MWh');
   L.push('- 口径：'+(state.includeDstCost===false?'只算到受端省界':'到户已列费用小计')+'　区域电网费：'+(state.includeRegion?'计入':'不计入'));
   for(const issue of r.pricingIssues||[]) L.push('- 适用条件：'+issue);
@@ -876,20 +1051,40 @@ function exportReport(){
       L.push(vt.ent.名称+'按用户容量类别与月度负荷率分档（1077号附件1 第 '+vt.ent.页码+' 页），无标准电压档对照，到户价按手填输配电价计算。');
       L.push('');
     } else if(vt.ent){
+      const isMix=dstMixActive();
+      const mix=isMix?dstMixOf():null;
+      const mixRows=(mix&&mix.ok&&Array.isArray(mix.rows))?mix.rows:[];
+      const byKey={};
+      mixRows.forEach(x=>{ byKey[x.档别+'|'+x.billing]=x; });
       const rows=dstTierRows(r);
+      const base=r.landed-r.comp.net-r.comp.cap;
       L.push('## 到户价分档对照（'+vt.ent.名称+' · 附件1 第 '+vt.ent.页码+' 页）');
       L.push('');
-      L.push('各档共同部分：节点交付价计入受端线损 '+fmt(r.border+r.comp.inLoss)+' ＋ 基金及附加 '+(state.fundMissing?'—（未获取）':fmt(r.comp.fund))+' ＋ 系统运行费 '+(state.dstSysOpFee==null?'—（未填）':fmt(r.comp.sysOp))+'；电压档只影响到户价高低，不影响路线排序。单位 元/MWh。');
+      L.push('各档共同部分：节点交付价计入受端线损 '+fmt(r.border+r.comp.inLoss)+' ＋ 基金及附加 '+(state.fundMissing?'—（未获取）':fmt(r.comp.fund))+' ＋ 系统运行费 '+(state.dstSysOpFee==null?'—（未填）':fmt(r.comp.sysOp))+'；电压档只影响到户价高低，不影响路线排序。单位 元/MWh。'+(isMix?' 当前为用户组合口径，组合行标注占比与负荷率，末行「用户组合加权」即主卡价格。':''));
       L.push('');
-      L.push('| 电压档 · 计价方式 | 输配电价 | 容（需）量 | 到户价 |');
-      L.push('|---|---|---|---|');
-      for(const row of rows){
-        const cur=vt.tier&&row.档别===vt.tier.档别&&row.billing===vt.billing;
-        L.push('| '+row.档别+' '+(row.billing==='single'?'单一制':'两部制')+(cur?'（当前）':'')
-          +' | '+fmt(row.net)+' | '+(row.cap!=null&&row.cap>0?fmt(row.cap):'—')+' | '+fmt(row.landed)+' |');
+      if(isMix){
+        L.push('| 电压档 · 计价方式 | 占比 % | 负荷率 % | 输配电价 | 容（需）量 | 到户价 |');
+        L.push('|---|---|---|---|---|---|');
+        for(const row of rows){
+          const mr=byKey[row.档别+'|'+row.billing];
+          const cap=mr?mr.cap:0;
+          L.push('| '+row.档别+' '+(row.billing==='single'?'单一制':'两部制')
+            +' | '+(mr?mr.share:'—')+' | '+(mr&&row.billing==='twopart'?(mr.lf!=null?mr.lf:'未填'):'—')
+            +' | '+fmt(row.net)+' | '+(cap!=null&&cap>0?fmt(cap):'—')+' | '+fmt(base+row.net+(cap||0))+' |');
+        }
+        L.push('| **用户组合加权** | 100 | — | '+fmt(mix?mix.net:0)+' | '+(mix&&mix.cap>0?fmt(mix.cap):'—')+' | **'+fmt(r.landed)+'** |');
+      }else{
+        L.push('| 电压档 · 计价方式 | 输配电价 | 容（需）量 | 到户价 |');
+        L.push('|---|---|---|---|');
+        for(const row of rows){
+          const cur=vt.tier&&row.档别===vt.tier.档别&&row.billing===vt.billing;
+          L.push('| '+row.档别+' '+(row.billing==='single'?'单一制':'两部制')+(cur?'（当前）':'')
+            +' | '+fmt(row.net)+' | '+(row.cap!=null&&row.cap>0?fmt(row.cap):'—')+' | '+fmt(row.landed)+' |');
+        }
       }
-      if(state.pNetManual){ L.push(''); L.push((state.pNet==null?'主卡未填受端输配电价':'主卡使用手填输配电价 '+fmt(state.pNet)+' 元/MWh')+'，本表各行按核定值计算。'); }
-      if(rows.some(x=>x.billing==='twopart') && !rows.some(x=>x.billing==='twopart'&&x.cap>0)){ L.push(''); L.push('两部制各行未含容（需）量电费'+(state.dstCapMode&&state.dstCapMode!=='none'?'（负荷率未填）':'')+'，偏低。'); }
+      if(!isMix&&state.pNetManual){ L.push(''); L.push((state.pNet==null?'主卡未填受端输配电价':'主卡使用手填输配电价 '+fmt(state.pNet)+' 元/MWh')+'，本表各行按核定值计算。'); }
+      const capApplied=isMix?!!(mix&&mix.ok&&mix.cap>0):rows.some(x=>x.billing==='twopart'&&x.cap>0);
+      if(rows.some(x=>x.billing==='twopart') && !capApplied){ L.push(''); L.push('两部制各行未含容（需）量电费'+(state.dstCapMode&&state.dstCapMode!=='none'?'（负荷率未填）':'')+'，偏低。'); }
       L.push('');
     }
   }
@@ -962,6 +1157,8 @@ function readInputs(){
   state.pGen=readSan(g,'i-pgen',NUM_LIMITS.quote);
   // 受端输配电价 / 基金及附加只在「到户已列费用」口径下渲染；按渲染时的口径决定是否读取，未渲染时保留预填值
   if(state.includeDstCost!==false){
+    // 组合编辑区已渲染时读回各行（含未配平的中间态）；单一口径未渲染，保留 state.dstMix 不动
+    readMixInputs();
     const pn=g('i-pnet'), fd=g('i-fund'), lf=g('i-dstlf'), so=g('i-dstsysop');
     // 空输入 = 缺项（保留 null，不静默按 0）；M13：与自动带入值一致视为预填、与 state 不同视为手改并持久化标记。
     // FR-1：数值按业务上限钳制（sanNum），超上限红框红字由 clampRegister 负责

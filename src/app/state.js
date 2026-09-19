@@ -10,6 +10,10 @@ const PARAM_DEFAULTS={
   // 受端到户（费用边界=到户已列费用时生效）：电网主体 / 电压档别为 null 时取该省默认主体、最高电压档；
   // 默认两部制 + 最高电压档即原 220kV 及以上两部制电量电价，旧口径不变
   dstEntity:null, dstTier:null, dstBilling:'twopart', dstCapMode:'none', dstLoadFactor:null, dstSysOpFee:null,
+  // 受端用户口径：'single'=单一用户（旧口径）/ 'mix'=用户组合（按电量加权）。
+  // dstMix 每项 {tier:档别名, billing:'single'|'twopart', share:电量占比%, lf:负荷率%|null}；
+  // 换受端省 / 换主体 / 恢复默认会重置回单一用户并清空（重置时必须给新数组，见 calc.js resetParams 的坑）
+  dstMode:'single', dstMix:[],
   srcStation:null,   // 送端电站专属送出价条目（1077号附件1 注4），null = 通用送出价
 };
 const PARAM_DEFAULTS_VER=2;   // 默认值口径版本：旧存档里自动存下的网损选项按新默认重置一次
@@ -22,6 +26,9 @@ let state={
   pGenManual:false,
   sel:0, showBad:false, sortBy:'A', showAll:false,
   ...PARAM_DEFAULTS, regionLossRates:{},
+  // dstMix 显式给新数组：上面的展开会让 state.dstMix 与 PARAM_DEFAULTS.dstMix 同引用，
+  // 之后任何 push 都会污染默认值（calc.js resetParams 同理）
+  dstMix:[],
   tradeDate:new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}),
   // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
