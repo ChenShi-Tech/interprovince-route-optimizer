@@ -8,7 +8,6 @@ function go(t){
 }
 document.addEventListener('change',e=>{
   const id=e.target.id;
-  if(id==='i-mapnet'){ state.mapNet=e.target.checked?'dim':'off'; saveMap(); renderMap(); return; }  // spec: grid-map 全网架开关
   if(id==='i-from'||id==='i-to'){
     const isFrom=(id==='i-from');
     if(isFrom) state.from=e.target.value; else state.to=e.target.value;

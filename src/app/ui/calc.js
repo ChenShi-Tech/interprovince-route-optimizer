@@ -359,18 +359,38 @@ function renderPriceComposition(res){
 }
 
 /* ---------- 可选路线列表 ---------- */
-const RLIMIT=18;
+/* 成本阈值内候选（渲染层口径）：测算页与网架图路线下拉共用（change:
+   grid-map-single-route-and-fixes 抽出），保证两处候选集合一致。
+   阈值基准取最低落地价（越限方案排在可行方案之后，首条不一定最低）；返回 [{r,i}]，i=原候选下标。 */
+function routeThresholdItems(res){
+  const rows=res&&res.rows?res.rows:[];
+  if(!rows.length) return [];
+  const bestPrice=Math.min(...rows.map(x=>x.landed));
+  const thr=bestPrice+Math.abs(bestPrice)*(state.degrade??0.10);
+  return rows.map((r,i)=>({r,i})).filter(it=>it.r.landed<=thr);
+}
+/* 实际展示集合：「展开全部」时为全部候选，否则为阈值内集合。 */
+function routeMenuItems(res){
+  const rows=res&&res.rows?res.rows:[];
+  return state.showAll?rows.map((r,i)=>({r,i})):routeThresholdItems(res);
+}
+/* 路线下拉选项文案（测算页与网架图同源）：序号 + 途经省 + 落地价，首条标注「推荐」 */
+function routeOptLabel(it){
+  return '#'+(it.i+1)+(it.i===0?' 推荐':'')+' · '+it.r.nodes.map(N).join('→')+' · '+fmt(it.r.landed,0)+' 元/MWh';
+}
 function renderRouteList(res){
   const rows=res.rows, sel=selIndex(res);
   const isDst=state.includeDstCost!==false;
   // 口径A 的主指标随「费用边界」换名；口径B/C 本就不含受端省内费用，不受开关影响
-  // 阈值基准取列表中最低的落地价（越限方案排在可行方案之后，首条不一定最低）
-  const bestPrice=rows.length?Math.min(...rows.map(r=>r.landed)):0;
-  const thr=bestPrice+Math.abs(bestPrice)*(state.degrade??0.10);
-  const inThr=rows.filter(r=>r.landed<=thr);
-  const shown=state.showAll?rows:inThr;
+  const inThr=routeThresholdItems(res);   // 阈值内集合（不含 showAll，供折叠计数）
+  const shown=routeMenuItems(res);
   const cut=rows.length-inThr.length;
   const mustN=(res.mustHave||[]).length;
+  /* 路线选择下拉（change: grid-map-single-route-and-fixes）：横滑卡片改下拉，保持简洁；
+     样式复用通道下拉同一套（.pk-col.chan 的 select），推荐路线 #1 为默认选中。
+     阈值收紧等瞬间当前选中项可能不在口径内，补进首位保证下拉值与下方详情一致 */
+  const items=shown.slice();
+  if(!items.some(it=>it.i===sel)) items.unshift({r:rows[sel],i:sel});
   let out=`<div class="card tight">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 参考未越限 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}${mustN?' · 已按通道筛选':''}</span></div>
     <details class="explain"><summary>候选与可行的定义<em>费用边界：${isDst?'到户已列费用小计':'只算到受端省界'}</em></summary><div class="inner">
@@ -380,21 +400,14 @@ function renderRouteList(res){
     <p class="note">通道（页面顶部）：选定通道后只列出经过它的方案；选「全部通道」显示全部候选。下拉项标注经过该通道的参考未越限方案中的最低价，同组内从低到高排列。</p>
     </div></details>
     ${res.truncated?'<div class="warn">候选集已达枚举上限（800 条），排序仅基于已枚举部分，不能保证全局最优——可用通道组件缩小范围后重算。</div>':''}
-    <div class="rlist">`;
-  rows.forEach((r,i)=>{
-    if(!state.showAll && r.landed>thr) return;
-    if(!state.showAll && i>=RLIMIT) return;
-    const via=routeVia(r);
-    out+=`<button class="rc ${i===sel?'on':''} ${r.feasible?'':'bad'}" onclick="pick(${i})" title="${esc(routeStops(r).map(s=>s.name).join(' → '))}">
-      <div class="rc-top"><span class="rc-no">#${i+1}</span><span class="rc-hop">${routeDisplayBlocks(r).length}段</span></div>
-      <div class="rc-line">${esc(routeLead(r))}</div>
-      <div class="rc-price">${fmt(r.landed,0)}<small>元/MWh</small></div>
-      <div class="rc-meta">${via?esc(via)+' · ':''}${fmt(r.dist,0)}km${r.feasible?'':' · <span style="color:var(--red)">越限</span>'}</div>
-    </button>`;
-  });
-  out+=`</div>
+    <div class="pk-col chan">
+      <div class="pk-lb">选择路线 · 按价格从低到高</div>
+      <select id="i-calcroute" onchange="pick(+this.value)"${sel>0?' class="on"':''}>
+        ${items.map(it=>`<option value="${it.i}" ${it.i===sel?'selected':''}>${esc(routeOptLabel(it))}${it.r.feasible?'':' · 越限'}</option>`).join('')}
+      </select>
+    </div>
     <div class="rlist-foot">
-      <span>按价格从低到高</span>
+      <span>按价格从低到高 · 共 ${items.length} 条${cut>0&&!state.showAll?'（另有 '+cut+' 条成本更高未列出）':''}</span>
       <label class="tg"><input type="checkbox" ${state.showBad?'checked':''} onchange="state.showBad=this.checked;state.sel=0;doSolve()"> 含越限</label>
     </div>`;
   const hiddenN=rows.length-shown.length;
@@ -461,8 +474,7 @@ function solveState(){
   return res;
 }
 function clearChannel(){ state.mustHave=[]; state.sel=0; doSolve(); }
-function pick(i){ state.sel=i; if(state.mapView) state.mapView=null; saveLast(); renderCalc();   // grid-map-device-fixes D2：选中方案变化复位触摸视野
-  const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
+function pick(i){ state.sel=i; if(state.mapView) state.mapView=null; saveLast(); renderCalc(); }   // grid-map-device-fixes D2：选中方案变化复位触摸视野
 
 /* ---------- 选中路线详情 ---------- */
 /* 连续的区域内共用交流接口仅在展示层合并；不改动计价路径、容量链或区域计费位置。 */

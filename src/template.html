@@ -7,6 +7,11 @@
      紧跟在样式表后面的内联脚本在首帧前就按当前主题的 --system-bar 改写；启动后 ui/theme.js 的 syncSystemBars() 再同步一次 -->
 <meta name="theme-color" content="#ffffff">
 <title>省间中长期交付成本与报价测算</title>
+<!-- 应用图标内联为 data: URI（change: grid-map-single-route-and-fixes）：零网络请求，
+     浏览器不再产生 /favicon.ico 404，file://（APK 离线包）同样有效。
+     data: URI 不认 CSS 变量，属品牌资产而非界面令牌场景：#185FA5 取自清晰主题 --blue 字面值，
+     已列入 test-design-tokens 守卫白名单 -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23185FA5'/%3E%3Cpolyline points='6,22 13,15 18,19 26,9' fill='none' stroke='%23FFFFFF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='6' cy='22' r='2.6' fill='%23FFFFFF'/%3E%3Ccircle cx='26' cy='9' r='2.6' fill='%23FFFFFF'/%3E%3C/svg%3E">
 <script>
 /* 全局错误兜底（spec: runtime-error-feedback）：head 最先安装，先于腾讯地图脚本，
    捕获启动期第三方脚本错误。提示按消息去重并计数（上限 4 条）；不吞错误——
@@ -35,8 +40,16 @@
     else items[m]++;
     flush();
   }
-  window.onerror=function(m){ report(m); return false; };
-  window.addEventListener('unhandledrejection',function(e){ report(e.reason); });
+  /* 跨域脚本（天地图/腾讯地图 SDK）的异常派发到宿主 window 时，浏览器按同源策略把消息
+     掩码为「Script error.」——不含堆栈与来源，没有任何可行动信息（change:
+     grid-map-single-route-and-fixes，spec runtime-error-feedback 掩码豁免口径）。
+     此类消息不上横幅；return false 不 preventDefault，浏览器控制台的原始完整错误独立留痕。 */
+  var MASKED_RE=/^script error\.?$/i;
+  window.onerror=function(m){ if(!MASKED_RE.test(String(m))) report(m); return false; };
+  window.addEventListener('unhandledrejection',function(e){
+    var r=e&&e.reason, m=r&&(r.message||r);
+    if(!(m&&MASKED_RE.test(String(m)))) report(r);
+  });
   document.addEventListener('click',function(ev){
     if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
   });

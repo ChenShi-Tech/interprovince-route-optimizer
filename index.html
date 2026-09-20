@@ -7,6 +7,11 @@
      紧跟在样式表后面的内联脚本在首帧前就按当前主题的 --system-bar 改写；启动后 ui/theme.js 的 syncSystemBars() 再同步一次 -->
 <meta name="theme-color" content="#ffffff">
 <title>省间中长期交付成本与报价测算</title>
+<!-- 应用图标内联为 data: URI（change: grid-map-single-route-and-fixes）：零网络请求，
+     浏览器不再产生 /favicon.ico 404，file://（APK 离线包）同样有效。
+     data: URI 不认 CSS 变量，属品牌资产而非界面令牌场景：#185FA5 取自清晰主题 --blue 字面值，
+     已列入 test-design-tokens 守卫白名单 -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23185FA5'/%3E%3Cpolyline points='6,22 13,15 18,19 26,9' fill='none' stroke='%23FFFFFF' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='6' cy='22' r='2.6' fill='%23FFFFFF'/%3E%3Ccircle cx='26' cy='9' r='2.6' fill='%23FFFFFF'/%3E%3C/svg%3E">
 <script>
 /* 全局错误兜底（spec: runtime-error-feedback）：head 最先安装，先于腾讯地图脚本，
    捕获启动期第三方脚本错误。提示按消息去重并计数（上限 4 条）；不吞错误——
@@ -35,8 +40,16 @@
     else items[m]++;
     flush();
   }
-  window.onerror=function(m){ report(m); return false; };
-  window.addEventListener('unhandledrejection',function(e){ report(e.reason); });
+  /* 跨域脚本（天地图/腾讯地图 SDK）的异常派发到宿主 window 时，浏览器按同源策略把消息
+     掩码为「Script error.」——不含堆栈与来源，没有任何可行动信息（change:
+     grid-map-single-route-and-fixes，spec runtime-error-feedback 掩码豁免口径）。
+     此类消息不上横幅；return false 不 preventDefault，浏览器控制台的原始完整错误独立留痕。 */
+  var MASKED_RE=/^script error\.?$/i;
+  window.onerror=function(m){ if(!MASKED_RE.test(String(m))) report(m); return false; };
+  window.addEventListener('unhandledrejection',function(e){
+    var r=e&&e.reason, m=r&&(r.message||r);
+    if(!(m&&MASKED_RE.test(String(m)))) report(r);
+  });
   document.addEventListener('click',function(ev){
     if(ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-gerr-close')!=null){ items={}; order=[]; flush(); }
   });
@@ -1093,7 +1106,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-20 06:21';
+const BUILD_TIME='2026-09-20 10:33';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -1302,7 +1315,7 @@ let state={
   // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
   mustHave:[],
-  mapProvider:'svg', tiandituKey:'', mapNet:'dim',   // mapNet：全网架层显示模式 'dim'=弱化显示 / 'off'=隐藏（spec: grid-map 分层）
+  mapProvider:'svg', tiandituKey:'',   // change: grid-map-single-route-and-fixes：mapNet（全网架层开关）随该层一并移除
   // 批��� B（grid-map P1）会话内视图状态，不入档（saveLast 剥离）：mapSec=断面高亮选择、mapQ=搜索词、mapFocusLL=搜索聚焦包围盒（度）、mapRegion=按区域着色
   mapSec:null, mapQ:'', mapFocusLL:null, mapRegion:false,
   // change: grid-map-device-fixes（D2）：mapView=拓扑图用户视野 {x,y,w,h}（会话内不入档，选中方案/参数变化复位）；
@@ -1406,10 +1419,11 @@ function saveLast(){
     delete s._res; delete s._ai; delete s._libStale; delete s._stalePrice;
     delete s.mapSec; delete s.mapQ; delete s.mapFocusLL; delete s.mapRegion;   // 会话内视图状态不入档
     delete s.mapView; delete s.tdDegradeNote;   // change: grid-map-device-fixes：触摸视野与降级说明同为会话内状态
+    delete s.mapNet;   // grid-map-single-route-and-fixes：旧 LS_MAP 的残键不入档
     localStorage.setItem(LS_LAST,JSON.stringify(s));
   }catch(e){ _storageBroken=true; }
 }
-function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey,mapNet:state.mapNet}));}catch(e){ _storageBroken=true; } }
+function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){ _storageBroken=true; } }
 
 /* ===== src/app/algo/network.js ===== */
 /* 图结构与几何工具。
@@ -2643,18 +2657,38 @@ function renderPriceComposition(res){
 }
 
 /* ---------- 可选路线列表 ---------- */
-const RLIMIT=18;
+/* 成本阈值内候选（渲染层口径）：测算页与网架图路线下拉共用（change:
+   grid-map-single-route-and-fixes 抽出），保证两处候选集合一致。
+   阈值基准取最低落地价（越限方案排在可行方案之后，首条不一定最低）；返回 [{r,i}]，i=原候选下标。 */
+function routeThresholdItems(res){
+  const rows=res&&res.rows?res.rows:[];
+  if(!rows.length) return [];
+  const bestPrice=Math.min(...rows.map(x=>x.landed));
+  const thr=bestPrice+Math.abs(bestPrice)*(state.degrade??0.10);
+  return rows.map((r,i)=>({r,i})).filter(it=>it.r.landed<=thr);
+}
+/* 实际展示集合：「展开全部」时为全部候选，否则为阈值内集合。 */
+function routeMenuItems(res){
+  const rows=res&&res.rows?res.rows:[];
+  return state.showAll?rows.map((r,i)=>({r,i})):routeThresholdItems(res);
+}
+/* 路线下拉选项文案（测算页与网架图同源）：序号 + 途经省 + 落地价，首条标注「推荐」 */
+function routeOptLabel(it){
+  return '#'+(it.i+1)+(it.i===0?' 推荐':'')+' · '+it.r.nodes.map(N).join('→')+' · '+fmt(it.r.landed,0)+' 元/MWh';
+}
 function renderRouteList(res){
   const rows=res.rows, sel=selIndex(res);
   const isDst=state.includeDstCost!==false;
   // 口径A 的主指标随「费用边界」换名；口径B/C 本就不含受端省内费用，不受开关影响
-  // 阈值基准取列表中最低的落地价（越限方案排在可行方案之后，首条不一定最低）
-  const bestPrice=rows.length?Math.min(...rows.map(r=>r.landed)):0;
-  const thr=bestPrice+Math.abs(bestPrice)*(state.degrade??0.10);
-  const inThr=rows.filter(r=>r.landed<=thr);
-  const shown=state.showAll?rows:inThr;
+  const inThr=routeThresholdItems(res);   // 阈值内集合（不含 showAll，供折叠计数）
+  const shown=routeMenuItems(res);
   const cut=rows.length-inThr.length;
   const mustN=(res.mustHave||[]).length;
+  /* 路线选择下拉（change: grid-map-single-route-and-fixes）：横滑卡片改下拉，保持简洁；
+     样式复用通道下拉同一套（.pk-col.chan 的 select），推荐路线 #1 为默认选中。
+     阈值收紧等瞬间当前选中项可能不在口径内，补进首位保证下拉值与下方详情一致 */
+  const items=shown.slice();
+  if(!items.some(it=>it.i===sel)) items.unshift({r:rows[sel],i:sel});
   let out=`<div class="card tight">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 参考未越限 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}${mustN?' · 已按通道筛选':''}</span></div>
     <details class="explain"><summary>候选与可行的定义<em>费用边界：${isDst?'到户已列费用小计':'只算到受端省界'}</em></summary><div class="inner">
@@ -2664,21 +2698,14 @@ function renderRouteList(res){
     <p class="note">通道（页面顶部）：选定通道后只列出经过它的方案；选「全部通道」显示全部候选。下拉项标注经过该通道的参考未越限方案中的最低价，同组内从低到高排列。</p>
     </div></details>
     ${res.truncated?'<div class="warn">候选集已达枚举上限（800 条），排序仅基于已枚举部分，不能保证全局最优——可用通道组件缩小范围后重算。</div>':''}
-    <div class="rlist">`;
-  rows.forEach((r,i)=>{
-    if(!state.showAll && r.landed>thr) return;
-    if(!state.showAll && i>=RLIMIT) return;
-    const via=routeVia(r);
-    out+=`<button class="rc ${i===sel?'on':''} ${r.feasible?'':'bad'}" onclick="pick(${i})" title="${esc(routeStops(r).map(s=>s.name).join(' → '))}">
-      <div class="rc-top"><span class="rc-no">#${i+1}</span><span class="rc-hop">${routeDisplayBlocks(r).length}段</span></div>
-      <div class="rc-line">${esc(routeLead(r))}</div>
-      <div class="rc-price">${fmt(r.landed,0)}<small>元/MWh</small></div>
-      <div class="rc-meta">${via?esc(via)+' · ':''}${fmt(r.dist,0)}km${r.feasible?'':' · <span style="color:var(--red)">越限</span>'}</div>
-    </button>`;
-  });
-  out+=`</div>
+    <div class="pk-col chan">
+      <div class="pk-lb">选择路线 · 按价格从低到高</div>
+      <select id="i-calcroute" onchange="pick(+this.value)"${sel>0?' class="on"':''}>
+        ${items.map(it=>`<option value="${it.i}" ${it.i===sel?'selected':''}>${esc(routeOptLabel(it))}${it.r.feasible?'':' · 越限'}</option>`).join('')}
+      </select>
+    </div>
     <div class="rlist-foot">
-      <span>按价格从低到高</span>
+      <span>按价格从低到高 · 共 ${items.length} 条${cut>0&&!state.showAll?'（另有 '+cut+' 条成本更高未列出）':''}</span>
       <label class="tg"><input type="checkbox" ${state.showBad?'checked':''} onchange="state.showBad=this.checked;state.sel=0;doSolve()"> 含越限</label>
     </div>`;
   const hiddenN=rows.length-shown.length;
@@ -2745,8 +2772,7 @@ function solveState(){
   return res;
 }
 function clearChannel(){ state.mustHave=[]; state.sel=0; doSolve(); }
-function pick(i){ state.sel=i; if(state.mapView) state.mapView=null; saveLast(); renderCalc();   // grid-map-device-fixes D2：选中方案变化复位触摸视野
-  const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
+function pick(i){ state.sel=i; if(state.mapView) state.mapView=null; saveLast(); renderCalc(); }   // grid-map-device-fixes D2：选中方案变化复位触摸视野
 
 /* ---------- 选中路线详情 ---------- */
 /* 连续的区域内共用交流接口仅在展示层合并；不改动计价路径、容量链或区域计费位置。 */
@@ -3586,15 +3612,16 @@ function secMemberIds(secId){
 }
 
 function visibleChannels(){
+  /* change: grid-map-single-route-and-fixes：图上只画选中方案——不再产出其它候选（alt）层，
+     全网架层随「显示全网架」开关一并移除。三种底图共用本口径。 */
   const r=state._res&&state._res.rows;
-  const hot=new Set(), alt=new Set(), nodes=new Set(), routeNodes=new Set();
+  const hot=new Set(), nodes=new Set(), routeNodes=new Set();
   if(r&&r.length){
     const sel=Math.min(state.sel,r.length-1);
     r[sel].edges.forEach(e=>hot.add(e.id));
     r[sel].nodes.forEach(k=>{nodes.add(k);routeNodes.add(k);});
-    r.forEach((row,i)=>{ if(i!==sel) row.edges.forEach(e=>alt.add(e.id)); });
   }
-  return {list:CH, hot, alt, nodes, routeNodes, sel:r?Math.min(state.sel,r.length-1):-1};
+  return {list:CH, hot, nodes, routeNodes, sel:r?Math.min(state.sel,r.length-1):-1};
 }
 
 function initMap(){
@@ -3604,17 +3631,8 @@ function initMap(){
     map=new TMap.Map('map-view',{center:new TMap.LatLng(34,108),zoom:4});
     // 腾讯地图样式对象只认真实颜色字符串：初始化时按当前主题解析令牌（renderMap 每次重建地图，换主题后重绘即跟随）
     const C=k=>tokenColor(k), D=mapDots();
-    // 批次 B：tier 线型按（层×tier）建样式，语义与拓扑/天地图一致（design D5）
-    const tierStyles={};
-    ['gov','grid','region','est'].forEach(t=>{
-      const st=tierStyle(t);
-      const dash=st.dash?{dashArray:st.dash.split(' ').map(Number)}:{};
-      tierStyles['alt_'+t]=new TMap.PolylineStyle({color:C('--map-alt'),width:Math.max(1.4,3*st.w),borderWidth:1,borderColor:C('--map-casing'),lineCap:'round',...dash});
-      tierStyles['base_'+t]=new TMap.PolylineStyle({color:C('--map-base'),width:Math.max(0.7,1*st.w),borderWidth:0,lineCap:'round',...dash});
-    });
     polyLayer=new TMap.MultiPolyline({map,styles:{
-      hot:new TMap.PolylineStyle({color:C('--map-route'),width:6,borderWidth:2,borderColor:C('--map-casing'),lineCap:'round'}),
-      ...tierStyles},geometries:[]});
+      hot:new TMap.PolylineStyle({color:C('--map-route'),width:6,borderWidth:2,borderColor:C('--map-casing'),lineCap:'round'})},geometries:[]});
     mkLayer=new TMap.MultiMarker({map,styles:{
       hot:new TMap.MarkerStyle({width:16,height:16,anchor:{x:8,y:8},src:D.hot}),
       on:new TMap.MarkerStyle({width:18,height:18,anchor:{x:9,y:9},src:D.on}),
@@ -3630,17 +3648,14 @@ function initMap(){
 
 function drawMapQQ(){
   if(!initMap()) return false;   // SDK 由 renderMap 的 loadTMap 先行加载（M17 机制），此处只做容器初始化
-  const v=visibleChannels(), netOff=state.mapNet==='off';
+  const v=visibleChannels();
   const polys=[],mks=[],lbs=[],seen=new Set();
+  // 选中方案通道（change: grid-map-single-route-and-fixes：其它候选/全网架层已移除）
   v.list.forEach(c=>{
-    const isHot=v.hot.has(c.id), isAlt=v.alt.has(c.id);
-    if(netOff&&!isHot&&!isAlt) return;
+    if(!v.hot.has(c.id)) return;
     const a=lngLatOf(c,'from'), b=lngLatOf(c,'to'); if(!a||!b) return;
-    const t=(c.tier&&TIER_STYLE[c.tier])?c.tier:'gov';
-    const sid=isHot?'hot':(isAlt?'alt_'+t:'base_'+t);
     const wp=Array.isArray(c.waypoints)?c.waypoints:[];
-    const paths=[a,...wp,b].map(p=>new TMap.LatLng(p[1],p[0]));
-    polys.push({id:c.id,styleId:sid,paths});
+    polys.push({id:c.id,styleId:'hot',paths:[a,...wp,b].map(p=>new TMap.LatLng(p[1],p[0]))});
   });
   // 站点：仅选中方案经过的站点打点并标注名称
   const r=state._res&&state._res.rows;
@@ -3790,30 +3805,25 @@ function drawMapTD(){
   try{
     if(!tdMap){ tdMap=new T.Map('map-view'); tdMap.centerAndZoom(new T.LngLat(108,34),5); }
     tdMap.clearOverLays();
-    const netOff=state.mapNet==='off';
     const v=visibleChannels(), seen=new Set();
     const C=k=>tokenColor(k), D=mapDots();   // 天地图样式只认真实颜色：按当前主题解析令牌
-    /* 断面高亮垫层（spec: grid-map 断面，与拓扑图同色同语义） */
+    /* 断面高亮垫层（spec: grid-map 断面，与拓扑图同色同语义）；真机 C3 复核：
+       选中方案成员改画更宽外圈、非成员垫层提对比度——与 topoSVG 同口径 */
     if(state.mapSec){
       const mem=new Set(secMemberIds(state.mapSec));
       v.list.forEach(c=>{
-        if(!mem.has(c.id)||v.hot.has(c.id)) return;
+        if(!mem.has(c.id)) return;
         const ps=chanPts(c,(lng,lat)=>[lng,lat]);
-        if(ps) tdMap.addOverLay(new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:C('--map-section'),weight:7,opacity:0.3}));
+        const hot=v.hot.has(c.id);
+        if(ps) tdMap.addOverLay(new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:C('--map-section'),weight:hot?11:7,opacity:hot?0.55:0.45}));
       });
     }
-    // 底图连线：走廊 waypoints 折线化；tier 线型仅作用弱化层（dasharray 若 SDK 不支持则自然忽略，语义降级见 design D5）
+    // 选中方案连线（走廊 waypoints 折线化）；其它候选/全网架不再上图（change: grid-map-single-route-and-fixes）
     v.list.forEach(c=>{
-      const isHot=v.hot.has(c.id), isAlt=v.alt.has(c.id);
-      if(netOff&&!isHot&&!isAlt) return;
+      if(!v.hot.has(c.id)) return;
       const ps=chanPts(c,(lng,lat)=>[lng,lat]);
       if(!ps) return;
-      const st=tierStyle(c.tier);
-      const dashArr=st.dash?st.dash.split(' ').map(Number):null;
-      const sty=isHot?{color:C('--map-route'),weight:6,opacity:0.9}
-        :isAlt?{color:C('--map-alt'),weight:Math.max(1.4,2*st.w),opacity:0.45,...(dashArr?{dasharray:dashArr}:{})}
-        :{color:C('--map-base'),weight:Math.max(0.7,1*st.w),opacity:0.3,...(dashArr?{dasharray:dashArr}:{})};
-      const ln=new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),sty);
+      const ln=new T.Polyline(ps.map(p=>new T.LngLat(p[0],p[1])),{color:C('--map-route'),weight:6,opacity:0.9});
       try{ ln.addEventListener('click',()=>toggleChan(c.id)); }catch(e){}  // 事件 API 真机核实，失败仅失去点击
       tdMap.addOverLay(ln);
     });
@@ -3844,6 +3854,32 @@ function drawMapTD(){
       const size=onRoute?14:(regColor?11:9);
       tdMap.addOverLay(new T.Marker(new T.LngLat(ll[0],ll[1]),{icon:new T.Icon({iconUrl,iconSize:new T.Point(size,size)})}));
     });
+    /* 站点热区兜底（真机 B3 复核）：T.Marker 图标仅 14px 且事件 API 在部分真机不派发
+       （map.js:241 的预留风险被实测坐实）。地图级 click 按最近站点判定：阈值 22px 按
+       当前 zoom 换算成度，只对选中方案经过的站点生效，与拓扑图同语义。 */
+    if(!tdMap._stHitBound && typeof tdMap.addEventListener==='function'){
+      tdMap._stHitBound=true;
+      try{
+        tdMap.addEventListener('click',ev=>{
+          try{
+            const p2=ev&&ev.lnglat; if(!p2) return;
+            const rr=state._res&&state._res.rows; if(!rr||!rr.length) return;
+            const sel=rr[Math.min(state.sel,rr.length-1)];
+            const z=tdMap.getZoom?tdMap.getZoom():10;
+            const th=22*360/(256*Math.pow(2,z));   // 22px 命中半径在当前 zoom 下对应的经度度数
+            const kx2=Math.cos(p2.getLat()*Math.PI/180);
+            const seen2=new Set(); let best=null,bd=1e9;
+            sel.segs.forEach(sg=>{[sg.e.stFrom,sg.e.stTo].forEach(id=>{
+              if(!id||!ST[id]||seen2.has(id)) return; seen2.add(id);
+              const p=ST[id];
+              const d=Math.hypot((p.lng-p2.getLng())*kx2,p.lat-p2.getLat());
+              if(d<th&&d<bd){bd=d;best=id;}
+            })});
+            if(best) stationPop(best);
+          }catch(e2){}
+        });
+      }catch(e2){}   // 事件 API 不可用时静默放弃兜底，不阻断底图绘制（与 map.js:241 同口径）
+    }
     // 视野聚焦：搜索聚焦 > 选中方案路线范围（用户随后仍可手动缩放拖动）
     const bb=state.mapFocusLL||mapFocusBB(r&&r.length?r[Math.min(v.sel,r.length-1)]:null);
     if(bb){
@@ -3932,7 +3968,9 @@ if(isProxyEnv()) loadTMap();   // 代理环境：脚本求值即开始下载（b
    （full=全图视野 / min=最小视野[聚焦 0.5 倍或全图 1/6] / base=本次渲染的基准视野），
    供手势层夹取与双击复位；topoDragged=拖动标志，用于吞掉拖动结束后的 click（防误触通道过滤）。 */
 let topoViewMeta=null, topoDragged=false;
-function topoSVG(){
+/* 等距圆柱投影参数（真机 B3 复核抽出的共用层）：topoSVG 渲染与 mapSvgClick 的站点热区判定
+   必须用同一套换算，「点击像素 ↔ 视图坐标」才能与所见严格一致。 */
+function topoProj(){
   const ids=Object.keys(PV);
   const lngs=ids.map(k=>PV[k].lng), lats=ids.map(k=>PV[k].lat);
   const lngMin=Math.min(...lngs)-1.2, lngMax=Math.max(...lngs)+1.2;
@@ -3942,7 +3980,10 @@ function topoSVG(){
   const w=(lngMax-lngMin)*kx, hgt=(latMax-latMin);
   const s=Math.min((W-2*PAD)/w,(H-2*PAD)/hgt);
   const ox=PAD+((W-2*PAD)-w*s)/2, oy=PAD+((H-2*PAD)-hgt*s)/2;
-  const P=(lng,lat)=>[ox+(lng-lngMin)*kx*s, oy+(latMax-lat)*s];
+  return { W, H, ids, P:(lng,lat)=>[ox+(lng-lngMin)*kx*s, oy+(latMax-lat)*s] };
+}
+function topoSVG(){
+  const {P,W,H,ids}=topoProj();
   const ll=(ch,side)=>{
     const st=side==='from'?ch.stFrom:ch.stTo, pv=side==='from'?ch.from:ch.to;
     return (st&&ST[st])?[ST[st].lng,ST[st].lat]:[PV[pv].lng,PV[pv].lat];
@@ -3954,45 +3995,48 @@ function topoSVG(){
   /* 区域归属上图（批次 B 增补）：环=区域电网归属，点=原有状态语义（选中/途经/全网），互不覆盖。
      注意区域分区在 DATA.RGOF（data.js 未解构成全局），与 lib.js 取法一致。 */
   const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
-  const inRoutes=new Set();
-  if(r) r.forEach(row=>row.edges.forEach(e=>inRoutes.add(e.id)));
-  /* 全网架层显示模式（spec: grid-map 分层）：'off'=隐藏非候选非选中通道，'dim'=弱化显示。
-     候选层固定降权——川→苏 150 条候选的边并集可达 55 条，是杂乱主力（design D1 实测）。 */
-  const netOff=state.mapNet==='off';
 
   let edges='',segs='',nodes='',labels='';
-  /* 断面高亮垫层（spec: grid-map 断面）：成员通道在底层垫紫色晕圈；基于成员通道高亮，不画虚构地理边界 */
+  /* 断面高亮垫层（spec: grid-map 断面）：成员通道在底层垫紫色晕圈；基于成员通道高亮，不画虚构地理边界。
+     真机 C3 复核：成员在选中方案上时原先直接跳过，晕圈被路线强视觉完全盖住等于没有反馈——
+     改画更宽的外圈垫层从路线两侧露出（选中视觉仍在最上层，语义不被覆盖）；非成员垫层同步提对比度。 */
   if(state.mapSec){
     const mem=new Set(secMemberIds(state.mapSec));
     CH.forEach(c=>{
-      if(!mem.has(c.id)||v.hot.has(c.id)) return;
+      if(!mem.has(c.id)) return;
       const ps=chanPts(c,P);
       if(!ps) return;
-      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" style="stroke:var(--map-section)" stroke-width="5.5" opacity="0.3" stroke-linecap="round" stroke-linejoin="round"/>`;
+      const hot=v.hot.has(c.id);
+      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" style="stroke:var(--map-section)" stroke-width="${hot?10:5.5}" opacity="${hot?0.55:0.45}" stroke-linecap="round" stroke-linejoin="round"/>`;
     });
   }
-  // 底图连线：全部通道（可点击=必经过滤；透明宽线仅作点击热区）。
-  // 批次 B：有走廊 waypoints 的通道按折线渲染（无则两点直线）；tier 线型仅作用弱化层
-  CH.forEach(c=>{
-    if(v.hot.has(c.id)) return;
-    const isAlt=v.alt.has(c.id);
-    if(netOff&&!isAlt) return;
-    const ps=chanPts(c,P);
-    if(!ps) return;
-    const st=tierStyle(c.tier);
-    const w=((isAlt?1.2:0.7)*st.w).toFixed(2);
-    const dash=st.dash?` stroke-dasharray="${st.dash}"`:'';
-    const vis=`fill="none" style="stroke:var(${isAlt?'--map-alt':'--map-edge'})" stroke-width="${w}" opacity="${isAlt?0.3:0.18}"${dash} stroke-linecap="round" stroke-linejoin="round"`;
-    if(ps.length===2){
-      const d=`x1="${ps[0][0].toFixed(1)}" y1="${ps[0][1].toFixed(1)}" x2="${ps[1][0].toFixed(1)}" y2="${ps[1][1].toFixed(1)}"`;
-      edges+=`<line ${d} ${vis}/><line ${d} stroke="transparent" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
-    }else{
-      const pts=ptsAttr(ps);
-      edges+=`<polyline points="${pts}" ${vis}/><polyline points="${pts}" fill="none" stroke="transparent" stroke-width="9" data-chan="${c.id}" style="pointer-events:stroke"/>`;
-    }
-  });
-  // 选中路线：加粗并编号，段名标注上下交错；同时记录包围盒供视野聚焦（design D4）
+  /* 其它候选/全网架连线与热区已随 grid-map-single-route-and-fixes 移除：图上只剩选中方案，
+     点击必经过滤仅在选中方案通道上可用；其余通道经搜索结果浮层查看（mapGotoChan）。 */
+  /* 标注防重叠（change: grid-map-single-route-and-fixes）：省名 > 站名 > 段名 按优先级贪心放置。
+     换流站与省节点经纬度接近时三类文字会叠在同一点（真机实测 川→陕→甘→宁：宝鸡换流站/陕西/
+     甘陕联络线三层相叠不可辨）。冲突的站名/段名先换对侧、仍无位则省略文字——站点圆点与通道线
+     仍可点开浮层看全名。SVG 未入 DOM 拿不到 getBBox，宽度按字符估：CJK≈1em、ASCII≈0.62em，另加 3px 呼吸边。 */
+  const placed=[];
+  const labelBox=(text,fs,cx,cyBase)=>{
+    let w=10;   // 两侧各留 5px：估宽偏小会让「实际相交但估算相离」漏检（MAP-07 实测 337px² 叠压）
+    for(const ch of String(text)) w+=ch.charCodeAt(0)>255?fs:fs*0.62;
+    return {x0:cx-w/2,y0:cyBase-fs*0.9,x1:cx+w/2,y1:cyBase+fs*0.45};
+  };
+  /* 真机/纯直线数据复核（2026-09-20）：本机制此前有两处失效——①y 轴相交条件写反（p.y1<b.y0），
+     垂直方向碰撞永远漏检；②putText 成功后未把盒子登记进 placed，已放标签不占位。走廊 waypoints
+     在场时折线中点天然分散掩盖了这两处，走廊数据还原后 MAP-07 即现形（337px² 叠压）。 */
+  const boxHit=b=>placed.some(p=>b.x0<p.x1&&p.x0<b.x1&&b.y0<p.y1&&p.y0<b.y1);
+  /* 放得下则写入 labels 并返回 true；attrs 携带字号/颜色/点击热区等其余属性 */
+  const putText=(text,fs,x,yBase,attrs)=>{
+    const box=labelBox(text,fs,x,yBase);
+    if(boxHit(box)) return false;
+    placed.push(box);
+    labels+=`<text x="${x.toFixed(1)}" y="${yBase.toFixed(1)}" ${attrs}>${esc(text)}</text>`;
+    return true;
+  };
+  // 选中路线：加粗并编号；段名文字延后到省名/站名之后放置（优先级最低），几何先算好供视野聚焦（design D4）
   let fx0=1e9,fy0=1e9,fx1=-1e9,fy1=-1e9;
+  const segCircles=[],segLabelCands=[];
   if(selR){
     selR.segs.forEach((sg,i)=>{
       const ps=chanPts(sg.e,P);
@@ -4004,8 +4048,25 @@ function topoSVG(){
       const m1=ps[Math.floor((ps.length-1)/2)], m2=ps[Math.ceil((ps.length-1)/2)];
       const mx=(m1[0]+m2[0])/2, my=(m1[1]+m2[1])/2;
       segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" style="fill:var(--map-route)"/>`
-          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`
-          + `<text x="${mx.toFixed(1)}" y="${(my+(i%2?17:-14)).toFixed(1)}" font-size="10" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="3">${esc(sg.e.n)}</text>`;
+          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`;
+      segCircles.push({mx,my});
+      /* 段名候选位：段线比例点 × 上下侧共 8 个。防重叠真正生效后（placed 登记修复），
+         仅靠中点两侧两个候选在拥挤路线（川→陕→甘→宁）上会全冲突而被省略——违反
+         grid-map spec「选中方案 SHALL 逐段标注线路名」（MAP-02）。沿段线挪位让
+         「段名必在场」（MAP-02）与「零叠压」（MAP-07）同时成立。 */
+      const at=f=>{const t=f*(ps.length-1),i0=Math.floor(t),i1=Math.min(ps.length-1,i0+1),k=t-i0;return [ps[i0][0]+(ps[i1][0]-ps[i0][0])*k,ps[i0][1]+(ps[i1][1]-ps[i0][1])*k];};
+      const c05=at(0.5),c035=at(0.35),c065=at(0.65);
+      const sPref=i%2?17:-14,sAlt=i%2?-14:17;
+      segLabelCands.push([
+        {name:sg.e.n,x:c05[0],yBase:c05[1]+sPref},
+        {name:sg.e.n,x:c05[0],yBase:c05[1]+sAlt},
+        {name:sg.e.n,x:c035[0],yBase:c035[1]+sPref},
+        {name:sg.e.n,x:c065[0],yBase:c065[1]+sPref},
+        {name:sg.e.n,x:c035[0],yBase:c035[1]+sAlt},
+        {name:sg.e.n,x:c065[0],yBase:c065[1]+sAlt},
+        {name:sg.e.n,x:c05[0],yBase:c05[1]-30},
+        {name:sg.e.n,x:c05[0],yBase:c05[1]+33},
+      ]);
     });
   }
   // 节点
@@ -4027,7 +4088,9 @@ function topoSVG(){
     :(focusBox?{x:focusBox.x0,y:focusBox.y0,x1:focusBox.x1,y1:focusBox.y1,w:focusBox.x1-focusBox.x0,h:focusBox.y1-focusBox.y0}
               :{x:0,y:0,x1:W,y1:H,w:W,h:H});
   let vbx0=shownBox.x,vbx1=shownBox.x1,vby0=shownBox.y,vby1=shownBox.y1;
-  ids.forEach(k=>{
+  /* 省名优先放置（最高优先级）：先放选中方案途经省，再放其余省（节点圆的绘制顺序不影响视觉） */
+  const ordered=[...ids.filter(k=>v.routeNodes.has(k)),...ids.filter(k=>!v.routeNodes.has(k))];
+  ordered.forEach(k=>{
     const [x,y]=P(PV[k].lng,PV[k].lat);
     const onRoute=v.routeNodes.has(k);
     const isEnd=selR&&(k===selR.nodes[0]||k===selR.nodes[selR.nodes.length-1]);
@@ -4037,8 +4100,9 @@ function topoSVG(){
     if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad+2.8).toFixed(1)}" fill="none" style="stroke:${rPal[REGION_OF[k]]}" stroke-width="1.8" opacity="0.95"/>`;
     // 聚焦视野下，离线路径且出画的省名不再绘制（避免跨界半截字，spec: grid-map 聚焦）
     if(focused&&!onRoute&&(x<vbx0||x>vbx1||y<vby0||y>vby1)) return;
-    labels+=`<text x="${x.toFixed(1)}" y="${(y-rad-3).toFixed(1)}" font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" style="fill:var(${onRoute?'--map-label-on':'--map-label'})" text-anchor="middle">${esc(N(k))}</text>`;
+    putText(N(k),onRoute?10.5:9,x,y-rad-3,`font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" style="fill:var(${onRoute?'--map-label-on':'--map-label'})" text-anchor="middle"`);
   });
+  segCircles.forEach(c=>placed.push({x0:c.mx-10,y0:c.my-10,x1:c.mx+10,y1:c.my+10}));   // 序号圆占位：站名/段名不得压圆
   // 选中路线的换流站
   let sts='';
   if(selR){
@@ -4047,11 +4111,18 @@ function topoSVG(){
       [['from',sg.e.stFrom],['to',sg.e.stTo]].forEach(([side,st])=>{
         if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
         const [x,y]=P(ST[st].lng,ST[st].lat);
-        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" stroke-width="2" data-st="${st}" style="fill:var(--map-casing);stroke:var(--map-end);pointer-events:all"/>`
-           + `<text x="${x.toFixed(1)}" y="${(y-7).toFixed(1)}" font-size="10" font-weight="600" text-anchor="middle" data-st="${st}" style="fill:var(--map-end);pointer-events:all">${esc(ST[st].n)}</text>`;
+        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" stroke-width="2" data-st="${st}" style="fill:var(--map-casing);stroke:var(--map-end);pointer-events:all"/>`;
+        // 站名：默认在点上方，冲突换下方；仍冲突则省略文字（圆点保留，点击看站名浮层）
+        const stAttrs=`font-size="10" font-weight="600" text-anchor="middle" data-st="${st}" style="fill:var(--map-end);pointer-events:all"`;
+        if(!putText(ST[st].n,10,x,y-7,stAttrs)) putText(ST[st].n,10,x,y+14,stAttrs);
       });
     });
   }
+  /* 段名最后放置（相对省名/站名优先级最低，但 spec 要求逐段必标——按候选序取第一个不冲突位） */
+  segLabelCands.forEach(cands=>{
+    const segAttrs='font-size="10" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="3"';
+    for(const c of cands){ if(putText(c.name,10,c.x,c.yBase,segAttrs)) return; }
+  });
 
   /* 视野输出：用户触摸视野 > 聚焦盒（搜索 / 选中方案）> 全国视野；
      并写入 topoViewMeta 供手势层夹取（design D2）。 */
@@ -4101,13 +4172,36 @@ function chanPop(id){
 }
 /* 拓扑 SVG 事件委托：命中通道热区→必经过滤；命中站点→站点信息浮层（数据与费率库同源）。
    grid-map-device-fixes D2：位移超阈值的拖动结束后的 click 在此吞掉——拖地图不得误触通道过滤。 */
+/* 拓扑 SVG 事件委托：命中通道热区→必经过滤；命中站点→站点信息浮层（数据与费率库同源）。
+   grid-map-device-fixes D2：位移超阈值的拖动结束后的 click 在此吞掉——拖地图不得误触通道过滤。
+   真机 B3 复核：换流站圆点 r=3.4 个视图单位，全国视野下不足 10px，手指点不中（e2e 是对元素
+   直接派发 click，绕过了物理命中所以桌面全绿）。兜底：元素未命中时按点击坐标换算视图坐标，
+   在选中方案经过的站点里找 22px 半径内最近者——44px 点按底线的坐标级实现。 */
 function mapSvgClick(e){
   if(topoDragged) return;
   const t=e.target;
   const st=t.getAttribute&&t.getAttribute('data-st');
   if(st){ stationPop(st); return; }
   const chan=t.closest?t.closest('[data-chan]'):null;
-  if(chan) toggleChan(chan.getAttribute('data-chan'));
+  if(chan){ toggleChan(chan.getAttribute('data-chan')); return; }
+  const svg=t.closest?t.closest('svg'):null;
+  if(!svg||!isFinite(e.clientX)||!isFinite(e.clientY)) return;
+  const box=svg.getBoundingClientRect(); if(!box.width||!box.height) return;
+  const vb=topoVBof();
+  const sc=Math.min(box.width/(vb.w||1),box.height/(vb.h||1));   // xMidYMid meet 的统一缩放
+  const ox=box.left+(box.width-vb.w*sc)/2, oy=box.top+(box.height-vb.h*sc)/2;
+  const ux=vb.x+(e.clientX-ox)/sc, uy=vb.y+(e.clientY-oy)/sc, th=22/sc;
+  const r=state._res&&state._res.rows; if(!r||!r.length) return;
+  const sel=r[Math.min(state.sel,r.length-1)];
+  const seen=new Set(),{P}=topoProj();
+  let best=null,bd=1e9;
+  sel.segs.forEach(sg=>{[sg.e.stFrom,sg.e.stTo].forEach(id=>{
+    if(!id||!ST[id]||seen.has(id)) return; seen.add(id);
+    const [x,y]=P(ST[id].lng,ST[id].lat);
+    const d=Math.hypot(x-ux,y-uy);
+    if(d<th&&d<bd){bd=d;best=id;}
+  })});
+  if(best) stationPop(best);
 }
 /* ---------- 拓扑图触摸缩放与平移（change: grid-map-device-fixes，design D2） ----------
    机制：渲染内容（topoSVG 输出）不变，手势只改 <svg> 的 viewBox——矢量缩放天然清晰；
@@ -4363,18 +4457,8 @@ function renderMap(){
     out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
   }
 
-  out+=`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
+  out+=`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
       <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-route);vertical-align:middle;margin-right:5px"></i>选中方案</span>
-      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-alt);vertical-align:middle;margin-right:5px"></i>其它候选</span>
-      <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-edge);vertical-align:middle;margin-right:5px"></i>全网架</span>
-      <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapnet" ${state.mapNet!=='off'?'checked':''}>显示全网架</label></span>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
-      <span style="color:var(--ink2)">价格线型（弱化层）</span>
-      <span><i class="lg-line" style="border-top:2.5px solid var(--ink3)"></i>核定</span>
-      <span><i class="lg-line" style="border-top:1.5px solid var(--ink3)"></i>国网披露</span>
-      <span><i class="lg-line" style="border-top:2.5px dashed var(--ink3)"></i>区域口径</span>
-      <span><i class="lg-line" style="border-top:2.5px dotted var(--ink3)"></i>待核价</span>
       <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
     </div>
     ${regionLegend}
@@ -4391,8 +4475,18 @@ function renderMap(){
     <div id="map-view" onclick="mapSvgClick(event)"></div><div id="fallback"></div><div id="map-pop"></div>`;
 
   if(selR){
+    /* 路线选择下拉（change: grid-map-single-route-and-fixes）：默认推荐路线 #1，
+       候选口径与测算页「可选路线」同源（routeMenuItems）；用户停留在阈值外方案时把当前项补进首位，保证下拉值与图上一致 */
+    const cur=Math.min(state.sel,r.length-1);
+    const items=routeMenuItems(state._res);
+    if(!items.some(it=>it.i===cur)) items.unshift({r:selR,i:cur});
     out+=`<div style="margin-top:11px;padding-top:11px;border-top:var(--hairline) solid var(--line2)">
-      <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">选中方案 #${state.sel+1}　${esc(selR.nodes.map(N).join(' → '))}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:12.5px;font-weight:600;flex:none">选中方案</span>
+        <select id="i-maproute" onchange="mapPick(+this.value)" style="flex:1;min-width:0;padding:6px 26px 6px 9px;font-size:12px;font-weight:600">
+          ${items.map(it=>`<option value="${it.i}" ${it.i===cur?'selected':''}>${esc(routeOptLabel(it))}</option>`).join('')}
+        </select>
+      </div>
       ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:var(--hairline) solid var(--line2);line-height:1.6">
         <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.t)} 元/MWh　计费线损 ${fmt(s.billLossPct,2)}%（物理估算 ${fmt(s.e.loss,2)}%）
         <span style="color:var(--ink3)">｜入口 ${fmt(s.inMW,0)} MW　${s.util!=null?'占用 '+fmt(s.util*100,0)+'%':'容量待补'}</span>
@@ -4428,6 +4522,12 @@ function renderMap(){
       });
     }
   },80);
+}
+/* 网架图下拉切换选中方案：语义同测算页 pick（state.js 深链 sel 同源），但不带测算页滚动副作用；
+   触摸视野随方案切换复位（grid-map-device-fixes D2 同口径）。选项文案与测算页同源（routeOptLabel，calc.js）。 */
+function mapPick(i){
+  state.sel=i; if(state.mapView) state.mapView=null;
+  saveLast(); renderMap();
 }
 function switchMap(p){
   // REQ-703：不可用底图必须给出明确反馈，不得静默回退（真机 APK 以 file:// 加载，
@@ -4768,7 +4868,6 @@ function go(t){
 }
 document.addEventListener('change',e=>{
   const id=e.target.id;
-  if(id==='i-mapnet'){ state.mapNet=e.target.checked?'dim':'off'; saveMap(); renderMap(); return; }  // spec: grid-map 全网架开关
   if(id==='i-from'||id==='i-to'){
     const isFrom=(id==='i-from');
     if(isFrom) state.from=e.target.value; else state.to=e.target.value;

@@ -142,10 +142,14 @@ const tokRaw = stripDataUri(stripCssComments(tokensCss));
 for (const m of tokRaw.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) { const n = valueNamed(m[2]); if (n) nameHits.push(`      src/tokens.css:${lineOf(tokensCss, m.index)}　${m[1]}（${n}）`); }
 ok(nameHits.length === 0, '颜色类属性与令牌取值不用颜色名（transparent / currentColor / inherit / none 除外）', [...new Set(nameHits)].slice(0, 20).join('\n'));
 
-/* data: URI 里写死的十六进制色（%23 即 #）：只警告，列出位置 */
+/* data: URI 里写死的十六进制色（%23 即 #）：只警告，列出位置。
+   白名单：应用图标（src/template.html 的 <link rel="icon"> data: URI）——品牌资产，
+   head 内联先于应用脚本、无法走 tokenColor()（change: grid-map-single-route-and-fixes）。 */
+const FAVICON_RE = /<link\s+rel="icon"[\s\S]*?>/g;
 const uriHits = [];
 for (const { file, text } of [{ file: 'src/template.html', text: tpl }, ...jsFiles]) {
-  const s = file.endsWith('.js') ? stripJsComments(text) : stripHtmlComments(stripCssComments(text));
+  let s = file.endsWith('.js') ? stripJsComments(text) : stripHtmlComments(stripCssComments(text));
+  if (file === 'src/template.html') s = s.replace(FAVICON_RE, blank);
   for (const u of s.matchAll(/(["'`])data:[\s\S]*?\1/g)) {
     for (const h of u[0].matchAll(/%23(?:[0-9a-f]{6}|[0-9a-f]{3})(?![0-9a-f])/gi)) uriHits.push(`${file}:${lineOf(text, u.index + h.index)} ${h[0]}`);
   }
