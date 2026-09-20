@@ -1101,7 +1101,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-20 10:19';
+const BUILD_TIME='2026-09-20 10:28';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -2652,8 +2652,7 @@ function renderPriceComposition(res){
 }
 
 /* ---------- 可选路线列表 ---------- */
-const RLIMIT=18;
-/* 成本阈值内候选（渲染层口径）：测算页 rlist 卡片与网架图路线下拉共用（change:
+/* 成本阈值内候选（渲染层口径）：测算页与网架图路线下拉共用（change:
    grid-map-single-route-and-fixes 抽出），保证两处候选集合一致。
    阈值基准取最低落地价（越限方案排在可行方案之后，首条不一定最低）；返回 [{r,i}]，i=原候选下标。 */
 function routeThresholdItems(res){
@@ -2668,6 +2667,10 @@ function routeMenuItems(res){
   const rows=res&&res.rows?res.rows:[];
   return state.showAll?rows.map((r,i)=>({r,i})):routeThresholdItems(res);
 }
+/* 路线下拉选项文案（测算页与网架图同源）：序号 + 途经省 + 落地价，首条标注「推荐」 */
+function routeOptLabel(it){
+  return '#'+(it.i+1)+(it.i===0?' 推荐':'')+' · '+it.r.nodes.map(N).join('→')+' · '+fmt(it.r.landed,0)+' 元/MWh';
+}
 function renderRouteList(res){
   const rows=res.rows, sel=selIndex(res);
   const isDst=state.includeDstCost!==false;
@@ -2676,6 +2679,11 @@ function renderRouteList(res){
   const shown=routeMenuItems(res);
   const cut=rows.length-inThr.length;
   const mustN=(res.mustHave||[]).length;
+  /* 路线选择下拉（change: grid-map-single-route-and-fixes）：横滑卡片改下拉，保持简洁；
+     样式复用通道下拉同一套（.pk-col.chan 的 select），推荐路线 #1 为默认选中。
+     阈值收紧等瞬间当前选中项可能不在口径内，补进首位保证下拉值与下方详情一致 */
+  const items=shown.slice();
+  if(!items.some(it=>it.i===sel)) items.unshift({r:rows[sel],i:sel});
   let out=`<div class="card tight">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 参考未越限 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}${mustN?' · 已按通道筛选':''}</span></div>
     <details class="explain"><summary>候选与可行的定义<em>费用边界：${isDst?'到户已列费用小计':'只算到受端省界'}</em></summary><div class="inner">
@@ -2685,20 +2693,14 @@ function renderRouteList(res){
     <p class="note">通道（页面顶部）：选定通道后只列出经过它的方案；选「全部通道」显示全部候选。下拉项标注经过该通道的参考未越限方案中的最低价，同组内从低到高排列。</p>
     </div></details>
     ${res.truncated?'<div class="warn">候选集已达枚举上限（800 条），排序仅基于已枚举部分，不能保证全局最优——可用通道组件缩小范围后重算。</div>':''}
-    <div class="rlist">`;
-  shown.forEach(({r,i})=>{
-    if(!state.showAll && i>=RLIMIT) return;
-    const via=routeVia(r);
-    out+=`<button class="rc ${i===sel?'on':''} ${r.feasible?'':'bad'}" onclick="pick(${i})" title="${esc(routeStops(r).map(s=>s.name).join(' → '))}">
-      <div class="rc-top"><span class="rc-no">#${i+1}</span><span class="rc-hop">${routeDisplayBlocks(r).length}段</span></div>
-      <div class="rc-line">${esc(routeLead(r))}</div>
-      <div class="rc-price">${fmt(r.landed,0)}<small>元/MWh</small></div>
-      <div class="rc-meta">${via?esc(via)+' · ':''}${fmt(r.dist,0)}km${r.feasible?'':' · <span style="color:var(--red)">越限</span>'}</div>
-    </button>`;
-  });
-  out+=`</div>
+    <div class="pk-col chan">
+      <div class="pk-lb">选择路线 · 按价格从低到高</div>
+      <select id="i-calcroute" onchange="pick(+this.value)"${sel>0?' class="on"':''}>
+        ${items.map(it=>`<option value="${it.i}" ${it.i===sel?'selected':''}>${esc(routeOptLabel(it))}${it.r.feasible?'':' · 越限'}</option>`).join('')}
+      </select>
+    </div>
     <div class="rlist-foot">
-      <span>按价格从低到高</span>
+      <span>按价格从低到高 · 共 ${items.length} 条${cut>0&&!state.showAll?'（另有 '+cut+' 条成本更高未列出）':''}</span>
       <label class="tg"><input type="checkbox" ${state.showBad?'checked':''} onchange="state.showBad=this.checked;state.sel=0;doSolve()"> 含越限</label>
     </div>`;
   const hiddenN=rows.length-shown.length;
@@ -2765,8 +2767,7 @@ function solveState(){
   return res;
 }
 function clearChannel(){ state.mustHave=[]; state.sel=0; doSolve(); }
-function pick(i){ state.sel=i; if(state.mapView) state.mapView=null; saveLast(); renderCalc();   // grid-map-device-fixes D2：选中方案变化复位触摸视野
-  const sel=document.querySelector('.rc.on'); if(sel) sel.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'}); }
+function pick(i){ state.sel=i; if(state.mapView) state.mapView=null; saveLast(); renderCalc(); }   // grid-map-device-fixes D2：选中方案变化复位触摸视野
 
 /* ---------- 选中路线详情 ---------- */
 /* 连续的区域内共用交流接口仅在展示层合并；不改动计价路径、容量链或区域计费位置。 */
@@ -4478,7 +4479,7 @@ function renderMap(){
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:12.5px;font-weight:600;flex:none">选中方案</span>
         <select id="i-maproute" onchange="mapPick(+this.value)" style="flex:1;min-width:0;padding:6px 26px 6px 9px;font-size:12px;font-weight:600">
-          ${items.map(it=>`<option value="${it.i}" ${it.i===cur?'selected':''}>${esc(mapRouteOptLabel(it))}</option>`).join('')}
+          ${items.map(it=>`<option value="${it.i}" ${it.i===cur?'selected':''}>${esc(routeOptLabel(it))}</option>`).join('')}
         </select>
       </div>
       ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:var(--hairline) solid var(--line2);line-height:1.6">
@@ -4517,13 +4518,8 @@ function renderMap(){
     }
   },80);
 }
-/* 网架图路线下拉的选项文案（change: grid-map-single-route-and-fixes）：序号 + 途经省 + 落地价；
-   首条（测算最低价）标注「推荐」。 */
-function mapRouteOptLabel(it){
-  return '#'+(it.i+1)+(it.i===0?' 推荐':'')+' · '+it.r.nodes.map(N).join('→')+' · '+fmt(it.r.landed,0)+' 元/MWh';
-}
-/* 下拉切换选中方案：语义同测算页 pick（state.js 深链 sel 同源），但不带测算页滚动副作用；
-   触摸视野随方案切换复位（grid-map-device-fixes D2 同口径）。 */
+/* 网架图下拉切换选中方案：语义同测算页 pick（state.js 深链 sel 同源），但不带测算页滚动副作用；
+   触摸视野随方案切换复位（grid-map-device-fixes D2 同口径）。选项文案与测算页同源（routeOptLabel，calc.js）。 */
 function mapPick(i){
   state.sel=i; if(state.mapView) state.mapView=null;
   saveLast(); renderMap();
