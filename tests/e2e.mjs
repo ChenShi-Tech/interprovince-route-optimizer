@@ -152,13 +152,16 @@ const tests = [
   {
     id: 'F-01', section: '主流程', title: '首次加载默认测算',
     steps: '打开 http://127.0.0.1:8734/',
-    expected: '默认四川→江苏；自动渲染可选路线卡片与选中方案详情；无页面脚本错误',
+    expected: '默认四川→江苏；自动渲染可选路线下拉（默认推荐 #1）与选中方案详情；无页面脚本错误',
     async run(page, set) {
       await page.goto(G, DCL);
       ok(await page.locator('#i-from').inputValue() === 'SC', '出发地应为 SC(四川)');
       ok(await page.locator('#i-to').inputValue() === 'JS', '目的地应为 JS(江苏)');
-      const cards = await page.locator('.rc').count();
-      ok(cards > 0, '路线卡片应>0，实际 ' + cards);
+      // change: grid-map-single-route-and-fixes：路线卡片改为下拉（#i-calcroute），默认选中推荐 #1
+      const optCount = await page.locator('#i-calcroute option').count();
+      ok(optCount > 0, '可选路线下拉应至少 1 项，实际 ' + optCount);
+      const cur = await page.evaluate(() => { const el = document.getElementById('i-calcroute'); return el.options[el.selectedIndex]?.textContent || ''; });
+      ok(cur.includes('#1') && cur.includes('推荐'), `下拉应默认选中推荐 #1，实际「${cur.slice(0, 30)}」`);
       // 修正(2026-09-18)：落地价元素已由 .big 改为方案卡 .plan-price b / 顶部主卡 .hero-v（calc.js renderDetail），
       // 断言语义（落地价已渲染且为数字）不变。
       const planPrice = (await page.locator('.plan-price b').first().innerText()).trim();
@@ -166,7 +169,7 @@ const tests = [
       const hero = (await page.locator('.hero-v').first().innerText()).trim();
       ok(/^[\d.]+/.test(hero), `顶部主卡落地价未渲染，实际「${hero}」`);
       const hd = (await page.locator('.hd-route').first().innerText()).trim();
-      set(`默认 SC→JS；卡片 ${cards} 张；方案卡落地价 ${planPrice} 元/MWh；详情「${hd.slice(0, 36)}」；pageerror=${logs0(page)}`);
+      set(`默认 SC→JS；下拉 ${optCount} 项默认「${cur.slice(0, 24)}」；方案卡落地价 ${planPrice} 元/MWh；pageerror=${logs0(page)}`);
     },
   },
   {
@@ -190,19 +193,20 @@ const tests = [
     },
   },
   {
-    id: 'F-03', section: '主流程', title: '点击路线卡片切换方案',
-    steps: '点击第 2 张路线卡片',
-    expected: 'state.sel=1；第 2 张卡片高亮；详情标题变为「方案 #2」',
+    id: 'F-03', section: '主流程', title: '路线下拉切换方案',
+    steps: '在「选择路线」下拉选第 2 条候选',
+    expected: 'state.sel=1；下拉呈高亮选中态（.on）；详情标题变为「方案 #2」',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.locator('.rc').nth(1).click();
+      // change: grid-map-single-route-and-fixes：路线卡片改为下拉切换
+      await page.selectOption('#i-calcroute', '1');
       ok(await page.evaluate(() => state.sel) === 1, 'state.sel 应为 1');
-      const onIdx = await page.evaluate(() => [...document.querySelectorAll('.rc')].findIndex(b => b.classList.contains('on')));
-      ok(onIdx === 1, `高亮卡片应为第 2 张(index 1)，实际 ${onIdx}`);
+      const onCls = await page.evaluate(() => document.getElementById('i-calcroute').classList.contains('on'));
+      ok(onCls, '选择非推荐路线后下拉应为高亮选中态（.on）');
       // 修正(2026-09-18)：详情标题已由 .sec-title（现仅用于「可选路线 / 交易连接与区域计费」）改为方案卡 .plan-no。
       const hd = await page.locator('.plan-no').first().innerText();
       ok(hd.includes('方案 #2'), `详情标题应含「方案 #2」，实际「${hd.trim().slice(0, 20)}」`);
-      set(`sel=1，第 2 张卡片 .on 高亮，详情「${hd.trim().slice(0, 12)}」`);
+      set(`sel=1，下拉 .on 高亮，详情「${hd.trim().slice(0, 12)}」`);
     },
   },
   {
@@ -278,25 +282,25 @@ const tests = [
   {
     id: 'F-07', section: '主流程', title: '勾选「含越限」展示不可行路线',
     steps: '勾选「含越限」复选框',
-    expected: 'showBad=true；列表卡片数不少于之前；顶部显示「共 X 条候选 · 可行 Y 条」',
+    expected: 'showBad=true；下拉候选数不少于之前；顶部显示「共 X 条候选 · 可行 Y 条」',
     async run(page, set) {
       await page.goto(G, DCL);
       // 修正(2026-09-18)：跳数输入已移除（界面固定取上限 MAX_HOPS=10），原 #i-hops 选择作废。
       await page.selectOption('#i-to', 'SH');
-      const before = await page.locator('.rc').count();
+      const before = await page.locator('#i-calcroute option').count();
       await page.locator('.tg input').check();
-      const after = await page.locator('.rc').count();
+      const after = await page.locator('#i-calcroute option').count();
       ok(await page.evaluate(() => state.showBad) === true, 'showBad 应为 true');
-      ok(after >= before, `卡片应不减少：${before}→${after}`);
+      ok(after >= before, `下拉候选应不减少：${before}→${after}`);
       const hint = await page.locator('.sec-title .hint').first().innerText();
       ok(/共 \d+ 条候选/.test(hint), `提示文案异常：${hint}`);
-      set(`含越限前卡片 ${before} 张、勾选后 ${after} 张；提示「${hint.trim()}」`);
+      set(`含越限前候选 ${before} 条、勾选后 ${after} 条；提示「${hint.trim()}」`);
     },
   },
   {
     id: 'F-08', section: '主流程', title: '展开全部路线（>18 条）',
     steps: '四川→上海，点「展开全部」',
-    expected: '默认只列成本接近的若干条；点「展开全部」后全部候选渲染为卡片，展开入口消失（showAll=true）',
+    expected: '默认只列成本接近的若干条；点「展开全部」后下拉候选等于全部候选，展开入口消失（showAll=true）',
     async run(page, set) {
       await page.goto(G, DCL);
       // 修正(2026-09-18)：跳数输入已移除（固定 MAX_HOPS=10），原 #i-hops=5 选择作废。
@@ -304,15 +308,15 @@ const tests = [
       const btn = page.locator('button', { hasText: '展开全部' });
       ok(await btn.count() > 0, '应出现「展开全部」按钮');
       await btn.first().click();
-      const n = await page.locator('.rc').count();
+      const n = await page.locator('#i-calcroute option').count();
       const rows = await page.evaluate(() => state._res.rows.length);
       ok(rows > 18, `候选应 >18 条才有展开意义，实际 ${rows}`);
-      ok(n === rows, `卡片数 ${n} 应等于 rows ${rows}`);
+      ok(n === rows, `下拉项 ${n} 应等于候选总数 ${rows}`);
       // 修正(2026-09-18)：展开后 hiddenN=0，按钮整体移除（renderRouteList 只在 hiddenN>0 时渲染切换按钮），
       // 原期望「按钮变收起」在现实现里不可达；断言语义改为「展开后不再有展开入口且 showAll 已置位」。
       ok(await page.evaluate(() => state.showAll === true), 'state.showAll 应为 true');
       ok(await page.locator('button', { hasText: '展开全部' }).count() === 0, '展开后不应再出现「展开全部」按钮');
-      set(`展开后卡片 ${n} 张 = 候选总数 ${rows}；展开入口消失（showAll=true）`);
+      set(`展开后下拉 ${n} 项 = 候选总数 ${rows}；展开入口消失（showAll=true）`);
     },
   },
   {
@@ -1504,26 +1508,96 @@ const tests = [
   },
   /* ================= 网架图升级（upgrade-grid-map） ================= */
   {
-    id: 'MAP-01', section: '网架升级', title: '全网架开关：隐藏并持久化',
-    steps: '打开网架图拓扑视图，关闭「显示全网架」开关后重载页面',
-    expected: '关闭后全网层通道线消失（仅选中+候选）；mapNet=off 写入 localStorage 并在重载后保持',
+    id: 'MAP-01', section: '网架升级', title: '仅渲染选中方案：开关与候选/全网架图例退场',
+    steps: '打开网架图拓扑视图，检查连线归属、开关与图例；重载后复查（change: grid-map-single-route-and-fixes）',
+    expected: 'SVG 的 data-chan 热区仅属选中方案通道；「显示全网架」开关与「其它候选/全网架/价格线型」图例不存在；重载后无 mapNet 状态',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
-      const n1 = await page.evaluate(() => document.querySelectorAll('#map-view svg line').length);
-      await page.locator('#i-mapnet').uncheck();
-      await page.waitForTimeout(250);
-      const n2 = await page.evaluate(() => document.querySelectorAll('#map-view svg line').length);
-      ok(n2 < n1, `关闭全网架后线数应减少：${n1}→${n2}`);
-      const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.map') || '{}').mapNet);
-      ok(saved === 'off', `mapNet 应持久化为 off，实际 ${saved}`);
+      const r1 = await page.evaluate(() => {
+        const rows = state._res.rows;
+        const hotIds = new Set(rows[Math.min(state.sel, rows.length - 1)].edges.map(e => e.id));
+        const chans = [...document.querySelectorAll('#map-view svg [data-chan]')].map(el => el.getAttribute('data-chan'));
+        const txt = document.getElementById('v-map').innerText;
+        return {
+          chans,
+          onlyHot: chans.length > 0 && chans.every(id => hotIds.has(id)),
+          noToggle: !document.querySelector('#i-mapnet'),
+          legendGone: ['其它候选', '全网架', '价格线型'].every(t => !txt.includes(t)),
+        };
+      });
+      ok(r1.onlyHot, `data-chan 热区应全部属于选中方案通道，实际 ${JSON.stringify(r1.chans)}`);
+      ok(r1.noToggle, '「显示全网架」开关应已移除');
+      ok(r1.legendGone, '其它候选/全网架/价格线型图例应已移除');
       await page.reload({ waitUntil: 'load' });
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
-      ok((await page.evaluate(() => state.mapNet)) === 'off', '重载后 mapNet 应保持 off');
-      await page.locator('#i-mapnet').check();
-      set(`线数 ${n1}→${n2}；mapNet=off 持久化并恢复`);
+      ok(!(await page.evaluate(() => 'mapNet' in state)), '重载后不应存在 mapNet 状态');
+      set(`仅选中方案 ${r1.chans.length} 条通道在线；开关与图例已移除；重载一致`);
+    },
+  },
+  {
+    id: 'MAP-06', section: '网架升级', title: '路线选择下拉：默认推荐 #1，切换即重绘',
+    steps: '打开网架图拓扑视图检查下拉默认值；选择另一条候选路线后核对地图与测算页选中态（change: grid-map-single-route-and-fixes）',
+    expected: '下拉默认选中推荐路线（#1）；切换后 state.sel 更新、图上 data-chan 全部属于新方案；测算页选中卡片一致',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#i-maproute');
+      const first = await page.evaluate(() => {
+        const sel = document.querySelector('#i-maproute');
+        const opt = sel.options[sel.selectedIndex];
+        return { value: +sel.value, text: opt.textContent, isRec: opt.textContent.includes('推荐') };
+      });
+      ok(first.value === 0 && first.isRec, `下拉应默认选中推荐 #1，实际 #${first.value + 1}「${first.text.slice(0, 24)}」`);
+      const second = await page.evaluate(() => {
+        const sel = document.querySelector('#i-maproute');
+        return sel.options.length > 1 ? +sel.options[1].value : null;
+      });
+      if (second == null) { set('候选仅一条，下拉仅推荐一项（符合规格）'); return; }
+      await page.selectOption('#i-maproute', String(second));
+      await page.waitForTimeout(300);
+      const after = await page.evaluate(() => {
+        const rows = state._res.rows;
+        const hotIds = new Set(rows[Math.min(state.sel, rows.length - 1)].edges.map(e => e.id));
+        const chans = [...document.querySelectorAll('#map-view svg [data-chan]')].map(el => el.getAttribute('data-chan'));
+        const sel = document.querySelector('#i-maproute');
+        return { sel: state.sel, onlyHot: chans.length > 0 && chans.every(id => hotIds.has(id)), opt: sel.options[sel.selectedIndex].textContent };
+      });
+      ok(after.sel === second, `切换后 state.sel 应为 ${second}，实际 ${after.sel}`);
+      ok(after.onlyHot, '切换后图上应只画新方案通道');
+      await page.click('#t-calc');
+      await page.waitForTimeout(300);
+      // change: grid-map-single-route-and-fixes：测算页路线选择同为下拉（#i-calcroute），value=原候选下标
+      const calcSel = await page.evaluate(() => +document.getElementById('i-calcroute').value);
+      ok(calcSel === second, `测算页路线下拉应为 #${second + 1}，实际 #${calcSel + 1}`);
+      set(`默认推荐 #1；切到 #${second + 1}（${after.opt.slice(0, 24)}…）后仅画新方案；测算页下拉同步 #${calcSel + 1}`);
+    },
+  },
+  {
+    id: 'MAP-07', section: '网架升级', title: '拓扑图标注防重叠：省名>站名>段名',
+    steps: '深链打开川→陕→甘→宁（换流站与省节点几乎同点的拥挤路线），两两检查拓扑图文字标注矩形',
+    expected: '任意两个文字标注的相交面积 ≤4px²；省名优先保留，冲突的站名/段名换侧或省略（change: grid-map-single-route-and-fixes）',
+    async run(page, set) {
+      await page.goto(G + '#from=SC&to=NX', DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg text');
+      const r = await page.evaluate(() => {
+        const texts = [...document.querySelectorAll('#map-view svg text')];
+        const rs = texts.map(t => t.getBoundingClientRect());
+        let worst = 0, pair = '';
+        for (let i = 0; i < rs.length; i++) for (let j = i + 1; j < rs.length; j++) {
+          const a = rs[i], b = rs[j];
+          const w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+          const h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          if (w > 0 && h > 0 && w * h > worst) { worst = w * h; pair = texts[i].textContent + '|' + texts[j].textContent; }
+        }
+        return { n: texts.length, worst, pair };
+      });
+      ok(r.n >= 4, `应有足够标注参与检查，实际 ${r.n} 个文字`);
+      ok(r.worst <= 4, `文字标注两两相交面积应 ≤4px²，最差 ${r.worst.toFixed(1)}px²（${r.pair}）`);
+      set(`${r.n} 个文字标注，最大相交 ${r.worst.toFixed(1)}px²（${r.pair}）`);
     },
   },
   {
@@ -1547,20 +1621,21 @@ const tests = [
   },
   {
     id: 'MAP-03', section: '网架升级', title: '点击通道=必经过滤联动测算页',
-    steps: '拓扑图点击一条通道热区，再点击一次取消',
-    expected: '点击后 state.mustHave 含该通道、测算页 i-chan 同步、路线图重绘；再点恢复全量',
+    steps: '拓扑图点击选中方案上的一条通道段，再点击一次取消',
+    expected: '点击后 state.mustHave 含该通道、测算页 i-chan 同步、路线图重绘；再点恢复',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-map');
-      await page.waitForSelector('#map-view svg line[data-chan]');
-      const cid = await page.evaluate(() => document.querySelector('#map-view svg line[data-chan]').getAttribute('data-chan'));
-      await page.evaluate(id => document.querySelector(`#map-view svg line[data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), cid);
+      // change: grid-map-single-route-and-fixes：候选/全网架层退场后，点击热区仅剩选中方案通道段（polyline）
+      await page.waitForSelector('#map-view svg polyline[data-chan]');
+      const cid = await page.evaluate(() => document.querySelector('#map-view svg polyline[data-chan]').getAttribute('data-chan'));
+      await page.evaluate(id => document.querySelector(`#map-view svg polyline[data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), cid);
       await page.waitForTimeout(300);
       ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([cid]), `mustHave 应为 [${cid}]`);
       const chan = await page.evaluate(() => (document.getElementById('i-chan') || {}).value);
       ok(chan === cid, `测算页通道筛选应同步为 ${cid}，实际 ${chan}`);
       await page.evaluate(id => { const l = document.querySelector(`#map-view svg [data-chan="${id}"]`); if (l) l.dispatchEvent(new MouseEvent('click', { bubbles: true })); }, cid);
-      // 2026-09-18 批次 B：选中方案段改为 polyline 渲染（走廊折线化），热区选择器去掉标签限定
+      // 2026-09-18 批次 B：选中方案段为 polyline 渲染（走廊折线化），热区选择器不限标签
       await page.waitForTimeout(300);
       ok((await page.evaluate(() => state.mustHave.length)) === 0, '再次点击应解除过滤');
       set(`点击 ${cid} → mustHave 联动并同步测算页；再点解除`);
@@ -1683,7 +1758,7 @@ const tests = [
     expected: '空输入不改动已存密钥并显示常驻灰字；清除后立即降级拓扑图，密钥清空并持久化（重启不回弹）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.evaluate(() => localStorage.setItem('iproute.v2.map', JSON.stringify({ mapProvider: 'td', tiandituKey: 'TESTKEY1234', mapNet: 'dim' })));
+      await page.evaluate(() => localStorage.setItem('iproute.v2.map', JSON.stringify({ mapProvider: 'td', tiandituKey: 'TESTKEY1234' })));
       await page.reload({ waitUntil: 'load' });
       await page.click('#t-map');
       await page.waitForTimeout(400);
@@ -1889,33 +1964,32 @@ const tests = [
     },
   },
   {
-    id: 'P1-02', section: '网架P1', title: 'tier 线型编码：弱化层虚线可辨、选中层不受干扰',
-    steps: '拓扑视图检查 est 短虚线与图例四档说明；检查选中方案线段无 dasharray',
-    expected: '全网/候选层存在 est 短虚线（dasharray 2 4）；图例含核定/国网披露/区域口径/待核价四档；选中蓝线无 dasharray',
+    id: 'P1-02', section: '网架P1', title: '单一选中层：弱化层与 tier 图例退场、选中层无 dash',
+    steps: '拓扑视图检查无任何 dasharray 虚线与「价格线型」图例；选中方案线无 dasharray（change: grid-map-single-route-and-fixes）',
+    expected: '全网/候选弱化层移除后全图无 dasharray；图例不含「价格线型」；选中蓝线存在且无 dasharray',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
       const r = await page.evaluate(() => {
         const svg = document.querySelector('#map-view svg');
-        const est = [...svg.querySelectorAll('[stroke-dasharray="2 4"]')].length;
-        const region = [...svg.querySelectorAll('[stroke-dasharray="8 5"]')].length;
+        const dash = svg.querySelectorAll('[stroke-dasharray]').length;
         // 拓扑图配色走设计令牌（style="stroke:var(--map-route)"），按令牌名识别选中层
         const selDash = [...svg.querySelectorAll('line, polyline')].filter(el => el.style.stroke === 'var(--map-route)' && el.getAttribute('stroke-dasharray')).length;
         const selLines = [...svg.querySelectorAll('line, polyline')].filter(el => el.style.stroke === 'var(--map-route)').length;
         const legend = document.getElementById('v-map').innerText;
-        return { est, region, selDash, selLines, hasLegend: legend.includes('价格线型'), four: ['核定', '国网披露', '区域口径', '待核价'].every(t => legend.includes(t)) };
+        return { dash, selDash, selLines, noTierLegend: !legend.includes('价格线型') };
       });
-      ok(r.hasLegend && r.four, '图例应含四档线型说明');
-      ok(r.est > 0, `全网/候选层应存在 est 短虚线通道，实际 ${r.est} 处`);
       ok(r.selLines > 0, `应能按令牌识别到选中方案线（实际 ${r.selLines} 条），否则下一条断言失去意义`);
       ok(r.selDash === 0, '选中方案线不得被 tier 线型干扰（spec）');
-      set(`est 虚线 ${r.est} 处、region 长虚线 ${r.region} 处；选中层 0 处 dash；图例四档齐备`);
+      ok(r.dash === 0, `弱化层移除后全图不应再有 dasharray 虚线，实际 ${r.dash} 处`);
+      ok(r.noTierLegend, '「价格线型」图例应已移除');
+      set(`选中线 ${r.selLines} 条；全图 0 处 dasharray；tier 图例已移除`);
     },
   },
   {
-    id: 'P1-03', section: '网架P1', title: '容量点击浮层：信息+待补+必经切换',
-    steps: '拓扑图点击一条容量待补且不在当前方案中的通道，再点浮层「设为必经通道」',
+    id: 'P1-03', section: '网架P1', title: '容量浮层：信息+待补+必经切换',
+    steps: '搜索定位一条容量待补且不在当前方案中的通道（mapGotoChan）打开浮层，再点浮层「设为必经通道」',
     expected: '浮层显示输电价/容量（缺失显「待补」）/占用与必经按钮；点按钮后 mustHave 生效且浮层显示必经过滤中',
     async run(page, set) {
       await page.goto(G, DCL);
@@ -1929,15 +2003,21 @@ const tests = [
       });
       ok(!!pick, '当前省对应存在非选中的可用通道');
       const capNull = await page.evaluate(id => (CH.find(x => x.id === id) || {}).cap == null, pick);
-      // D13 语义：点击通道 = 必经过滤开启 + 容量浮层同步弹出（浮层按钮为「解除必经过滤」）
-      await page.evaluate(id => document.querySelector(`#map-view svg [data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), pick);
+      // change: grid-map-single-route-and-fixes：非选中通道不再上图、无点击热区，
+      // 浮层改经搜索定位入口（mapGotoChan）打开；必经过滤由浮层按钮驱动，语义不变
+      await page.evaluate(id => mapGotoChan(id), pick);
       await page.waitForTimeout(400);
       const pop = await page.evaluate(() => document.getElementById('map-pop').innerText);
       ok(pop.includes('容量'), '浮层应含容量字段');
       if (capNull) ok(pop.includes('待补'), `容量缺失通道浮层应显「待补」，实际「${pop.slice(0, 50)}」`);
       ok(pop.includes('占用'), '浮层应含占用率字段');
-      ok(pop.includes('必经过滤中') && pop.includes('解除必经过滤'), '点击后浮层应显示必经过滤中与解除按钮');
-      ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([pick]), '点击通道后 mustHave 应生效（MAP-03 同语义）');
+      // 点浮层「设为必经通道」→ mustHave 生效，浮层转「解除必经过滤」
+      await page.evaluate(() => [...document.querySelectorAll('#map-pop button')].find(b => b.textContent.includes('设为必经通道')).click());
+      await page.waitForTimeout(400);
+      ok(pop.includes('设为必经通道'), '浮层应提供「设为必经通道」按钮');
+      ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([pick]), '设为必经后 mustHave 应生效（MAP-03 同语义）');
+      const pop1 = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      ok(pop1.includes('必经过滤中') && pop1.includes('解除必经过滤'), '开启后浮层应显示必经过滤中与解除按钮');
       // 点浮层「解除必经过滤」→ 过滤解除，浮层转回「设为必经通道」
       await page.evaluate(() => [...document.querySelectorAll('#map-pop button')].find(b => b.textContent.includes('解除必经过滤')).click());
       await page.waitForTimeout(400);

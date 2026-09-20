@@ -26,7 +26,7 @@ let state={
   // REQ-401 容量电费测算器：capMode 'cap'=按容量(kVA) / 'demand'=按需量(kW)；capProv/capTier 为 null 时跟随受端省与默认档
   capMode:'cap', capValue:1000, capQty:12000, capProv:null, capTier:null,
   mustHave:[],
-  mapProvider:'svg', tiandituKey:'', mapNet:'dim',   // mapNet：全网架层显示模式 'dim'=弱化显示 / 'off'=隐藏（spec: grid-map 分层）
+  mapProvider:'svg', tiandituKey:'',   // change: grid-map-single-route-and-fixes：mapNet（全网架层开关）随该层一并移除
   // 批��� B（grid-map P1）会话内视图状态，不入档（saveLast 剥离）：mapSec=断面高亮选择、mapQ=搜索词、mapFocusLL=搜索聚焦包围盒（度）、mapRegion=按区域着色
   mapSec:null, mapQ:'', mapFocusLL:null, mapRegion:false,
   // change: grid-map-device-fixes（D2）：mapView=拓扑图用户视野 {x,y,w,h}（会话内不入档，选中方案/参数变化复位）；
@@ -130,7 +130,8 @@ function saveLast(){
     delete s._res; delete s._ai; delete s._libStale; delete s._stalePrice;
     delete s.mapSec; delete s.mapQ; delete s.mapFocusLL; delete s.mapRegion;   // 会话内视图状态不入档
     delete s.mapView; delete s.tdDegradeNote;   // change: grid-map-device-fixes：触摸视野与降级说明同为会话内状态
+    delete s.mapNet;   // grid-map-single-route-and-fixes：旧 LS_MAP 的残键不入档
     localStorage.setItem(LS_LAST,JSON.stringify(s));
   }catch(e){ _storageBroken=true; }
 }
-function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey,mapNet:state.mapNet}));}catch(e){ _storageBroken=true; } }
+function saveMap(){ try{localStorage.setItem(LS_MAP,JSON.stringify({mapProvider:state.mapProvider,tiandituKey:state.tiandituKey}));}catch(e){ _storageBroken=true; } }
