@@ -96,7 +96,7 @@ header{position:sticky;top:0;z-index:20;background:var(--header-glass);backdrop-
 .hd-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowrap}
 /* 页头右侧：状态徽标 + 外观 + 帮助。手机宽度放不下全部时，徽标先收缩成省略号，标题与两个按钮不换行、不缩 */
-.hd-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
+.hd-acts{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;min-height:36px}
 .badge{font-size:10.5px;padding:2px 7px;border-radius:var(--radius-pill);background:var(--teal-bg);color:var(--teal);font-weight:600;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* 要引起注意的状态（费率已本地修改，ui/lib.js 的 setVerBadge）：徽标挂 .mod，换蓝底、不收缩，放不下时由标题让位（截成省略号）。
    不认 :has() 的老内核退回默认排布：徽标照旧截断，title 仍给全文 */
@@ -104,10 +104,15 @@ h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.2px;white-space:nowr
 .hd-top:has(.badge.mod) h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .hd-top:has(.badge.mod) .hd-acts,.hd-top:has(.badge.mod) .badge{flex:none}
 /* FR-3：页头常驻帮助入口，任意时刻可重看新手导览。
-   change: grid-map-device-fixes（D1，与 PR #28 设计系统合流）：帮助按钮改 ？ 圆钮——36px
-   点按区满足手指点按（spec: experience-fixes ≥32px 等效区域）；颜色全走设计令牌，深浅主题都成立 */
+   change: grid-map-device-fixes（D1，与 PR #28 设计系统合流）：帮助按钮改 ？ 圆钮——视觉 25px 与「外观」钮同高，
+   点按区靠 ::after 透明扩区补足（限幅 4px，等效 ≥33px，spec: experience-fixes ≥32px）；颜色全走设计令牌，深浅主题都成立 */
 .help-link{border:var(--hairline) solid var(--ghost-border);background:var(--card);color:var(--blue);border-radius:var(--radius-pill);padding:3px 10px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
-.help-link.help-round{width:36px;height:36px;padding:0;border-radius:50%;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;line-height:1}
+.help-link.help-round{width:23px;height:23px;padding:0;border-radius:50%;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;line-height:1;flex:none}
+/* 全角「？」墨迹在 em 框内偏左上（canvas 实测 12px 字号下墨迹中心偏左 2.8px/偏上 1px），
+   用 em 相对位移做光学居中补偿，随字号缩放；Android(Noto) 全角问号度量一致可复用 */
+.help-link.help-round .qm{display:inline-block;transform:translate(.23em,.08em)}
+/* 圆钮缩小后 50%-22px 会外扩 9.5px、越过 8px 按钮间距抢「外观」的点击，按 .seg.small 模式限幅 4px */
+.help-link.help-round::after{top:max(-4px,min(0px,calc(50% - 22px)));bottom:max(-4px,min(0px,calc(50% - 22px)));left:max(-4px,min(0px,calc(50% - 22px)));right:max(-4px,min(0px,calc(50% - 22px)))}
 /* 底部留白收紧：main 不再预留 96px 导航让位空间，改由页脚自带导航条高度的内边距，
    声明文字贴在固定导航条上方可见（此前整段页脚被 nav 盖住，等于 48px 纯死空白） */
 /* overflow-x 用 clip 而不是 hidden（M14）：hidden 会把计算值 overflow-y 变成 auto，main 随之
@@ -720,12 +725,12 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
     <div class="hd-top">
       <h1>省间路径优选测算</h1>
       <div class="hd-acts">
-        <!-- change: grid-map-device-fixes（D1 页头一行化）× 设计系统（PR #28）合流：徽章默认文案缩短
-             （公开价格 · 含历史与估算参数→公开数据，title 留全文），帮助改 ？ 圆钮（36px 点按区），
-             外观按钮保留——360px 视口四元素仍单行；本地修改态由 lib.js setVerBadge 挂 .mod 换文案 -->
+      <!-- change: grid-map-device-fixes（D1 页头一行化）× 设计系统（PR #28）合流：徽章默认文案缩短
+           （公开价格 · 含历史与估算参数→公开数据，title 留全文），帮助改 ？ 圆钮（视觉 25px 与「外观」同高，
+           透明扩区限幅 4px 保 44px 内点按区），外观按钮保留——360px 视口四元素仍单行；本地修改态由 lib.js setVerBadge 挂 .mod 换文案 -->
         <span class="badge" id="verBadge" title="公开价格 · 含历史与估算参数">公开数据</span>
         <button class="help-link" id="btn-theme" type="button" onclick="openAppearance()" aria-label="外观：风格与明暗">外观</button>
-        <button class="help-link help-round" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览">？</button>
+        <button class="help-link help-round" id="btn-help" type="button" onclick="guideStart()" aria-label="重看新手导览"><span class="qm">？</span></button>
       </div>
     </div>
   </header>
