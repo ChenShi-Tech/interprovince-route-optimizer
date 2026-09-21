@@ -156,16 +156,13 @@ const tests = [
   {
     id: 'F-01', section: '主流程', title: '首次加载默认测算',
     steps: '打开 http://127.0.0.1:8734/',
-    expected: '默认四川→江苏；自动渲染可选路线下拉（默认推荐 #1）与选中方案详情；无页面脚本错误',
+    expected: '默认四川→江苏；自动渲染可选路线卡片与选中方案详情；无页面脚本错误',
     async run(page, set) {
       await page.goto(G, DCL);
       ok(await page.locator('#i-from').inputValue() === 'SC', '出发地应为 SC(四川)');
       ok(await page.locator('#i-to').inputValue() === 'JS', '目的地应为 JS(江苏)');
-      // change: grid-map-single-route-and-fixes：路线卡片改为下拉（#i-calcroute），默认选中推荐 #1
-      const optCount = await page.locator('#i-calcroute option').count();
-      ok(optCount > 0, '可选路线下拉应至少 1 项，实际 ' + optCount);
-      const cur = await page.evaluate(() => { const el = document.getElementById('i-calcroute'); return el.options[el.selectedIndex]?.textContent || ''; });
-      ok(cur.includes('#1') && cur.includes('推荐'), `下拉应默认选中推荐 #1，实际「${cur.slice(0, 30)}」`);
+      const cards = await page.locator('.rc').count();
+      ok(cards > 0, '路线卡片应>0，实际 ' + cards);
       // 修正(2026-09-18)：落地价元素已由 .big 改为方案卡 .plan-price b / 顶部主卡 .hero-v（calc.js renderDetail），
       // 断言语义（落地价已渲染且为数字）不变。
       const planPrice = (await page.locator('.plan-price b').first().innerText()).trim();
@@ -173,7 +170,7 @@ const tests = [
       const hero = (await page.locator('.hero-v').first().innerText()).trim();
       ok(/^[\d.]+/.test(hero), `顶部主卡落地价未渲染，实际「${hero}」`);
       const hd = (await page.locator('.hd-route').first().innerText()).trim();
-      set(`默认 SC→JS；下拉 ${optCount} 项默认「${cur.slice(0, 24)}」；方案卡落地价 ${planPrice} 元/MWh；pageerror=${logs0(page)}`);
+      set(`默认 SC→JS；卡片 ${cards} 张；方案卡落地价 ${planPrice} 元/MWh；详情「${hd.slice(0, 36)}」；pageerror=${logs0(page)}`);
     },
   },
   {
@@ -197,20 +194,19 @@ const tests = [
     },
   },
   {
-    id: 'F-03', section: '主流程', title: '路线下拉切换方案',
-    steps: '在「选择路线」下拉选第 2 条候选',
-    expected: 'state.sel=1；下拉呈高亮选中态（.on）；详情标题变为「方案 #2」',
+    id: 'F-03', section: '主流程', title: '点击路线卡片切换方案',
+    steps: '点击第 2 张路线卡片',
+    expected: 'state.sel=1；第 2 张卡片高亮；详情标题变为「方案 #2」',
     async run(page, set) {
       await page.goto(G, DCL);
-      // change: grid-map-single-route-and-fixes：路线卡片改为下拉切换
-      await page.selectOption('#i-calcroute', '1');
+      await page.locator('.rc').nth(1).click();
       ok(await page.evaluate(() => state.sel) === 1, 'state.sel 应为 1');
-      const onCls = await page.evaluate(() => document.getElementById('i-calcroute').classList.contains('on'));
-      ok(onCls, '选择非推荐路线后下拉应为高亮选中态（.on）');
+      const onIdx = await page.evaluate(() => [...document.querySelectorAll('.rc')].findIndex(b => b.classList.contains('on')));
+      ok(onIdx === 1, `高亮卡片应为第 2 张(index 1)，实际 ${onIdx}`);
       // 修正(2026-09-18)：详情标题已由 .sec-title（现仅用于「可选路线 / 交易连接与区域计费」）改为方案卡 .plan-no。
       const hd = await page.locator('.plan-no').first().innerText();
       ok(hd.includes('方案 #2'), `详情标题应含「方案 #2」，实际「${hd.trim().slice(0, 20)}」`);
-      set(`sel=1，下拉 .on 高亮，详情「${hd.trim().slice(0, 12)}」`);
+      set(`sel=1，第 2 张卡片 .on 高亮，详情「${hd.trim().slice(0, 12)}」`);
     },
   },
   {
@@ -286,25 +282,25 @@ const tests = [
   {
     id: 'F-07', section: '主流程', title: '勾选「含越限」展示不可行路线',
     steps: '勾选「含越限」复选框',
-    expected: 'showBad=true；下拉候选数不少于之前；顶部显示「共 X 条候选 · 可行 Y 条」',
+    expected: 'showBad=true；列表卡片数不少于之前；顶部显示「共 X 条候选 · 可行 Y 条」',
     async run(page, set) {
       await page.goto(G, DCL);
       // 修正(2026-09-18)：跳数输入已移除（界面固定取上限 MAX_HOPS=10），原 #i-hops 选择作废。
       await page.selectOption('#i-to', 'SH');
-      const before = await page.locator('#i-calcroute option').count();
+      const before = await page.locator('.rc').count();
       await page.locator('.tg input').check();
-      const after = await page.locator('#i-calcroute option').count();
+      const after = await page.locator('.rc').count();
       ok(await page.evaluate(() => state.showBad) === true, 'showBad 应为 true');
-      ok(after >= before, `下拉候选应不减少：${before}→${after}`);
+      ok(after >= before, `卡片应不减少：${before}→${after}`);
       const hint = await page.locator('.sec-title .hint').first().innerText();
       ok(/共 \d+ 条候选/.test(hint), `提示文案异常：${hint}`);
-      set(`含越限前候选 ${before} 条、勾选后 ${after} 条；提示「${hint.trim()}」`);
+      set(`含越限前卡片 ${before} 张、勾选后 ${after} 张；提示「${hint.trim()}」`);
     },
   },
   {
     id: 'F-08', section: '主流程', title: '展开全部路线（>18 条）',
     steps: '四川→上海，点「展开全部」',
-    expected: '默认只列成本接近的若干条；点「展开全部」后下拉候选等于全部候选，展开入口消失（showAll=true）',
+    expected: '默认只列成本接近的若干条；点「展开全部」后全部候选渲染为卡片，展开入口消失（showAll=true）',
     async run(page, set) {
       await page.goto(G, DCL);
       // 修正(2026-09-18)：跳数输入已移除（固定 MAX_HOPS=10），原 #i-hops=5 选择作废。
@@ -312,15 +308,15 @@ const tests = [
       const btn = page.locator('button', { hasText: '展开全部' });
       ok(await btn.count() > 0, '应出现「展开全部」按钮');
       await btn.first().click();
-      const n = await page.locator('#i-calcroute option').count();
+      const n = await page.locator('.rc').count();
       const rows = await page.evaluate(() => state._res.rows.length);
       ok(rows > 18, `候选应 >18 条才有展开意义，实际 ${rows}`);
-      ok(n === rows, `下拉项 ${n} 应等于候选总数 ${rows}`);
+      ok(n === rows, `卡片数 ${n} 应等于 rows ${rows}`);
       // 修正(2026-09-18)：展开后 hiddenN=0，按钮整体移除（renderRouteList 只在 hiddenN>0 时渲染切换按钮），
       // 原期望「按钮变收起」在现实现里不可达；断言语义改为「展开后不再有展开入口且 showAll 已置位」。
       ok(await page.evaluate(() => state.showAll === true), 'state.showAll 应为 true');
       ok(await page.locator('button', { hasText: '展开全部' }).count() === 0, '展开后不应再出现「展开全部」按钮');
-      set(`展开后下拉 ${n} 项 = 候选总数 ${rows}；展开入口消失（showAll=true）`);
+      set(`展开后卡片 ${n} 张 = 候选总数 ${rows}；展开入口消失（showAll=true）`);
     },
   },
   {
@@ -543,7 +539,7 @@ const tests = [
       await page.locator('button', { hasText: '应用密钥' }).click();
       ok(await page.evaluate(() => state.tiandituKey.length) === 50004, '50504 字符应完整保存');
       await page.click('#t-calc');
-      ok(await page.locator('#i-calcroute').first().isVisible(), '切回测算应正常');
+      ok(await page.locator('.rc').first().isVisible(), '切回测算应正常');
       set('50504 字符保存成功、无崩溃；切回测算页路线列表正常渲染');
     },
   },
@@ -571,7 +567,7 @@ const tests = [
       await page.evaluate(() => localStorage.setItem('iproute.v2.last', '{oops'));
       await page.reload(DCL);
       ok(await page.locator('#i-from').inputValue() === 'SC', '应回落默认四川');
-      const cards = await page.locator('#i-calcroute option').count();
+      const cards = await page.locator('.rc').count();
       ok(cards > 0, '刷新后应正常渲染卡片');
       set(`损坏 JSON 被吞掉；回落 SC→JS；卡片 ${cards} 张正常渲染`);
     },
@@ -631,7 +627,7 @@ const tests = [
       try { await page.reload({ timeout: 6000 }); } catch (e) { err = String(e.message).split('\n')[0].slice(0, 110); }
       await page.context().setOffline(false);
       ok(/ERR_|Timeout|net::/.test(err), `reload 应失败，实际：${err}`);
-      const still = await page.locator('#i-calcroute option').count();
+      const still = await page.locator('.rc').count();
       set(`reload 报「${err}」；重载前已渲染的 ${still} 张卡片仍在 DOM（纯前端可继续操作）`);
     },
   },
@@ -672,7 +668,7 @@ const tests = [
     expected: '测算页出现恰好一条存储故障提示；多次失败不重复弹条；测算与切换照常、无未捕获异常',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       await page.evaluate(() => {
         window.__origSetItem = Storage.prototype.setItem;
         Storage.prototype.setItem = function () { throw new Error('HR01 模拟配额超限'); };
@@ -686,7 +682,7 @@ const tests = [
       }));
       ok(r1.warnN === 1, `存储故障提示应恰好 1 条，实际 ${r1.warnN}`);
       ok(r1.rows > 0, `存储故障下测算应正常，实际 ${r1.rows} 条`);
-      await page.selectOption('#i-calcroute', '1');
+      await page.locator('.rc').nth(1).click();
       await page.selectOption('#i-degrade', '0.2');
       await page.waitForTimeout(150);
       const r2 = await page.evaluate(() => [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length);
@@ -701,7 +697,7 @@ const tests = [
     expected: '重建后两者仍为展开态（修复前完整明细会被收回）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       await page.evaluate(() => {
         document.getElementById('d-detail').open = true;
         const ex = document.querySelector('details.explain'); if (ex) ex.open = true;
@@ -726,7 +722,7 @@ const tests = [
     expected: '错误态正常渲染空态卡片；切回后 d-detail 按 id 恢复展开，无错位、无异常',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       await page.evaluate(() => { document.getElementById('d-detail').open = true; });
       // 修正(2026-09-18)：跳数输入已移除（固定 10 段）。错误态改用库内真实不连通的 北京→贵州，
       // 往返仍是「错误态 → 恢复结果态」，与 M11 的按 id 恢复展开断言一致。
@@ -739,7 +735,7 @@ const tests = [
       await page.waitForTimeout(150);
       const back = await page.evaluate(() => ({
         detailOpen: document.getElementById('d-detail').open,
-        cards: document.querySelectorAll('#i-calcroute option').length,
+        cards: document.querySelectorAll('.rc').length,
       }));
       ok(back.cards > 0, '应恢复正常结果态');
       ok(back.detailOpen, '切回后完整明细应按 id 恢复展开');
@@ -752,7 +748,7 @@ const tests = [
     expected: 'iproute.v2.last 低于 2048 字节且不含求解结果（修复前最坏约 12MB）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       // 修正(2026-09-18)：6 段 / 绕行度输入已移除（固定 MAX_HOPS、不限绕行），默认即最坏口径。
       await page.evaluate(() => {
         const setv = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -775,7 +771,7 @@ const tests = [
     expected: '提示条出现且相同错误合并为 ×2；不同错误单列；pageerror 事件照常触发（控制台留痕）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       const errs = [];
       page.on('pageerror', e => errs.push(String(e)));
       await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
@@ -1012,7 +1008,7 @@ const tests = [
       await page.click('#t-calc');
       await page.waitForTimeout(150);
       const back = await page.evaluate(() => ({
-        cards: document.querySelectorAll('#v-calc #i-calcroute option').length,
+        cards: document.querySelectorAll('#v-calc .rc').length,
         empty: !!document.querySelector('#v-calc .empty'),
       }));
       ok(back.cards > 0 && !back.empty, `切回测算页应仍渲染方案卡片，实际卡片=${back.cards} 空态=${back.empty}`);
@@ -1326,7 +1322,7 @@ const tests = [
     expected: '声明存在且含「ATC」',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       const ok1 = await page.evaluate(() => document.getElementById('v-calc').innerText.includes('ATC'));
       ok(ok1, '方案区应含 ATC 口径声明');
       set('ATC 声明可见');
@@ -1357,7 +1353,7 @@ const tests = [
     expected: '声明存在且写明单时段边界（「省间中长期单时段交付成本…合同分时曲线、交易组织…需另行处理」）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       // 修正(2026-09-18)：声明文案随测算页重构（570473e）由「96 时段」改写为「单时段交付成本 + 合同分时曲线另行处理」，
       // 且移入默认收起的「政策与取值依据」内，须先展开再断言；单时点边界声明的语义不变。
       await page.evaluate(() => { document.querySelectorAll('details.explain').forEach(d => d.open = true); });
@@ -1448,7 +1444,7 @@ const tests = [
     expected: '触发 Markdown 下载，含三口径、费用拆解、逐段文号与 priceVersion',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       const [dl] = await Promise.all([
         page.waitForEvent('download', { timeout: 5000 }),
         page.locator('button', { hasText: '导出报告' }).click(),
@@ -1467,7 +1463,7 @@ const tests = [
     expected: '36 个价格档（100~800 步长 20）全量输出，含最优路线与落地成本列',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       await page.evaluate(() => { const d = document.getElementById('d-sens'); if (d) d.open = true; });
       await page.waitForTimeout(80);
       const r = await page.evaluate(() => {
@@ -1485,7 +1481,7 @@ const tests = [
     expected: '应用内弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），确定后切到天地图',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
+      await page.waitForSelector('.rc');
       const dlg = confirmDlg(page);   // 排除参数弹出面板 .sheet-panel，见 confirmDlg 说明
       const clickQQ = async () => {
         await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
@@ -1573,10 +1569,10 @@ const tests = [
       ok(after.onlyHot, '切换后图上应只画新方案通道');
       await page.click('#t-calc');
       await page.waitForTimeout(300);
-      // change: grid-map-single-route-and-fixes：测算页路线选择同为下拉（#i-calcroute），value=原候选下标
-      const calcSel = await page.evaluate(() => +document.getElementById('i-calcroute').value);
-      ok(calcSel === second, `测算页路线下拉应为 #${second + 1}，实际 #${calcSel + 1}`);
-      set(`默认推荐 #1；切到 #${second + 1}（${after.opt.slice(0, 24)}…）后仅画新方案；测算页下拉同步 #${calcSel + 1}`);
+      // 测算页同步（卡片口径）：网架图切换后高亮卡片应跟随
+      const calcSel = await page.evaluate(() => [...document.querySelectorAll('.rc')].findIndex(b => b.classList.contains('on')));
+      ok(calcSel === second, `测算页高亮卡片应为 #${second + 1}，实际 #${calcSel + 1}`);
+      set(`默认推荐 #1；切到 #${second + 1}（${after.opt.slice(0, 24)}…）后仅画新方案；测算页卡片同步 #${calcSel + 1}`);
     },
   },
   {
@@ -1829,7 +1825,7 @@ const tests = [
       try {
         await p2.goto(G, DCL);
         await p2.waitForSelector('#guide-box', { timeout: 4000 });
-        await p2.selectOption('#i-calcroute', '1');
+        await p2.locator('.rc').nth(1).click();
         ok(await p2.evaluate(() => state.sel) === 1, '导览在场时测算主流程应可正常操作（AC3 不阻塞）');
         await p2.locator('#guide-box button', { hasText: '跳过导览' }).click();
         ok(await p2.locator('#guide-box').count() === 0, '跳过后导览应关闭');
@@ -2235,7 +2231,7 @@ const tests = [
       await page.waitForSelector('#map-view svg');
       ok((await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'))) === vbZoom, '切 Tab 回来视野应保持');
       await page.click('#t-calc');
-      await page.selectOption('#i-calcroute', '1');   // 选中方案变化 → 复位
+      await page.locator('.rc').nth(1).click();   // 选中方案变化 → 复位
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
       const vb2 = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: state.mapView }));
@@ -2482,20 +2478,20 @@ const tests = [
       }
       // 以下 390px。回归点 1：「含越限」正上方那张路线卡的下沿（原先被复选框标签的扩区接走 3–7px）
       await fresh();
-      // change: grid-map-single-route-and-fixes：路线卡改下拉后，「含越限」正上方为路线下拉；
-      // 回归点改为「下拉与复选框之间的空档点击不得被 .tg 扩区接走切换含越限、也不改变选中路线」
       const rc = await page.evaluate(() => {
         const tg = document.querySelector('.rlist-foot .tg');
         tg.scrollIntoView({ block: 'center' });
         const t = tg.getBoundingClientRect();
-        const sel = document.getElementById('i-calcroute').getBoundingClientRect();
-        return { x: t.left + 10, y: (sel.bottom + t.top) / 2, gap: +(t.top - sel.bottom).toFixed(1), sel: +document.getElementById('i-calcroute').value, showBad: state.showBad };
+        const cards = [...document.querySelectorAll('.rc')];
+        const i = cards.findIndex((c) => { const q = c.getBoundingClientRect(); return q.left <= t.left && q.right >= t.left + 20 && q.right <= innerWidth + 200; });
+        const q = i < 0 ? null : cards[i].getBoundingClientRect();
+        return q && { i, x: t.left + 10, y: q.bottom - 2, gap: +(t.top - q.bottom).toFixed(1), showBad: state.showBad };
       });
-      ok(rc.gap >= 0, '「含越限」应位于路线下拉下方');
+      ok(rc, '找不到「含越限」正上方的路线卡');
       await page.mouse.click(rc.x, rc.y);
       await page.waitForTimeout(150);
-      const after = await page.evaluate(() => ({ sel: +document.getElementById('i-calcroute').value, showBad: state.showBad }));
-      ok(after.sel === rc.sel && after.showBad === rc.showBad, `空档点击不应改变状态：sel=${rc.sel}→${after.sel}、含越限 ${rc.showBad}→${after.showBad}`);
+      const after = await page.evaluate(() => ({ sel: state.sel, showBad: state.showBad }));
+      ok(after.sel === rc.i && after.showBad === rc.showBad, `点第 ${rc.i + 1} 张路线卡下沿应选中它、不切换「含越限」，实际 sel=${after.sel}、含越限 ${rc.showBad}→${after.showBad}`);
       // 回归点 2：网架图搜索结果换行排布、行距 6px，点「锦屏换流站」下沿原先会打开下一行「奉贤换流站」
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
@@ -2543,7 +2539,7 @@ async function respCheck(page, set, expectCentered, desktop = false, expectMax =
       left: app.getBoundingClientRect().left,
       vw: de.clientWidth,
       nav: !!document.querySelector('nav'),
-      route: !!document.querySelector('#i-calcroute option'),
+      route: !!document.querySelector('.rc'),
     };
   });
   ok(m.overflow <= 1, `存在横向溢出 ${m.overflow}px`);

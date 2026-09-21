@@ -934,7 +934,8 @@ function renderMap(){
   },80);
 }
 /* 网架图下拉切换选中方案：语义同测算页 pick（state.js 深链 sel 同源），但不带测算页滚动副作用；
-   触摸视野随方案切换复位（grid-map-device-fixes D2 同口径）。选项文案与测算页同源（routeOptLabel，calc.js）。 */
+   触摸视野随方案切换复位（grid-map-device-fixes D2 同口径）。选项文案区域口径（routeOptLabel，calc.js，
+   与测算页卡片 routeStops 同源）。 */
 function mapPick(i){
   state.sel=i; if(state.mapView) state.mapView=null;
   saveLast(); renderMap();
