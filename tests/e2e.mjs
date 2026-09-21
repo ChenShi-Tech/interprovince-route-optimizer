@@ -963,7 +963,8 @@ const tests = [
         return { aspect: cs.aspectRatio, h: parseFloat(cs.height) };
       });
       ok(td.aspect === 'auto', `td 模式容器不应有 aspect-ratio，实际 ${td.aspect}`);
-      ok(Math.abs(td.h - (844 - 290)) <= 2, `td 模式容器高应≈554px（844-290），实际 ${td.h}px`);
+      // 高度预算 250px（change: grid-map-declutter，原 290px）
+      ok(Math.abs(td.h - (844 - 250)) <= 2, `td 模式容器高应≈594px（844-250），实际 ${td.h}px`);
       set(summary.join('；') + `；td 模式 aspect=${td.aspect} 高=${td.h}px（固定高不变）`);
     },
   },
@@ -1758,6 +1759,9 @@ const tests = [
     expected: '空输入不改动已存密钥并显示常驻灰字；清除后立即降级拓扑图，密钥清空并持久化（重启不回弹）',
     async run(page, set) {
       await page.goto(G, DCL);
+      // 拦截真实天地图 SDK：脚本加载/探针失败的回写若恰落在点击后窗口内，会以更新的 tkMsg 代数戳
+      // 盖掉「已保留」提示（那是新消息，不是迟到的旧回写）——提前让它快速失败，时序确定化
+      await page.route('**://api.tianditu.gov.cn/**', (route) => route.abort());
       await page.evaluate(() => localStorage.setItem('iproute.v2.map', JSON.stringify({ mapProvider: 'td', tiandituKey: 'TESTKEY1234' })));
       await page.reload({ waitUntil: 'load' });
       await page.click('#t-map');
@@ -1781,7 +1785,7 @@ const tests = [
   {
     id: 'UX-05', section: '体验修复', title: 'FR-2 瓦片级探针状态机（mock Image 两分支）',
     steps: '切天地图，注入 T 桩与受控 Image 桩，分别触发探针 onload / onerror',
-    expected: 'onload(naturalWidth≥256) → 绿字「密钥有效」；onerror → 自动切回内置拓扑图 + 红字降级说明（区分「密钥无效/被风控拦截」与「网络不可达」，grid-map-device-fixes D4 推翻 D-2 保留容器口径）；全程无「加载成功」假阳性',
+    expected: 'onload(naturalWidth≥256) → 成功静默（提示清空，不再显示「密钥有效」）；onerror → 自动切回内置拓扑图 + 红字降级说明（区分「密钥无效/被风控拦截」与「网络不可达」，grid-map-device-fixes D4 推翻 D-2 保留容器口径）；全程无「加载成功」假阳性',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-map');
@@ -1804,14 +1808,14 @@ const tests = [
       });
       await page.evaluate(() => tkMsg('ok'));
       await page.waitForTimeout(100);
-      ok((await page.locator('#tk-msg').innerText()).includes('密钥有效'), 'onload 分支应显示「密钥有效，底图可用」');
+      ok((await page.locator('#tk-msg').innerText()).trim() === '', 'onload 分支应静默清空提示（不再显示「密钥有效」）');
       await page.evaluate(() => { window.__imgOk = false; tkMsg('ok'); });
       await page.waitForTimeout(400);
       // grid-map-device-fixes D4（推翻 PRD D-2）：onerror 不再保留无底图叠加物，自动切回拓扑图 + 红字说明
       ok(await page.evaluate(() => state.mapProvider) === 'svg', 'onerror 应自动降级回内置拓扑图');
       const note = await page.evaluate(() => document.getElementById('v-map').innerText);
       ok(note.includes('密钥无效或被风控拦截') && note.includes('已自动切回内置拓扑图'), `降级红字说明应在场，实际「${note.slice(0, 60)}」`);
-      set(`onload→密钥有效；onerror→自动降级 svg + 红字说明（密钥无效或被风控拦截）`);
+      set(`onload→静默；onerror→自动降级 svg + 红字说明（密钥无效或被风控拦截）`);
     },
   },
   {
@@ -2028,9 +2032,9 @@ const tests = [
     },
   },
   {
-    id: 'P1-04', section: '网架P1', title: '断面选择器：成员高亮与限额提示',
+    id: 'P1-04', section: '网架P1', title: '断面选择器：成员高亮与限额信息行',
     steps: '网架图选择一个成员可映射且含非当前方案成员的断面，再切回不选',
-    expected: '选中断面后出现紫色晕圈垫层与限额提示条；清除后晕圈与提示条消失',
+    expected: '选中断面后出现紫色晕圈垫层与限额信息行；清除后晕圈与信息行消失',
     async run(page, set) {
       await page.goto(G, DCL);
       await page.click('#t-map');
@@ -2051,21 +2055,21 @@ const tests = [
         const members = (s.edges || []).filter(n => CH.some(c => c.n === n)).length;
         return {
           halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.style.stroke === 'var(--map-section)').length,
-          strip: (document.getElementById('v-map').innerText || '').includes('断面高亮：'),
+          infoRow: (document.getElementById('v-map').innerText || '').includes('限额 '),
           members,
         };
       }, sec);
       ok(r1.halo >= 1, `成员通道应出现晕圈垫层（可映射成员 ${r1.members}，晕圈 ${r1.halo}）`);
-      ok(r1.strip, '应显示断面限额提示条');
+      ok(r1.infoRow, '应显示断面限额信息行');
       await page.selectOption('#i-mapsec', '');
       await page.waitForTimeout(300);
       const r2 = await page.evaluate(() => ({
         halo: [...document.querySelectorAll('#map-view svg polyline, #map-view svg line')].filter(el => el.style.stroke === 'var(--map-section)').length,
-        // 注意：下拉框首项文案「按断面高亮…」含相似字样，必须用带冒号的提示条标记判别
-        strip: (document.getElementById('v-map').innerText || '').includes('断面高亮：'),
+        // 注意：标记用「限额 」（信息行独有）；下拉首项「按断面高亮…」不含该字样，不会误判
+        infoRow: (document.getElementById('v-map').innerText || '').includes('限额 '),
       }));
-      ok(r2.halo === 0 && !r2.strip, '清除选择后晕圈与提示条应消失');
-      set(`断面 ${sec}：晕圈 ${r1.halo}（可映射成员 ${r1.members}）、提示条在场；清除后归零`);
+      ok(r2.halo === 0 && !r2.infoRow, '清除选择后晕圈与限额信息行应消失');
+      set(`断面 ${sec}：晕圈 ${r1.halo}（可映射成员 ${r1.members}）、信息行在场；清除后归零`);
     },
   },
   {
@@ -2101,6 +2105,8 @@ const tests = [
       await page.goto(G, DCL);
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
+      // 图层面板默认收起（grid-map-declutter）：先展开「图层」再操作开关，开关行为不变
+      await page.click('#map-layer-btn');
       await page.locator('#i-mapregion').check();
       await page.waitForTimeout(300);
       const r1 = await page.evaluate(() => {
