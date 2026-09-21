@@ -135,6 +135,22 @@ const TD_WAIT_MS=5000, TD_POLL_MS=100;
 let tkVis=false;
 const SVG_EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const SVG_EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+/* 问号帮助图标（help-circle）：内联 SVG 与密钥小眼睛同款做法，浏览器 / 安卓 WebView / iOS
+   WKWebView 渲染一致；stroke=currentColor 随所在元素的颜色令牌（--ink3）走，三套主题自动适配。 */
+const SVG_HELP='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+/* 箭头图标（chevron-down / chevron-right）：同 SVG_HELP 的内联 SVG 做法（change: grid-map-collapse-fee-sheet）。
+   下箭头用于「各段明细」切换按钮（收起态由 .route-seg-toggle 的 CSS 旋成右向）；右箭头用于费用分布入口行。 */
+const SVG_CHEV_D='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+const SVG_CHEV_R='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+/* 会话级开合标志（grid-map-collapse-fee-sheet）：各段明细展开态与费用分布抽屉开合态。
+   只在会话内记忆、不入档不进深链——与 state.mapView「会话内不入档」同口径；
+   renderMap 重建频繁，两态都按标志恢复，满足 ui-render-stability「折叠面板展开态跨重渲染保持」。 */
+let mapRouteDetailOpen=false;
+let _feeSheetOpen=false;
+/* 会话级开合标志（grid-map-declutter）：断面「详情」备注展开态与「图层」面板开合态，
+   口径同上——会话内记忆、不入档不进深链，renderMap 重建时按标志恢复。 */
+let mapSecNoteOpen=false;
+let mapLayerOpen=false;
 function toggleTkVis(){
   tkVis=!tkVis;
   const inp=document.getElementById('i-tk'), btn=document.querySelector('.tk-eye');
@@ -833,9 +849,15 @@ function renderMap(){
   const stale=()=>gen!==mapGen||state.mapProvider!==mode;
   const r=state._res&&state._res.rows;
   const selR=(r&&r.length)?r[Math.min(state.sel,r.length-1)]:null;
-  // 批次 B：断面高亮提示条（数据与费率库断面分区同源）
+  /* 断面信息单行收纳（change: grid-map-declutter，取代原琥珀色提示条）：断面名不重复
+     （下拉已示当前值）；限额直读；note 收进「详情」展开（esc 原文输出，不改写不截断）；
+     成员通道未映射到本图时才追加红字警示；未选断面时仅拓扑图模式渲染本行（承载导出入口）。 */
   const secObj=state.mapSec?SEC.find(s=>s.id===state.mapSec):null;
-  const secStrip=secObj?`<div class="warn" style="margin:0 0 8px">断面高亮：<b>${esc(secObj.n)}</b>　限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}${secObj.note?'　'+esc(secObj.note):''}${secMemberIds(state.mapSec).length?'':'　<span style="color:var(--red)">成员通道未映射到本图</span>'}</div>`:'';
+  const secUnmapped=secObj&&!secMemberIds(state.mapSec).length;
+  const secRow=(secObj||mode==='svg')?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 6px;min-height:28px">
+      ${secObj?`${secUnmapped?'<span style="font-size:11px;color:var(--red)">成员通道未映射到本图</span>':''}<span style="font-size:11px;color:var(--ink2)">限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}</span>${secObj.note?`<button type="button" class="btn ghost hit-x" style="width:auto;padding:5px 10px;font-size:11px;display:inline-flex;align-items:center;gap:3px" aria-expanded="${mapSecNoteOpen}" aria-controls="map-sec-note" onclick="toggleSecNote(this)">详情<span style="display:inline-flex;transform:rotate(${mapSecNoteOpen?0:-90}deg)">${SVG_CHEV_D}</span></button>`:''}`:''}
+      ${mode==='svg'?`<button type="button" class="btn ghost hit-x" style="margin-left:auto;width:auto;padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button>`:''}
+    </div>${secObj&&secObj.note?`<div id="map-sec-note" style="font-size:11px;color:var(--ink3);line-height:1.6;margin:0 0 8px"${mapSecNoteOpen?'':' hidden'}>${esc(secObj.note)}</div>`:''}`:'';
   // 批次 B 增补：区域着色图例（动态，依据 REGION_OF 区域电网分区）
   const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
   const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
@@ -846,6 +868,7 @@ function renderMap(){
 
   let out=`<div class="card tight">
     <div class="sec-title">跨省网架<span class="hint">${CH.length} 条通道 · ${Object.keys(ST).length} 个站点</span>
+      <button type="button" id="map-layer-btn" class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px;flex:none" aria-expanded="${mapLayerOpen}" aria-controls="map-layer-panel" onclick="toggleMapLayers(this)">图层</button>
       <button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
     <div class="seg small">${MAP_MODES.map(([k,t])=>`<button class="${mode===k?'on':''}" onclick="switchMap('${k}')">${t}</button>`).join('')}</div>`;
 
@@ -854,20 +877,27 @@ function renderMap(){
     out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
   }
   if(mode==='td'){
-    out+=`<label class="f"><span>天地图密钥（tk）</span>
+    out+=`<label class="f"><span style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" onclick="tkHelpDlg()">天地图密钥<i aria-hidden="true" style="display:inline-flex;color:var(--ink3)">${SVG_HELP}</i></span>
       <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
         <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
       </div></label>
-      <div class="row3" style="margin-bottom:10px">
-        <button class="btn ghost" onclick="applyTk()">应用密钥</button>
-        <button class="btn ghost" onclick="clearTk()">清除密钥</button>
-        <button class="btn ghost" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
+      <div class="row3" style="margin-bottom:10px;padding-top:6px">
+        <button class="btn ghost" style="font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)" onclick="applyTk()">应用密钥</button>
+        <button class="btn ghost" style="font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)" onclick="clearTk()">清除密钥</button>
+        <button class="btn ghost" style="font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
-      <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
-      <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥默认掩码显示，点右侧小眼睛可见；仅存本机，代码中不内嵌任何有效密钥。</p>`;
+      <!-- 三键字号/内边距/圆角对齐 .seg.small（拓扑图/腾讯地图/天地图），两行按钮高度一致；
+           触屏命中区仍由 .btn.ghost::after 透明扩区机制负责。上边距 8px 让本行扩区盒与上方
+           密钥显隐钮的向下扩区错开（44px 扩区盒随按钮变小而上移，贴太近会互相抢点，UI-HIT 审计） -->
+      <div id="tk-msg" class="note" style="margin:0 0 10px"></div>`;
+      /* 密钥申请说明收进弹框：点「天地图密钥 ?」行内文字（问号图标）弹出（title 原生 tooltip
+         在触屏 / WebView 不生效，弃用）；申请入口仍由「去申请密钥」按钮承担，不再常驻占一屏文案。 */
   }
 
-  out+=`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
+  /* 图例与「按区域着色」开关折叠收纳（change: grid-map-declutter）：原常驻图例行收进标题行
+     「图层」入口下的默认收起面板（display 直翻，hidden 属性会被内联 flex 盖掉）；
+     开关 id/onchange 不变，区域着色开启时的色点图例（regionLegend）保持原位不进面板。 */
+  out+=`<div id="map-layer-panel" style="display:${mapLayerOpen?'flex':'none'};gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
       <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-route);vertical-align:middle;margin-right:5px"></i>选中方案</span>
       <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
     </div>
@@ -880,37 +910,49 @@ function renderMap(){
       </select>
     </div>
     <div id="map-search-out"></div>
-    ${secStrip}
-    ${mode==='svg'?`<div style="display:flex;justify-content:flex-end;margin:0 0 6px"><button class="btn ghost hit-x" style="padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button></div>`:''}
+    ${secRow}
     <div id="map-view" onclick="mapSvgClick(event)"></div><div id="fallback"></div><div id="map-pop"></div>`;
 
   if(selR){
     /* 路线选择下拉（change: grid-map-single-route-and-fixes）：默认推荐路线 #1，
-       候选口径与测算页「可选路线」同源（routeMenuItems）；用户停留在阈值外方案时把当前项补进首位，保证下拉值与图上一致 */
+       候选口径与测算页「可选路线」同源（routeMenuItems）；用户停留在阈值外方案时把当前项补进首位，保证下拉值与图上一致。
+       选项文案带核心通道（routeOptLabel → routeLead，同测算页卡片标题），字号 11px 保证长文案在 390px 下不挤 */
     const cur=Math.min(state.sel,r.length-1);
     const items=routeMenuItems(state._res);
     if(!items.some(it=>it.i===cur)) items.unshift({r:selR,i:cur});
+    /* 各段明细折叠（change: grid-map-collapse-fee-sheet）：默认收起为「各段明细 · N 段」一行，
+       点开才见逐段明细；展开态按 mapRouteDetailOpen 恢复（切方案/切底图/切区域着色重建不弹回），
+       切换只翻转 DOM 不重走 renderMap（见 toggleRouteDetail），避免整图重绘。 */
     out+=`<div style="margin-top:11px;padding-top:11px;border-top:var(--hairline) solid var(--line2)">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
         <span style="font-size:12.5px;font-weight:600;flex:none">选中方案</span>
-        <select id="i-maproute" onchange="mapPick(+this.value)" style="flex:1;min-width:0;padding:6px 26px 6px 9px;font-size:12px;font-weight:600">
+        <select id="i-maproute" onchange="mapPick(+this.value)" style="flex:1;min-width:0;padding:6px 26px 6px 9px;font-size:11px;font-weight:600">
           ${items.map(it=>`<option value="${it.i}" ${it.i===cur?'selected':''}>${esc(routeOptLabel(it))}</option>`).join('')}
         </select>
       </div>
+      <div class="route-seg-row">
+        <button type="button" class="route-seg-toggle" onclick="toggleRouteDetail(this)" aria-expanded="${mapRouteDetailOpen}" aria-controls="map-route-segs">
+          ${SVG_CHEV_D}<span>各段明细 · ${selR.segs.length} 段</span>
+        </button>
+        <button type="button" class="note-icon-btn" onclick="stationNoteDlg()" aria-label="站点位置说明" title="站点位置说明">${SVG_HELP}</button>
+      </div>
+      <div id="map-route-segs"${mapRouteDetailOpen?'':' hidden'}>
       ${selR.segs.map((s,i)=>`<div style="font-size:11px;color:var(--ink2);padding:4px 0;border-bottom:var(--hairline) solid var(--line2);line-height:1.6">
         <b style="color:var(--blue-ink)">${i+1}</b>　${esc(s.e.n)}　${esc(s.e.kv)}　${fmt(s.t)} 元/MWh　计费线损 ${fmt(s.billLossPct,2)}%（物理估算 ${fmt(s.e.loss,2)}%）
         <span style="color:var(--ink3)">｜入口 ${fmt(s.inMW,0)} MW　${s.util!=null?'占用 '+fmt(s.util*100,0)+'%':'容量待补'}</span>
       </div>`).join('')}
+      </div>
     </div>`;
   }
-  out+=`<p class="note" style="margin-top:10px">站点位置为县/市级近似（精确站址见费率库中各通道的送受端地址）。落点未采集的通道以省会位置示意。</p></div>`;
+  /* 站点位置说明不再内联占行（grid-map-collapse-fee-sheet 二次收敛）：改由「各段明细」行尾问号
+     弹窗（stationNoteDlg）承载，点击与折叠按钮互不冲突（兄弟节点）。 */
+  out+=`</div>`;
 
-  out+=`<div class="card tight"><div class="sec-title">通道费用分布<span class="hint">按输电价升序</span></div>
-    <table><tr><th style="width:40%">通道</th><th>输电价 / 送出省参考价</th><th>物理估算线损</th><th>容量</th></tr>
-    ${[...CH].filter(c=>c.t!=null).sort((a,b)=>a.t-b.t).map(c=>`<tr>
-      <td>${esc(c.n)}<br><span style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
-      <td>${fmt(c.t)}${c.regional?'（仅起点送出省）':''}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>
-  </div>`;
+  /* 通道费用分布改抽屉（change: grid-map-collapse-fee-sheet）：全通道表格迁入 #fee-sheet（打开时才渲染，
+     renderMap 不再每次渲染整表）；原位保留细入口行（方案 A），文案与原卡片标题逐字一致保可发现性；
+     二次收敛：竖向 padding 由 .card.tight 的 12px 收到 8px、按钮 min-height 32px，整卡更矮。 */
+  out+=`<div class="card tight" style="padding:8px 12px"><button type="button" id="fee-entry" class="fee-entry" onclick="openFeeSheet()" aria-haspopup="dialog">
+    <span style="font-size:12px;font-weight:600">通道费用分布</span><span class="fee-entry-hint">按输电价升序</span>${SVG_CHEV_R}</button></div>`;
 
   document.getElementById('v-map').innerHTML=out;
   setTimeout(()=>{
@@ -934,11 +976,99 @@ function renderMap(){
   },80);
 }
 /* 网架图下拉切换选中方案：语义同测算页 pick（state.js 深链 sel 同源），但不带测算页滚动副作用；
-   触摸视野随方案切换复位（grid-map-device-fixes D2 同口径）。选项文案区域口径（routeOptLabel，calc.js，
-   与测算页卡片 routeStops 同源）。 */
+   触摸视野随方案切换复位（grid-map-device-fixes D2 同口径）。选项文案（routeOptLabel，calc.js）
+   = 核心通道 + 区域口径途经 + 落地价，与测算页卡片标题（routeLead）/途经（routeStops）同源。 */
 function mapPick(i){
   state.sel=i; if(state.mapView) state.mapView=null;
   saveLast(); renderMap();
+}
+/* ---------- 各段明细展开/收起（change: grid-map-collapse-fee-sheet） ----------
+   只翻转 hidden 属性与 aria-expanded、同步会话标志，不重走 renderMap——
+   整图重绘（topoSVG 重注入 / 天地图腾讯地图重初始化）为一次收展付出太重；
+   renderMap 重建时按 mapRouteDetailOpen 恢复，口径同 ui-render-stability。 */
+function toggleRouteDetail(btn){
+  const box=document.getElementById('map-route-segs');
+  if(!box) return;
+  const open=box.hasAttribute('hidden');
+  if(open) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
+  btn.setAttribute('aria-expanded',open?'true':'false');
+  mapRouteDetailOpen=open;
+}
+/* ---------- 断面备注「详情」展开/收起（change: grid-map-declutter） ----------
+   口径同 toggleRouteDetail：只翻转 hidden 与 aria-expanded、同步会话标志，不重走 renderMap；
+   收起态箭头旋成右向（同 .route-seg-toggle 的 CSS 语义，这里用内联 transform），
+   renderMap 重建时按 mapSecNoteOpen 恢复。 */
+function toggleSecNote(btn){
+  const box=document.getElementById('map-sec-note');
+  if(!box) return;
+  const open=box.hasAttribute('hidden');
+  if(open) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
+  btn.setAttribute('aria-expanded',open?'true':'false');
+  const ic=btn.querySelector('span');
+  if(ic) ic.style.transform=open?'':'rotate(-90deg)';
+  mapSecNoteOpen=open;
+}
+/* ---------- 「图层」面板开合（change: grid-map-declutter） ----------
+   「选中方案」图例与「按区域着色」开关收进默认收起的折叠面板；面板用内联 display 直翻
+   （hidden 属性会被内联 display:flex 盖掉），其余口径同 toggleSecNote。 */
+function toggleMapLayers(btn){
+  const box=document.getElementById('map-layer-panel');
+  if(!box) return;
+  const open=box.style.display==='none';
+  box.style.display=open?'flex':'none';
+  btn.setAttribute('aria-expanded',open?'true':'false');
+  mapLayerOpen=open;
+}
+/* 「各段明细」行尾问号弹出的站点位置说明框（change: grid-map-collapse-fee-sheet 二次收敛）：
+   结构与样式令牌同 tkHelpDlg（天地图密钥说明），单按钮「知道了」，Esc / 点遮罩均可关闭。
+   原页面流内的站点位置 note 段落移除，改由本弹窗承载；问号按钮与折叠按钮是兄弟节点，
+   两个点击事件互不冒泡、互不冲突。 */
+function stationNoteDlg(){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:4000;background:var(--scrim-dialog);display:flex;align-items:center;justify-content:center;padding:28px';
+  ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:var(--card);border-radius:var(--radius-dialog);max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:var(--shadow-dialog)">
+    <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">站点位置说明</div>
+    <div style="font-size:12.5px;color:var(--ink2);line-height:1.7">站点位置为县/市级近似（精确站址见费率库中各通道的送受端地址）。落点未采集的通道以省会位置示意。</div>
+    <div style="display:flex;margin-top:16px"><button class="btn" style="flex:1;font-size:14px;padding:10px">知道了</button></div></div>`;
+  const close=()=>{ ov.remove(); document.removeEventListener('keydown',onKey); };
+  const onKey=e=>{ if(e.key==='Escape') close(); };
+  ov.addEventListener('click',e=>{ if(e.target===ov||e.target.closest('button')) close(); });
+  document.addEventListener('keydown',onKey);
+  document.body.appendChild(ov);
+  ov.querySelector('button').focus();
+}
+/* ---------- 通道费用分布抽屉（change: grid-map-collapse-fee-sheet） ----------
+   表格从网架页内联卡片迁入；开关机制与外观面板（theme.js）同款：独立开合标志 +
+   history.pushState（安卓返回键 / 浏览器后退先关面板，boot.js popstate 统一收口）+ 焦点管理。
+   表格改为打开时才渲染，口径与原内联表格逐字一致。 */
+function feeTableHTML(){
+  return `<table><tr><th style="width:40%">通道</th><th>输电价 / 送出省参考价</th><th>物理估算线损</th><th>容量</th></tr>
+  ${[...CH].filter(c=>c.t!=null).sort((a,b)=>a.t-b.t).map(c=>`<tr>
+    <td>${esc(c.n)}<br><span style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
+    <td>${fmt(c.t)}${c.regional?'（仅起点送出省）':''}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>`;
+}
+function openFeeSheet(){
+  const el=document.getElementById('fee-sheet');
+  if(!el||_feeSheetOpen) return;
+  _feeSheetOpen=true;
+  const body=document.getElementById('fee-sheet-body');
+  if(body) body.innerHTML=feeTableHTML();
+  el.classList.add('open'); el.setAttribute('aria-hidden','false');
+  document.body.classList.add('sheet-open');
+  // 压一条历史记录：安卓返回键 / 浏览器后退时先关闭面板（同参数 / 外观弹层）
+  try{ history.pushState({feeSheet:1},''); }catch(e){}
+  const x=document.getElementById('fee-sheet-close');
+  if(x&&x.focus){ try{ x.focus({preventScroll:true}); }catch(e){} }
+}
+function closeFeeSheet(fromHistory){
+  if(!_feeSheetOpen) return;
+  _feeSheetOpen=false;
+  const el=document.getElementById('fee-sheet');
+  if(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
+  document.body.classList.remove('sheet-open');
+  if(!fromHistory){ try{ if(history.state&&history.state.feeSheet) history.back(); }catch(e){} }
+  const b=document.getElementById('fee-entry');
+  if(b&&b.focus){ try{ b.focus({preventScroll:true}); }catch(e){} }
 }
 function switchMap(p){
   // REQ-703：不可用底图必须给出明确反馈，不得静默回退（真机 APK 以 file:// 加载，
@@ -987,6 +1117,22 @@ function clearTk(){
   saveMap();
   state.mapProvider='svg'; saveMap(); renderMap();
 }
+/* 「天地图密钥」旁问号图标点击弹出的说明框：样式令牌与 uiConfirm 同一套，单按钮「知道了」，
+   Esc / 点遮罩均可关闭。 */
+function tkHelpDlg(){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:4000;background:var(--scrim-dialog);display:flex;align-items:center;justify-content:center;padding:28px';
+  ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:var(--card);border-radius:var(--radius-dialog);max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:var(--shadow-dialog)">
+    <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">天地图密钥说明</div>
+    <div style="font-size:12.5px;color:var(--ink2);line-height:1.7">密钥需在天地图开放平台申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥仅存本机，代码中不内嵌任何有效密钥。</div>
+    <div style="display:flex;margin-top:16px"><button class="btn" style="flex:1;font-size:14px;padding:10px">知道了</button></div></div>`;
+  const close=()=>{ ov.remove(); document.removeEventListener('keydown',onKey); };
+  const onKey=e=>{ if(e.key==='Escape') close(); };
+  ov.addEventListener('click',e=>{ if(e.target===ov||e.target.closest('button')) close(); });
+  document.addEventListener('keydown',onKey);
+  document.body.appendChild(ov);
+  ov.querySelector('button').focus();
+}
 /* 密钥应用的各阶段反馈：loading/ok/empty/loadfail/drawfail。
    script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
 function tkMsg(kind){
@@ -1029,7 +1175,7 @@ function tdTileProbe(el,gen){
     img.onload=()=>{
       if(!live()) return;
       if(img.naturalWidth>=256){
-        el.innerHTML='<span style="color:var(--teal);font-weight:600">✓ 密钥有效，底图可用。</span>';
+        el.innerHTML='';            // 成功静默：不显示「密钥有效」提示，仅清空旧消息
         state.tdDegradeNote=null;   // grid-map-device-fixes D4：有效密钥成功即清除降级说明
         return;
       }
@@ -1067,8 +1213,8 @@ function tkFailDiagnose(el,gen){
 function tkFailShow(el, kind, fresh){
   if(kind==='server'){
     el.innerHTML = (!fresh && Date.now()<tdCooldownUntil)
-      ? '<span style="color:var(--error-text);font-weight:600">✗ 天地图风控拦截仍未解除。</span>反复重试会延长封禁，请安静等待约 '+Math.ceil((tdCooldownUntil-Date.now())/60000)+' 分钟后再点「应用密钥」。已降级为网架清单。'
-      : '<span style="color:var(--error-text);font-weight:600">✗ 天地图服务端拦截了本次请求（临时风控封禁）。</span>静置 30 分钟以上再点「应用密钥」重试一次，期间勿反复点击。已降级为网架清单。';
+      ? '<span style="color:var(--error-text);font-weight:600">天地图风控拦截仍未解除。反复重试会延长封禁。</span><span style="color:var(--ink3)">已降级为网架清单。</span>'
+      : '<span style="color:var(--error-text);font-weight:600">天地图服务端拦截了本次请求/临时风控，请勿反复点击。</span><span style="color:var(--ink3)">已降级为网架清单。</span>';
     return;
   }
   el.innerHTML = '<span style="color:var(--error-text);font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';

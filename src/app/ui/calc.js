@@ -374,10 +374,12 @@ function routeMenuItems(res){
   const rows=res&&res.rows?res.rows:[];
   return state.showAll?rows.map((r,i)=>({r,i})):routeThresholdItems(res);
 }
-/* 路线下拉选项文案（网架图）：序号 + 途经（区域口径，与测算页卡片同源 routeStops，
-   进入区域共用网络只写「X区域」与物理落点，不逐省列名）+ 落地价，首条标注「推荐」 */
+/* 路线下拉选项文案（网架图）：序号 + 核心通道（routeLead，与测算页卡片标题同口径，
+   如「吉泉直流」；多条写「X 等 N 条」，全程区域网架写「X区域网架」）+ 途经（区域口径，
+   与测算页卡片同源 routeStops，进入区域共用网络只写「X区域」与物理落点，不逐省列名）
+   + 落地价，首条标注「推荐」 */
 function routeOptLabel(it){
-  return '#'+(it.i+1)+(it.i===0?' 推荐':'')+' · '+routeStops(it.r).map(s=>s.name+(s.landing?'（落点'+s.landing+'）':'')).join('→')+' · '+fmt(it.r.landed,0)+' 元/MWh';
+  return '#'+(it.i+1)+(it.i===0?' 推荐':'')+' · '+routeLead(it.r)+' · '+routeStops(it.r).map(s=>s.name+(s.landing?'（落点'+s.landing+'）':'')).join('→')+' · '+fmt(it.r.landed,0)+' 元/MWh';
 }
 const RLIMIT=18;
 function renderRouteList(res){

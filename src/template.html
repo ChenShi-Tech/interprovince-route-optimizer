@@ -295,7 +295,9 @@ td b{font-weight:600}
 .prow:first-of-type{font-size:10.5px;color:var(--ink3)}
 .prow .pn{font-size:12px;font-weight:500}
 .prow input{padding:5px 6px;font-size:12px;border-radius:var(--radius-inline)}
-#map-view,#fallback{width:100%;height:calc(100vh - 290px);min-height:320px;border-radius:var(--r);overflow:hidden;background:var(--map-fallback);border:var(--hairline) solid var(--line)}
+/* 高度预算 290→250（change: grid-map-declutter）：断面条收一行、图例行折叠后工具区变矮，
+   手机端地图相应增高；min-height 下限与宽屏（721 行）口径不动。 */
+#map-view,#fallback{width:100%;height:calc(100vh - 250px);min-height:320px;border-radius:var(--r);overflow:hidden;background:var(--map-fallback);border:var(--hairline) solid var(--line)}
 /* 地图 API（天地图/腾讯）内部图层 z-index 高达 200~1000+：容器若不建立层叠上下文，
    这些图层会在根层叠环境里压过 z-index:30 的固定底栏（容器延伸到视口底时必现）。
    contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
@@ -412,6 +414,23 @@ td b{font-weight:600}
 body.sheet-open{overflow:hidden}
 /* 外观面板（#theme-sheet）复用上面的弹层结构；没有底部按钮栏，正文自己让出底部安全区 */
 #theme-sheet .sheet-body{padding-bottom:max(16px,env(safe-area-inset-bottom))}
+/* 通道费用分布抽屉（#fee-sheet）：同样没有底部按钮栏，正文让出底部安全区（grid-map-collapse-fee-sheet） */
+#fee-sheet .sheet-body{padding-bottom:max(16px,env(safe-area-inset-bottom))}
+/* 网架图「通道费用分布」细入口行与「各段明细」切换行：只用现有令牌与字号档（grid-map-collapse-fee-sheet）。
+   两行高度都压矮（用户指示对这两行放宽 44px 触达红线——整行宽命中，竖向紧凑）；
+   入口行不设固定高度、上下内边距也去掉，高度由内容 + 外层卡片内边距撑开 */
+.fee-entry{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;padding:3px 0;font-family:inherit;line-height:1;color:var(--ink);cursor:pointer;text-align:left}
+.fee-entry .fee-entry-hint{font-size:11px;font-weight:400;color:var(--ink3)}
+.fee-entry svg{display:block;flex:none;margin-left:auto;color:var(--ink3)}
+.route-seg-row{display:flex;align-items:center;gap:2px}
+.route-seg-toggle{flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:28px;background:none;border:0;padding:2px 0;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--ink2);cursor:pointer;text-align:left}
+.route-seg-toggle svg{display:block;flex:none;color:var(--ink3);transform:rotate(-90deg);transition:transform .2s}
+.route-seg-toggle[aria-expanded="true"] svg{transform:rotate(0deg)}
+/* 「各段明细」行尾站点位置说明问号按钮：与折叠按钮为兄弟节点，点击互不冲突；问号图标同 SVG_HELP 口径。
+   三元素（箭头/文字/问号）垂直居中：line-height:1 让行盒贴住字面——normal 行高下中文字体
+   （雅黑/手机字体）上伸部偏高压高行盒、字面沉降，视觉上图标与文字错位；SVG display:block 消除行内基线缝隙。 */
+.note-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;border:0;background:none;padding:0;color:var(--ink3);cursor:pointer;border-radius:var(--radius-field)}
+.note-icon-btn svg{display:block}
 @media (min-width:600px){
   .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:var(--radius-sheet) 0 0 var(--radius-sheet);transform:translateX(100%);box-shadow:var(--shadow-sheet-side)}
   .sheet-grab{display:none}
@@ -790,6 +809,19 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
         <button class="sheet-x" id="theme-close" type="button" onclick="closeAppearance()" aria-label="关闭">✕</button>
       </div>
       <div class="sheet-body" id="theme-body"></div>
+    </div>
+  </div>
+  <!-- 通道费用分布抽屉：与参数/外观弹层同一套 .sheet 结构（手机底部滑出，≥600px 右侧滑出）；
+       表格由 ui/map.js 的 openFeeSheet 在打开时生成（change: grid-map-collapse-fee-sheet） -->
+  <div id="fee-sheet" class="sheet" aria-hidden="true">
+    <div class="sheet-mask" onclick="closeFeeSheet()"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="fee-sheet-title">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <div class="sheet-hd">
+        <div><div class="sheet-title" id="fee-sheet-title">通道费用分布</div><div class="tsub" style="margin-top:2px">按输电价升序</div></div>
+        <button class="sheet-x" id="fee-sheet-close" type="button" onclick="closeFeeSheet()" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-body" id="fee-sheet-body"></div>
     </div>
   </div>
 </div>

@@ -58,9 +58,9 @@ document.addEventListener('change',e=>{
     saveLast(); renderCalc();
   }
 });
-// 参数面板与外观面板：Esc 关闭；后退（含安卓返回键）先关闭面板
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); } });
-if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); });
+// 参数面板、外观面板与通道费用分布抽屉：Esc 关闭；后退（含安卓返回键）先关闭面板
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); closeFeeSheet(); } });
+if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); closeFeeSheet(true); });
 // 外观主题：data-theme 已由 <head> 内联脚本在首帧前设好，这里读偏好、同步系统栏颜色（meta theme-color / 安卓壳），并跟随系统明暗
 applyTheme();
 watchSystemTheme();
