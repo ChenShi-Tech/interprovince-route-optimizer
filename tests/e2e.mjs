@@ -87,7 +87,11 @@ const hitAudit = (page, scope) => page.evaluate(async (scope) => {
   const name = (el) => `${el.tagName.toLowerCase()}${typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : ''}「${(el.innerText || el.getAttribute('aria-label') || '').trim().replace(/\s+/g, ' ').slice(0, 14)}」`;
   const ctrls = [...host.querySelectorAll('*')].filter((el) => {
     const a = getComputedStyle(el, '::after');
-    return a.content !== 'none' && a.content !== 'normal' && a.position === 'absolute' && a.zIndex === '-1' && el.getClientRects().length;
+    if (!(a.content !== 'none' && a.content !== 'normal' && a.position === 'absolute' && a.zIndex === '-1' && el.getClientRects().length)) return false;
+    // change: grid-map-single-route-and-fixes：闭合 details 的内容在本环境仍有布局盒（可被取样命中），
+    // 但对用户不可见、不可点（content-visibility:hidden 不绘制）——不属扩区守卫对象
+    for (let a2 = el; a2 && a2 !== document.body; a2 = a2.parentElement) if (a2.tagName === 'DETAILS' && !a2.open) return false;
+    return true;
   });
   const bad = [], names = [];
   for (const el of ctrls) {
@@ -539,7 +543,7 @@ const tests = [
       await page.locator('button', { hasText: '应用密钥' }).click();
       ok(await page.evaluate(() => state.tiandituKey.length) === 50004, '50504 字符应完整保存');
       await page.click('#t-calc');
-      ok(await page.locator('.rc').first().isVisible(), '切回测算应正常');
+      ok(await page.locator('#i-calcroute').first().isVisible(), '切回测算应正常');
       set('50504 字符保存成功、无崩溃；切回测算页路线列表正常渲染');
     },
   },
@@ -567,7 +571,7 @@ const tests = [
       await page.evaluate(() => localStorage.setItem('iproute.v2.last', '{oops'));
       await page.reload(DCL);
       ok(await page.locator('#i-from').inputValue() === 'SC', '应回落默认四川');
-      const cards = await page.locator('.rc').count();
+      const cards = await page.locator('#i-calcroute option').count();
       ok(cards > 0, '刷新后应正常渲染卡片');
       set(`损坏 JSON 被吞掉；回落 SC→JS；卡片 ${cards} 张正常渲染`);
     },
@@ -627,7 +631,7 @@ const tests = [
       try { await page.reload({ timeout: 6000 }); } catch (e) { err = String(e.message).split('\n')[0].slice(0, 110); }
       await page.context().setOffline(false);
       ok(/ERR_|Timeout|net::/.test(err), `reload 应失败，实际：${err}`);
-      const still = await page.locator('.rc').count();
+      const still = await page.locator('#i-calcroute option').count();
       set(`reload 报「${err}」；重载前已渲染的 ${still} 张卡片仍在 DOM（纯前端可继续操作）`);
     },
   },
@@ -668,7 +672,7 @@ const tests = [
     expected: '测算页出现恰好一条存储故障提示；多次失败不重复弹条；测算与切换照常、无未捕获异常',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       await page.evaluate(() => {
         window.__origSetItem = Storage.prototype.setItem;
         Storage.prototype.setItem = function () { throw new Error('HR01 模拟配额超限'); };
@@ -682,7 +686,7 @@ const tests = [
       }));
       ok(r1.warnN === 1, `存储故障提示应恰好 1 条，实际 ${r1.warnN}`);
       ok(r1.rows > 0, `存储故障下测算应正常，实际 ${r1.rows} 条`);
-      await page.locator('.rc').nth(1).click();
+      await page.selectOption('#i-calcroute', '1');
       await page.selectOption('#i-degrade', '0.2');
       await page.waitForTimeout(150);
       const r2 = await page.evaluate(() => [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length);
@@ -697,7 +701,7 @@ const tests = [
     expected: '重建后两者仍为展开态（修复前完整明细会被收回）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       await page.evaluate(() => {
         document.getElementById('d-detail').open = true;
         const ex = document.querySelector('details.explain'); if (ex) ex.open = true;
@@ -722,7 +726,7 @@ const tests = [
     expected: '错误态正常渲染空态卡片；切回后 d-detail 按 id 恢复展开，无错位、无异常',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       await page.evaluate(() => { document.getElementById('d-detail').open = true; });
       // 修正(2026-09-18)：跳数输入已移除（固定 10 段）。错误态改用库内真实不连通的 北京→贵州，
       // 往返仍是「错误态 → 恢复结果态」，与 M11 的按 id 恢复展开断言一致。
@@ -735,7 +739,7 @@ const tests = [
       await page.waitForTimeout(150);
       const back = await page.evaluate(() => ({
         detailOpen: document.getElementById('d-detail').open,
-        cards: document.querySelectorAll('.rc').length,
+        cards: document.querySelectorAll('#i-calcroute option').length,
       }));
       ok(back.cards > 0, '应恢复正常结果态');
       ok(back.detailOpen, '切回后完整明细应按 id 恢复展开');
@@ -748,7 +752,7 @@ const tests = [
     expected: 'iproute.v2.last 低于 2048 字节且不含求解结果（修复前最坏约 12MB）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       // 修正(2026-09-18)：6 段 / 绕行度输入已移除（固定 MAX_HOPS、不限绕行），默认即最坏口径。
       await page.evaluate(() => {
         const setv = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -771,7 +775,7 @@ const tests = [
     expected: '提示条出现且相同错误合并为 ×2；不同错误单列；pageerror 事件照常触发（控制台留痕）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       const errs = [];
       page.on('pageerror', e => errs.push(String(e)));
       await page.evaluate(() => setTimeout(() => { throw new Error('hr05-重复错误'); }, 0));
@@ -1008,7 +1012,7 @@ const tests = [
       await page.click('#t-calc');
       await page.waitForTimeout(150);
       const back = await page.evaluate(() => ({
-        cards: document.querySelectorAll('#v-calc .rc').length,
+        cards: document.querySelectorAll('#v-calc #i-calcroute option').length,
         empty: !!document.querySelector('#v-calc .empty'),
       }));
       ok(back.cards > 0 && !back.empty, `切回测算页应仍渲染方案卡片，实际卡片=${back.cards} 空态=${back.empty}`);
@@ -1322,7 +1326,7 @@ const tests = [
     expected: '声明存在且含「ATC」',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       const ok1 = await page.evaluate(() => document.getElementById('v-calc').innerText.includes('ATC'));
       ok(ok1, '方案区应含 ATC 口径声明');
       set('ATC 声明可见');
@@ -1353,7 +1357,7 @@ const tests = [
     expected: '声明存在且写明单时段边界（「省间中长期单时段交付成本…合同分时曲线、交易组织…需另行处理」）',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       // 修正(2026-09-18)：声明文案随测算页重构（570473e）由「96 时段」改写为「单时段交付成本 + 合同分时曲线另行处理」，
       // 且移入默认收起的「政策与取值依据」内，须先展开再断言；单时点边界声明的语义不变。
       await page.evaluate(() => { document.querySelectorAll('details.explain').forEach(d => d.open = true); });
@@ -1444,7 +1448,7 @@ const tests = [
     expected: '触发 Markdown 下载，含三口径、费用拆解、逐段文号与 priceVersion',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       const [dl] = await Promise.all([
         page.waitForEvent('download', { timeout: 5000 }),
         page.locator('button', { hasText: '导出报告' }).click(),
@@ -1463,7 +1467,7 @@ const tests = [
     expected: '36 个价格档（100~800 步长 20）全量输出，含最优路线与落地成本列',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       await page.evaluate(() => { const d = document.getElementById('d-sens'); if (d) d.open = true; });
       await page.waitForTimeout(80);
       const r = await page.evaluate(() => {
@@ -1481,7 +1485,7 @@ const tests = [
     expected: '应用内弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），确定后切到天地图',
     async run(page, set) {
       await page.goto(G, DCL);
-      await page.waitForSelector('.rc');
+      await page.waitForSelector('#i-calcroute option', { state: 'attached' });
       const dlg = confirmDlg(page);   // 排除参数弹出面板 .sheet-panel，见 confirmDlg 说明
       const clickQQ = async () => {
         await page.locator('#v-map button', { hasText: '腾讯地图' }).click().catch(async () => {
@@ -1825,7 +1829,7 @@ const tests = [
       try {
         await p2.goto(G, DCL);
         await p2.waitForSelector('#guide-box', { timeout: 4000 });
-        await p2.locator('.rc').nth(1).click();
+        await p2.selectOption('#i-calcroute', '1');
         ok(await p2.evaluate(() => state.sel) === 1, '导览在场时测算主流程应可正常操作（AC3 不阻塞）');
         await p2.locator('#guide-box button', { hasText: '跳过导览' }).click();
         ok(await p2.locator('#guide-box').count() === 0, '跳过后导览应关闭');
@@ -2231,7 +2235,7 @@ const tests = [
       await page.waitForSelector('#map-view svg');
       ok((await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'))) === vbZoom, '切 Tab 回来视野应保持');
       await page.click('#t-calc');
-      await page.locator('.rc').nth(1).click();   // 选中方案变化 → 复位
+      await page.selectOption('#i-calcroute', '1');   // 选中方案变化 → 复位
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
       const vb2 = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: state.mapView }));
@@ -2478,20 +2482,20 @@ const tests = [
       }
       // 以下 390px。回归点 1：「含越限」正上方那张路线卡的下沿（原先被复选框标签的扩区接走 3–7px）
       await fresh();
+      // change: grid-map-single-route-and-fixes：路线卡改下拉后，「含越限」正上方为路线下拉；
+      // 回归点改为「下拉与复选框之间的空档点击不得被 .tg 扩区接走切换含越限、也不改变选中路线」
       const rc = await page.evaluate(() => {
         const tg = document.querySelector('.rlist-foot .tg');
         tg.scrollIntoView({ block: 'center' });
         const t = tg.getBoundingClientRect();
-        const cards = [...document.querySelectorAll('.rc')];
-        const i = cards.findIndex((c) => { const q = c.getBoundingClientRect(); return q.left <= t.left && q.right >= t.left + 20 && q.right <= innerWidth + 200; });
-        const q = i < 0 ? null : cards[i].getBoundingClientRect();
-        return q && { i, x: t.left + 10, y: q.bottom - 2, gap: +(t.top - q.bottom).toFixed(1), showBad: state.showBad };
+        const sel = document.getElementById('i-calcroute').getBoundingClientRect();
+        return { x: t.left + 10, y: (sel.bottom + t.top) / 2, gap: +(t.top - sel.bottom).toFixed(1), sel: +document.getElementById('i-calcroute').value, showBad: state.showBad };
       });
-      ok(rc, '找不到「含越限」正上方的路线卡');
+      ok(rc.gap >= 0, '「含越限」应位于路线下拉下方');
       await page.mouse.click(rc.x, rc.y);
       await page.waitForTimeout(150);
-      const after = await page.evaluate(() => ({ sel: state.sel, showBad: state.showBad }));
-      ok(after.sel === rc.i && after.showBad === rc.showBad, `点第 ${rc.i + 1} 张路线卡下沿应选中它、不切换「含越限」，实际 sel=${after.sel}、含越限 ${rc.showBad}→${after.showBad}`);
+      const after = await page.evaluate(() => ({ sel: +document.getElementById('i-calcroute').value, showBad: state.showBad }));
+      ok(after.sel === rc.sel && after.showBad === rc.showBad, `空档点击不应改变状态：sel=${rc.sel}→${after.sel}、含越限 ${rc.showBad}→${after.showBad}`);
       // 回归点 2：网架图搜索结果换行排布、行距 6px，点「锦屏换流站」下沿原先会打开下一行「奉贤换流站」
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
@@ -2524,7 +2528,7 @@ const tests = [
       await page.waitForTimeout(300);
       await audit('外观面板', '#theme-sheet');
       ok(bad.length === 0, `扩区抢点 ${bad.length} 处：\n      ` + bad.slice(0, 12).join('\n      '));
-      set(`取样 ${seen.join('、')}，无抢点；路线卡下沿（与「含越限」相隔 ${rc.gap}px）选中第 ${rc.i + 1} 张；「锦屏换流站」下沿打开锦屏浮层`);
+      set(`取样 ${seen.join('、')}，无抢点；下拉与「含越限」空档 ${rc.gap}px 点击无状态变化；「锦屏换流站」下沿打开锦屏浮层`);
     },
   },
 ];
@@ -2539,7 +2543,7 @@ async function respCheck(page, set, expectCentered, desktop = false, expectMax =
       left: app.getBoundingClientRect().left,
       vw: de.clientWidth,
       nav: !!document.querySelector('nav'),
-      card: !!document.querySelector('.rc'),
+      route: !!document.querySelector('#i-calcroute option'),
     };
   });
   ok(m.overflow <= 1, `存在横向溢出 ${m.overflow}px`);
@@ -2551,7 +2555,7 @@ async function respCheck(page, set, expectCentered, desktop = false, expectMax =
   } else {
     ok(m.appMax === expectMax, `#app max-width 应 ${expectMax}，实际 ${m.appMax}`);
   }
-  ok(m.nav && m.card, '底部导航/路线卡片缺失');
+  ok(m.nav && m.route, '底部导航/路线下拉缺失');
   if (expectCentered) ok(m.left > 100, `桌面端 #app 应居中留白，left=${m.left}`);
   set(`横向溢出 ${m.overflow}px；#app max-width=${m.appMax}，left=${Math.round(m.left)}px（视口 ${m.vw}px）；导航与卡片正常`);
 }
