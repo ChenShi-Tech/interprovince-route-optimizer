@@ -207,10 +207,11 @@ const SCREENS = [
     },
   },
   {
-    // 网架图叠加层：区域着色环与图例、断面晕圈与提示条、搜索结果、站点浮层
+    // 网架图叠加层：区域着色环与图例、断面晕圈与信息行、搜索结果、站点浮层
     name: 'x-map-overlays', target: 'full', async prepare(page) {
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
+      await page.click('#map-layer-btn'); // 图层面板默认收起（grid-map-declutter），先展开再勾区域着色
       await mapRedraw(page, () => page.check('#i-mapregion'));
       await mapRedraw(page, () => page.selectOption('#i-mapsec', { index: 1 }));
       await page.fill('#map-q', '锦屏');
@@ -238,6 +239,34 @@ const SCREENS = [
       await page.click('#btn-theme');
       await page.waitForSelector('#theme-sheet.open');
       await page.waitForTimeout(350);
+    },
+  },
+  {
+    // 网架图「各段明细」展开态：默认收起为「各段明细 · N 段」一行，这里点开验证展开画面（grid-map-collapse-fee-sheet）
+    name: 'x-map-segs-open', target: 'full', async prepare(page) {
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.click('.route-seg-toggle');
+      await page.waitForSelector('#map-route-segs:not([hidden])');
+    },
+  },
+  {
+    // 通道费用分布抽屉打开态：手机=底部抽屉，≥600px=右侧边栏（grid-map-collapse-fee-sheet）
+    name: 'x-fee-sheet', target: 'viewport', async prepare(page) {
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.click('#fee-entry');
+      await page.waitForSelector('#fee-sheet.open');
+      await page.waitForTimeout(350);
+    },
+  },
+  {
+    // 「各段明细」行尾站点位置说明弹窗（tkHelpDlg 同款，grid-map-collapse-fee-sheet 二次收敛）
+    name: 'x-station-note', target: 'viewport', async prepare(page) {
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      await page.click('.note-icon-btn');
+      await page.waitForFunction(() => [...document.querySelectorAll('[role=dialog]')].some((d) => d.textContent.includes('站点位置为县/市级近似')));
     },
   },
 ];
