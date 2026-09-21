@@ -849,9 +849,6 @@ function renderMap(){
       <button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
     <div class="seg small">${MAP_MODES.map(([k,t])=>`<button class="${mode===k?'on':''}" onclick="switchMap('${k}')">${t}</button>`).join('')}</div>`;
 
-  if(!proxyOK && mode!=='svg'){
-    out+=`<div class="warn" style="margin-bottom:10px">当前环境无法使用腾讯地图代理（该底图仅在本机预览时可用）。天地图需要你在下方填入自己的密钥。</div>`;
-  }
   /* grid-map-device-fixes D4：探针失败自动降级的一次性红字说明（会话标志，成功应用有效密钥后清除） */
   if(mode==='svg'&&state.tdDegradeNote){
     out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
@@ -868,9 +865,6 @@ function renderMap(){
       </div>
       <div id="tk-msg" class="note" style="margin:0 0 10px"></div>
       <p class="note">密钥需在 <b>天地图开放平台</b> 注册/登录后申请：进入「应用管理 → 创建应用」，应用类型选「浏览器端」即可获取密钥。密钥默认掩码显示，点右侧小眼睛可见；仅存本机，代码中不内嵌任何有效密钥。</p>`;
-  }
-  if(mode==='svg'){
-    out+=`<p class="note" style="margin:0 0 8px">内置拓扑图，不依赖任何外部地图服务，离线与托管环境均可用。节点按站点经纬度定位，仅示拓扑关系，不绘制行政区划边界。</p>`;
   }
 
   out+=`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
