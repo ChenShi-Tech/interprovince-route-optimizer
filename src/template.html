@@ -174,14 +174,24 @@ input.clamp-bad{border-color:var(--red);box-shadow:var(--focus-ring-bad)}
 .mc .v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 批次 B：tier 线型图例样本（虚/点线用 border 复刻 SVG dasharray 语义） */
 .lg-line{display:inline-block;width:16px;height:0;vertical-align:middle;margin-right:4px}
-/* 密钥输入框：掩码显示 + 右侧小眼睛切换可见性（toggleTkVis 在 ui/map.js） */
+/* 密钥输入框：普通文本框明文直显（change: 取消掩码——手机端 password 调起密码键盘、
+   剪贴板建议不可见，粘贴密钥不便；眼睛显隐切换随掩码一并移除） */
 .tk-wrap{position:relative}
-.tk-wrap input{padding-right:38px}
-.tk-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;
-  border:0;background:none;cursor:pointer;padding:6px;color:var(--ink3);
-  display:flex;align-items:center;justify-content:center;border-radius:var(--radius-mini)}
-.tk-eye:hover{background:var(--gray-bg);color:var(--ink2)}
-.tk-eye svg{width:18px;height:18px;display:block;pointer-events:none}
+/* 「天地图密钥 ?」标题行即折叠开关（change: 密钥输入完成后自动收起）：行首小箭头随开合旋转，
+   口径同 .route-seg-toggle（收起旋右 -90°、展开回正）；inline-flex 让箭头与文字基线对齐。
+   旋转只命中直接子级箭头（> 选择器）：行内问号图标在 <i> 里、非直接子级，始终保持正立。
+   选择器必须带上 `label.f span` 前缀（特异性 0,2,2 > label.f span 的 0,1,2）：标题行在
+   label.f 内，否则会被 `label.f span{display:block}` 压回块级，display:block 的箭头独占一行。 */
+.tk-fold,label.f span.tk-fold{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.tk-fold>svg{display:block;flex:none;color:var(--ink3);transform:rotate(-90deg);transition:transform .2s}
+.tk-fold[aria-expanded="true"]>svg{transform:rotate(0deg)}
+/* 折叠行尾标（change: 失败提示行收起到折叠行）：面板收起时页面只留折叠行一行，
+   加载/失败状态由尾标承载（加载中… / 加载失败），详情收在展开面板内 #tk-msg。
+   同样要带 `label.f span` 前缀：否则被 label.f span 的 color/margin-bottom 压住，
+   尾标会被染色并带 5px 下边距造成行内错位；空内容时 :empty 隐藏，不留多余 gap。 */
+.tk-state,label.f span.tk-state{color:var(--ink3);margin-bottom:0}
+.tk-state[data-kind="fail"],label.f span.tk-state[data-kind="fail"]{color:var(--error-text);font-weight:600}
+label.f span.tk-state:empty{display:none}
 /* 该字段在当前口径下不参与计算：置灰但保留在 DOM 中（readInputs 仍按 id 读取） */
 label.f.off span{color:var(--ink3)}
 label.f.off input{background:var(--gray-bg);color:var(--ink3)}
@@ -431,8 +441,10 @@ body.sheet-open{overflow:hidden}
 .fee-entry{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;padding:3px 0;font-family:inherit;line-height:1;color:var(--ink);cursor:pointer;text-align:left}
 .fee-entry .fee-entry-hint{font-size:11px;font-weight:400;color:var(--ink3)}
 .fee-entry svg{display:block;flex:none;margin-left:auto;color:var(--ink3)}
-.route-seg-row{display:flex;align-items:center;gap:2px}
-.route-seg-toggle{flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:28px;background:none;border:0;padding:2px 0;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--ink2);cursor:pointer;text-align:left}
+.route-seg-row{display:flex;align-items:center;gap:4px}
+/* 折叠按钮不再 flex:1 占满整行（change: 问号紧跟文字）：收缩为内容宽度，行尾问号按钮
+   （站点位置说明弹窗入口）随之贴住文字末尾，而不是被顶到卡片最右。 */
+.route-seg-toggle{display:flex;align-items:center;gap:6px;min-height:28px;background:none;border:0;padding:2px 0;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--ink2);cursor:pointer;text-align:left}
 .route-seg-toggle svg{display:block;flex:none;color:var(--ink3);transform:rotate(-90deg);transition:transform .2s}
 .route-seg-toggle[aria-expanded="true"] svg{transform:rotate(0deg)}
 /* 「各段明细」行尾站点位置说明问号按钮：与折叠按钮为兄弟节点，点击互不冲突；问号图标同 SVG_HELP 口径。
@@ -502,19 +514,16 @@ input[type=checkbox],input[type=radio]{appearance:auto;accent-color:var(--blue);
    控件自建层叠上下文（z-index:0）、伪元素垫在 -1 层：扩出的透明区压在邻近静态内容之上可点，
    但压不住控件自己的子元素（复选框、图标、角标），点它们时命中的仍是子元素本身 */
 .sheet-x,.help-link,.tg,.btn.ghost,.seg:not(.wrap) button,details.adv>summary,details.explain>summary,.plan-issues>summary{position:relative;z-index:0}
-.tk-eye{z-index:0}
-.sheet-x::after,.tk-eye::after,.help-link::after,.tg::after,.btn.ghost::after,.seg:not(.wrap) button::after,
+.sheet-x::after,.help-link::after,.tg::after,.btn.ghost::after,.seg:not(.wrap) button::after,
 details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::after{content:"";position:absolute;
   top:min(0px,calc(50% - 22px));bottom:min(0px,calc(50% - 22px));left:min(0px,calc(50% - 22px));right:min(0px,calc(50% - 22px));z-index:-1}
 /* 紧凑排布的扩区：相邻两个可点控件朝对方扩出的距离加起来，不超过两者间距减 2px（留给舍入），否则会盖住邻居、抢走它边缘的点击。
    · 纵向不扩、只横向扩：.hit-x（网架图换行排布的搜索结果，行距 6px；「复制链接」，下隔 10px 是底图切换；
      「导出快照」在图层面板内右端、左邻「按区域着色」相隔 10px）与所有复选框标签 .tg（网架图两行开关只隔 4px；「含越限」上邻路线卡、下邻展开按钮）；
-   · 限幅：小号分段按钮 .seg.small（网架图底图切换）上下各最多 4px；密钥显隐按钮叠在输入框右端，向左最多 4px，
-     不越过输入框给它预留的 38px 右内边距、不抢打字区的点击。
+   · 限幅：小号分段按钮 .seg.small（网架图底图切换）上下各最多 4px。
    tests/e2e.mjs 的 UI-HIT 在控件外沿与扩区内逐点取样守住这几条；规范见 docs/12 第 7 节。 */
 .btn.hit-x::after,.tg::after{top:0;bottom:0}
 .seg.small:not(.wrap) button::after{top:max(-4px,min(0px,calc(50% - 22px)));bottom:max(-4px,min(0px,calc(50% - 22px)))}
-.tk-eye::after{left:max(-4px,min(0px,calc(50% - 22px)))}
 /* 方案卡片：路线（左）+ 价格（右，突出）→ 价格组成条（悬停 / 聚焦显示分项）→ 关键指标 → 标签与区域网损对照 */
 .plan-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
 .plan-no{font-size:12.5px;font-weight:700;color:var(--ink2)}

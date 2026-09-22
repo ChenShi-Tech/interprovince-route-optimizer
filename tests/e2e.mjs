@@ -73,7 +73,6 @@ const openParams = async (page) => {
    ① 在可见矩形外 1–2px、扩区外沿与中线取样，elementFromPoint 命中的必须是控件自己或非可点元素；
       扩区之外的取样只追究「别的控件经它自己的扩区伸过来」，相邻控件本体贴得近不算；
    ② 反向：临时撤掉本控件的伪元素，扩区内同一点原本命中的不能是别的可点控件（否则就是本控件抢了邻居边缘的点击）。
-      例外：叠在输入框里的按钮（密钥显隐）占用输入框给它预留的右内边距，那一段本来就归按钮。
    返回 { n: 检查的控件数, names: 控件清单, bad: 违例清单 }。 */
 const hitAudit = (page, scope) => page.evaluate(async (scope) => {
   const CLICK = 'button,a[href],input,select,textarea,label,summary,[onclick],[role="button"],[role="radio"]';
@@ -1767,6 +1766,8 @@ const tests = [
       await page.click('#t-map');
       await page.waitForTimeout(400);
       ok(await page.evaluate(() => state.tiandituKey) === 'TESTKEY1234', '已存密钥应被加载');
+      /* 密钥面板折叠适配（change: 密钥输入完成后自动收起）：有已存密钥时面板默认收起，先展开再操作输入框 */
+      if (await page.evaluate(() => document.getElementById('map-tk-body').hasAttribute('hidden'))) await page.click('#map-tk-toggle');
       await page.fill('#i-tk', '');
       await page.locator('#v-map .row3 button', { hasText: '应用密钥' }).click();
       await page.waitForTimeout(150);
