@@ -465,6 +465,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:var(
 textarea{resize:vertical;min-height:64px;line-height:1.5;font-size:13px}
 /* 下拉箭头是 data: URI 里的 SVG（箭头色写死在 URI 中、不认 CSS 变量），整条 url(...) 放在令牌 --select-chevron 里，各主题各写一条 */
 select{background-image:var(--select-chevron);background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+/* 网架图页断面/选中方案下拉的「展开选项列表」钉 10.5px：原生弹层的选项字号不随收起态
+   select 的 font-size 走（用户口径：列表 10.5px，收起态控件保持各自原字号）。 */
+#i-mapsec option,#i-maproute option{font-size:10.5px}
 input[type=number]{font-variant-numeric:tabular-nums;font-family:var(--font-num)}
 input:disabled{cursor:not-allowed}
 /* FR-1（PRD-体验问题修复）三层防御之显示层与 CSS 兜底：
@@ -601,19 +604,25 @@ td b{font-weight:600}
 .prow:first-of-type{font-size:10.5px;color:var(--ink3)}
 .prow .pn{font-size:12px;font-weight:500}
 .prow input{padding:5px 6px;font-size:12px;border-radius:var(--radius-inline)}
-/* 高度预算 290→250（change: grid-map-declutter）：断面条收一行、图例行折叠后工具区变矮，
-   手机端地图相应增高；min-height 下限与宽屏（721 行）口径不动。 */
-#map-view,#fallback{width:100%;height:calc(100vh - 250px);min-height:320px;border-radius:var(--r);overflow:hidden;background:var(--map-fallback);border:var(--hairline) solid var(--line)}
+/* 高度预算 290→250→200→300（change: grid-map-declutter + 真机验收红框口径）：
+   地图容器最终定在约六成视口高（100vh-300px），三底图统一；文档流不变、页面滚动不受影响；
+   min-height 下限与宽屏（721 行）口径不动。 */
+#map-view,#fallback{width:100%;height:calc(100vh - 300px);min-height:320px;border-radius:var(--r);overflow:hidden;background:var(--map-fallback);border:var(--hairline) solid var(--line)}
 /* 地图 API（天地图/腾讯）内部图层 z-index 高达 200~1000+：容器若不建立层叠上下文，
    这些图层会在根层叠环境里压过 z-index:30 的固定底栏（容器延伸到视口底时必现）。
    contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
 #map-view{contain:paint;position:relative;z-index:0}
-/* REQ-603+702：svg 拓扑模式容器高度随绘制纵横比自适应（viewBox 660×430），
-   仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则。
+/* REQ-603+702：svg 拓扑模式容器与 qq/td 同一视口预算（真机验收红框口径：地图占约六成视口高），
+   画布 660×520 内容等比铺开、垂直居中；仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则。
    change: grid-map-device-fixes（D2）：拓扑模式接管触摸——touch-action:none 阻止浏览器
    手势（滚动/双指缩放页面）与自定义捏合冲突；user-select:none 防拖动时选中 SVG 文字。
    qq/td 模式不设 touch-action，保留底图原生手势。 */
-#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430;touch-action:none;user-select:none;-webkit-user-select:none}
+#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/520;touch-action:none;user-select:none;-webkit-user-select:none}
+/* 真机验收红框口径（≤720px 手机端）：拓扑与 qq/td 底图统一约六成视口高（画布 660×520 内容垂直居中，
+   非拉伸）；桌面端保持上一行的画布比例定高——1366×768 实测视口预算会把贴边省名（陕西）推出画布顶被裁。 */
+@media (max-width:720px){
+  #map-view.topo-svg{height:calc(100vh - 300px);min-height:320px;max-height:70vh}
+}
 #fallback{display:none;padding:16px;font-size:12px;color:var(--ink2);overflow:auto}
 .empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
 .empty-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px}
@@ -1138,7 +1147,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-21 10:38';
+const BUILD_TIME='2026-09-22 03:52';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -4033,7 +4042,7 @@ function topoProj(){
   const lngs=ids.map(k=>PV[k].lng), lats=ids.map(k=>PV[k].lat);
   const lngMin=Math.min(...lngs)-1.2, lngMax=Math.max(...lngs)+1.2;
   const latMin=Math.min(...lats)-1.6, latMax=Math.max(...lats)+1.6;
-  const W=660,H=430,PAD=14;
+  const W=660,H=520,PAD=14;
   const kx=Math.cos((latMin+latMax)/2*Math.PI/180);
   const w=(lngMax-lngMin)*kx, hgt=(latMax-latMin);
   const s=Math.min((W-2*PAD)/w,(H-2*PAD)/hgt);
@@ -4271,7 +4280,7 @@ function mapSvgClick(e){
 const TOPO_DRAG_PX=6;
 function topoVBof(){
   if(state.mapView) return {...state.mapView};
-  return {...((topoViewMeta&&topoViewMeta.base)||{x:0,y:0,w:660,h:430})};
+  return {...((topoViewMeta&&topoViewMeta.base)||{x:0,y:0,w:660,h:520})};
 }
 function topoViewSet(vb){
   if(!topoViewMeta) return;
@@ -4477,13 +4486,14 @@ function renderMap(){
   const selR=(r&&r.length)?r[Math.min(state.sel,r.length-1)]:null;
   /* 断面信息单行收纳（change: grid-map-declutter，取代原琥珀色提示条）：断面名不重复
      （下拉已示当前值）；限额直读；note 收进「详情」展开（esc 原文输出，不改写不截断）；
-     成员通道未映射到本图时才追加红字警示；未选断面时仅拓扑图模式渲染本行（承载导出入口）。 */
+     未映射红字与限额/详情/导出同行（按钮短名「导出快照」腾出宽度，真机验收口径：
+     所有元素一行展示）；极窄屏红字省略号兜底不换行。未选断面时仅拓扑图模式渲染本行。 */
   const secObj=state.mapSec?SEC.find(s=>s.id===state.mapSec):null;
   const secUnmapped=secObj&&!secMemberIds(state.mapSec).length;
-  const secRow=(secObj||mode==='svg')?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 6px;min-height:28px">
-      ${secObj?`${secUnmapped?'<span style="font-size:11px;color:var(--red)">成员通道未映射到本图</span>':''}<span style="font-size:11px;color:var(--ink2)">限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}</span>${secObj.note?`<button type="button" class="btn ghost hit-x" style="width:auto;padding:5px 10px;font-size:11px;display:inline-flex;align-items:center;gap:3px" aria-expanded="${mapSecNoteOpen}" aria-controls="map-sec-note" onclick="toggleSecNote(this)">详情<span style="display:inline-flex;transform:rotate(${mapSecNoteOpen?0:-90}deg)">${SVG_CHEV_D}</span></button>`:''}`:''}
-      ${mode==='svg'?`<button type="button" class="btn ghost hit-x" style="margin-left:auto;width:auto;padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button>`:''}
-    </div>${secObj&&secObj.note?`<div id="map-sec-note" style="font-size:11px;color:var(--ink3);line-height:1.6;margin:0 0 8px"${mapSecNoteOpen?'':' hidden'}>${esc(secObj.note)}</div>`:''}`:'';
+  const secRow=(secObj||mode==='svg')?`<div style="display:flex;align-items:center;gap:6px;margin:0 0 6px;min-height:28px">
+      ${secObj?`${secUnmapped?'<span style="font-size:11px;color:var(--red);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">成员通道未映射到本图</span>':''}<span style="flex:none;font-size:11px;color:var(--ink2);white-space:nowrap">限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}</span>${secObj.note?`<button type="button" class="btn ghost hit-x" style="flex:none;width:auto;padding:3px 8px;font-size:10.5px;white-space:nowrap" aria-expanded="${mapSecNoteOpen}" aria-controls="map-sec-note" onclick="toggleSecNote(this)">详情</button>`:''}`:''}
+      ${mode==='svg'?`<button type="button" class="btn ghost hit-x" style="flex:none;margin-left:auto;width:auto;padding:3px 8px;font-size:10.5px;white-space:nowrap" onclick="exportTopo()">导出快照</button>`:''}
+      </div>${secObj&&secObj.note?`<div id="map-sec-note" style="font-size:11px;color:var(--ink3);line-height:1.6;margin:0 0 8px"${mapSecNoteOpen?'':' hidden'}>${esc(secObj.note)}</div>`:''}`:'';
   // 批次 B 增补：区域着色图例（动态，依据 REGION_OF 区域电网分区）
   const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
   const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
@@ -4503,7 +4513,7 @@ function renderMap(){
     out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
   }
   if(mode==='td'){
-    out+=`<label class="f"><span style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" onclick="tkHelpDlg()">天地图密钥<i aria-hidden="true" style="display:inline-flex;color:var(--ink3)">${SVG_HELP}</i></span>
+    out+=`<label class="f"><span style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" onclick="event.preventDefault();tkHelpDlg()">天地图密钥<i aria-hidden="true" style="display:inline-flex;color:var(--ink3)">${SVG_HELP}</i></span>
       <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
         <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
       </div></label>
@@ -4529,8 +4539,8 @@ function renderMap(){
     </div>
     ${regionLegend}
     <div style="display:flex;gap:8px;margin:0 0 8px;align-items:center">
-      <input id="map-q" type="search" placeholder="搜索站点 / 通道…" value="${esc(state.mapQ||'')}" oninput="mapQSearch(this.value)" style="flex:1;min-width:0;padding:7px 10px;font-size:12px">
-      <select id="i-mapsec" onchange="state.mapSec=this.value||null;renderMap()" style="flex:none;max-width:48%;padding:7px 24px 7px 8px;font-size:12px">
+      <input id="map-q" type="search" placeholder="搜索站点 / 通道…" value="${esc(state.mapQ||'')}" oninput="mapQSearch(this.value)" style="flex:1;min-width:0;height:32px;padding:7px 10px;font-size:12px">
+      <select id="i-mapsec" onchange="state.mapSec=this.value||null;renderMap()" style="flex:none;max-width:48%;height:32px;padding:7px 24px 7px 8px;font-size:12px">
         <option value="">按断面高亮…</option>
         ${SEC.map(s=>`<option value="${esc(s.id)}" ${state.mapSec===s.id?'selected':''}>${esc(s.n)}</option>`).join('')}
       </select>
@@ -4622,7 +4632,6 @@ function toggleRouteDetail(btn){
 }
 /* ---------- 断面备注「详情」展开/收起（change: grid-map-declutter） ----------
    口径同 toggleRouteDetail：只翻转 hidden 与 aria-expanded、同步会话标志，不重走 renderMap；
-   收起态箭头旋成右向（同 .route-seg-toggle 的 CSS 语义，这里用内联 transform），
    renderMap 重建时按 mapSecNoteOpen 恢复。 */
 function toggleSecNote(btn){
   const box=document.getElementById('map-sec-note');
@@ -4630,8 +4639,6 @@ function toggleSecNote(btn){
   const open=box.hasAttribute('hidden');
   if(open) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
   btn.setAttribute('aria-expanded',open?'true':'false');
-  const ic=btn.querySelector('span');
-  if(ic) ic.style.transform=open?'':'rotate(-90deg)';
   mapSecNoteOpen=open;
 }
 /* ---------- 「图层」面板开合（change: grid-map-declutter） ----------
