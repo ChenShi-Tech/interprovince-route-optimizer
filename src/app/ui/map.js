@@ -341,10 +341,7 @@ function showMapFallback(){
   const fb=document.getElementById('fallback'); if(!fb) return;
   fb.style.display='block';
   const r=state._res&&state._res.rows;
-  let t='<div style="font-weight:600;color:var(--ink);margin-bottom:6px">底图未加载，已降级为网架清单</div>';
-  t+='<div style="margin-bottom:12px;line-height:1.7;font-size:11.5px">'+(state.mapProvider==='td'
-    ?'天地图未加载：请确认密钥有效且网络可达 api.tianditu.gov.cn。'
-    :'腾讯地图需运行环境支持；天地图需你自己的密钥。')+'</div>';
+  let t='<div style="font-weight:600;color:var(--ink);margin-bottom:12px">底图未加载，已降级为网架清单</div>';
   if(r&&r.length){
     const sel=Math.min(state.sel,r.length-1);
     t+=`<div style="font-weight:600;margin-bottom:6px">选中方案 #${sel+1}　${r[sel].nodes.map(N).join(' → ')}</div>`;
