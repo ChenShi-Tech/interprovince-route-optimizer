@@ -1757,10 +1757,31 @@ const tests = [
     steps: '预置已存密钥切到天地图：清空输入点「应用密钥」；再点「清除密钥」',
     expected: '空输入不改动已存密钥并显示常驻灰字；清除后立即降级拓扑图，密钥清空并持久化（重启不回弹）',
     async run(page, set) {
+      // 页面内桩（对齐 UX-05 口径）替代 route 拦截：SDK 加载/瓦片探针/定性 fetch 全部不走网络，时序由测试掌控。
+      // addInitScript 注入（非 evaluate）：本用例有 reload，evaluate 桩会被冲掉；先例见 RQ-602/TH-01。
+      // T 桩须过 tdApiReady 门槛（TD_REQUIRED 七类全 function），否则仍会注入真实 SDK script。
+      let tdReq = 0;
+      page.on('request', (r) => { if (r.url().includes('api.tianditu.gov.cn')) tdReq++; });
+      await page.addInitScript(() => {
+        window.T = {
+          Protocol: { value: 'https:' }, Domain: 'gov.cn',
+          Map: class { centerAndZoom() {} clearOverLays() {} addOverLay() {} addEventListener() {} },
+          LngLat: class {}, Point: class {}, Icon: class {},
+          Marker: class {}, Polyline: class {}, Label: class {},
+        };
+        window.__imgOk = true;
+        window.Image = class {
+          set src(v) {
+            setTimeout(() => {
+              if (window.__imgOk) { this.naturalWidth = 256; if (this.onload) this.onload(); }
+              else if (this.onerror) this.onerror();
+            }, 10);
+          }
+        };
+        // 探针 onerror 分支的 no-cors 定性 fetch：桩为立即 resolve（定性=服务端有响应=被拒）
+        window.fetch = () => Promise.resolve({ ok: true });
+      });
       await page.goto(G, DCL);
-      // 拦截真实天地图 SDK：脚本加载/探针失败的回写若恰落在点击后窗口内，会以更新的 tkMsg 代数戳
-      // 盖掉「已保留」提示（那是新消息，不是迟到的旧回写）——提前让它快速失败，时序确定化
-      await page.route('**://api.tianditu.gov.cn/**', (route) => route.abort());
       await page.evaluate(() => localStorage.setItem('iproute.v2.map', JSON.stringify({ mapProvider: 'td', tiandituKey: 'TESTKEY1234' })));
       await page.reload({ waitUntil: 'load' });
       await page.click('#t-map');
@@ -1780,7 +1801,8 @@ const tests = [
       ok(await page.evaluate(() => state.tiandituKey) === '', '清除后 tiandituKey 应为空');
       const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.map') || '{}'));
       ok(saved.mapProvider === 'svg' && !saved.tiandituKey, '清除操作应持久化（重启不回弹）');
-      set(`空输入保留 TESTKEY1234（灰字常驻）；清除后 svg + 密钥清空持久化`);
+      ok(tdReq === 0, `隔离守卫：全程零天地图请求（实测 ${tdReq} 次）`);
+      set(`空输入保留 TESTKEY1234（灰字常驻）；清除后 svg + 密钥清空持久化；零天地图请求`);
     },
   },
   {
