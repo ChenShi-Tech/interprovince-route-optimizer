@@ -1160,7 +1160,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-22 07:39';
+const BUILD_TIME='2026-09-22 07:50';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -3989,10 +3989,7 @@ function showMapFallback(){
   const fb=document.getElementById('fallback'); if(!fb) return;
   fb.style.display='block';
   const r=state._res&&state._res.rows;
-  let t='<div style="font-weight:600;color:var(--ink);margin-bottom:6px">底图未加载，已降级为网架清单</div>';
-  t+='<div style="margin-bottom:12px;line-height:1.7;font-size:11.5px">'+(state.mapProvider==='td'
-    ?'天地图未加载：请确认密钥有效且网络可达 api.tianditu.gov.cn。'
-    :'腾讯地图需运行环境支持；天地图需你自己的密钥。')+'</div>';
+  let t='<div style="font-weight:600;color:var(--ink);margin-bottom:12px">底图未加载，已降级为网架清单</div>';
   if(r&&r.length){
     const sel=Math.min(state.sel,r.length-1);
     t+=`<div style="font-weight:600;margin-bottom:6px">选中方案 #${sel+1}　${r[sel].nodes.map(N).join(' → ')}</div>`;
