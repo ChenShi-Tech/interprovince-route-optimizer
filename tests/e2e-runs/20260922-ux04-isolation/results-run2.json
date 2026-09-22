@@ -1,0 +1,1722 @@
+[
+  {
+    "id": "F-01",
+    "section": "主流程",
+    "title": "首次加载默认测算",
+    "steps": "打开 http://127.0.0.1:8734/",
+    "expected": "默认四川→江苏；自动渲染可选路线卡片与选中方案详情；无页面脚本错误",
+    "actual": "默认 SC→JS；卡片 8 张；方案卡落地价 436.26 元/MWh；详情「四川→江苏」；pageerror=见报告控制台记录",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-02",
+    "section": "主流程",
+    "title": "切换省对自动重算+省级参数联动",
+    "steps": "出发地下拉选「宁夏」，目的地下拉选「浙江」",
+    "expected": "选完即重算（无按钮）；受端输配电价/基金附加自动换成浙江值；详情线路串以宁夏开头",
+    "actual": "pNet 51.8→66.3（=浙江参数 66.3）；详情「宁夏→浙江」",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-03",
+    "section": "主流程",
+    "title": "点击路线卡片切换方案",
+    "steps": "点击第 2 张路线卡片",
+    "expected": "state.sel=1；第 2 张卡片高亮；详情标题变为「方案 #2」",
+    "actual": "sel=1，第 2 张卡片 .on 高亮，详情「方案 #2」",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-04",
+    "section": "主流程",
+    "title": "路线排序固定按落地价升序（排序按钮已移除）",
+    "steps": "检查页面无排序控件；读取可行方案的落地价序列与列表页脚说明",
+    "expected": "排序口径固定为「按价格从低到高」（state.sortBy=A，界面不再提供过网费/送端收益排序）；可见可行方案 landed 单调不减",
+    "actual": "无排序控件；页脚「按价格从低到高\n含越限」；可行方案 156 条按落地价升序（首项 436.3 元/MWh）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-05",
+    "section": "主流程",
+    "title": "电量参数重算（总额线性放大）",
+    "steps": "电量输入 3000 后失焦",
+    "expected": "费用总额变为原 3 倍；落地单价不变",
+    "actual": "同一路线(SC>JS)总额 436261→1308783（×3）；单价保持 436.2609427960465 元/MWh",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-06",
+    "section": "主流程",
+    "title": "网损承担方切换为送端",
+    "steps": "「价格与口径」中网损承担方选「送端承担」",
+    "expected": "comp.loss=0；费用拆解表不再出现「网损折价」行",
+    "actual": "lossBearer=0；comp.loss=0；网损行显示 0；落地单价 412.1749212906701 元/MWh",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-07",
+    "section": "主流程",
+    "title": "勾选「含越限」展示不可行路线",
+    "steps": "勾选「含越限」复选框",
+    "expected": "showBad=true；列表卡片数不少于之前；顶部显示「共 X 条候选 · 可行 Y 条」",
+    "actual": "含越限前卡片 9 张、勾选后 9 张；提示「共 250 条候选 · 参考未越限 155 条 · 已达枚举上限」",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-07.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-08",
+    "section": "主流程",
+    "title": "展开全部路线（>18 条）",
+    "steps": "四川→上海，点「展开全部」",
+    "expected": "默认只列成本接近的若干条；点「展开全部」后全部候选渲染为卡片，展开入口消失（showAll=true）",
+    "actual": "展开后卡片 155 张 = 候选总数 155；展开入口消失（showAll=true）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-08.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "F-09",
+    "section": "主流程",
+    "title": "底部 Tab 跳转（测算/网架图/费率库）",
+    "steps": "依次点击网架图、费率库、测算 Tab",
+    "expected": "对应 section 显示、其余隐藏（hidden 属性切换）",
+    "actual": "三个 Tab 均正确切换，section 的 hidden 属性与按钮高亮同步",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/F-09.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "I-01",
+    "section": "交互",
+    "title": "省份下拉：省份齐全 + 同省互斥禁用",
+    "steps": "检查出发地下拉选项数；检查目的地中「四川」是否禁用",
+    "expected": "选项数与省级参数表一致；目的地中与出发地相同的省份 disabled",
+    "actual": "下拉 31 项（=省级参数省份数）；目的地中四川 disabled=true",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/I-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "I-02",
+    "section": "交互",
+    "title": "「完整明细」折叠展开",
+    "steps": "点击「完整明细」summary 展开",
+    "expected": "默认收起（无 open 属性）；点击后展开且费用拆解表在 DOM 中",
+    "actual": "open=null→已展开；费用拆解表 8 行",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/I-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "I-03",
+    "section": "交互",
+    "title": "费率库改价：即时生效+本地持久化",
+    "steps": "费率库 Tab，把第 1 条通道输电价改为 99 后失焦",
+    "expected": "CH[0].t=99；顶部徽标变「费率已本地修改」（带 .mod、title 为全文），320px 下也不截断、按钮不被挤出屏；localStorage 已写入",
+    "actual": "CH[0].t=99；徽标「费率已本地修改」（.mod，title 全文，320px 不截断）；localStorage 已持久化",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/I-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "I-04",
+    "section": "交互",
+    "title": "「恢复检索原始值」应用内确认框（取消/确认）",
+    "steps": "先改 CH[0].t=123；点恢复→取消；再点恢复→确认",
+    "expected": "取消：值不变、徽标仍是「费率已本地修改」；确认：恢复为 DATA.CH 原始值，徽标回到默认文案",
+    "actual": "应用内确认框「恢复检索原始值\n恢复为检索原始值？本…」；取消保持 123；确认后恢复 40.3",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/I-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "I-05",
+    "section": "交互",
+    "title": "「导出 JSON」触发浏览器下载",
+    "steps": "费率库 Tab 点「导出 JSON」",
+    "expected": "触发下载，文件名 费率库-v2.json，内容含全部通道（与 CH.length 一致，当前 64）",
+    "actual": "下载 费率库-v2.json；解析得通道 91 条、断面 10 个",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/I-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "I-06",
+    "section": "交互",
+    "title": "步进器连续操作（重渲染焦点观察）",
+    "steps": "聚焦电量输入框，按 3 次 ArrowUp 步进",
+    "expected": "每步 qty+100 且焦点保持在输入框（若丢失即为全量重渲染缺陷）",
+    "actual": "ArrowUp×3 后 state.qty=1201（起点 1000）；焦点在 i-qty",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/I-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "B-01",
+    "section": "边界",
+    "title": "电量清空→回落默认值",
+    "steps": "清空电量输入框后失焦",
+    "expected": "+''||1000 → state.qty=1000，页面回显 1000",
+    "actual": "state.qty=1000，输入框回显 1000",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/B-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "B-02",
+    "section": "边界",
+    "title": "电量输入 0→回落默认值",
+    "steps": "电量输入 0 后失焦",
+    "expected": "0 为 falsy → 回落 1000（HTML min=1 不约束 JS 读值）",
+    "actual": "state.qty=1000，正常重算",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/B-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "B-03",
+    "section": "边界",
+    "title": "电量输入负数→拒绝并回落默认",
+    "steps": "电量输入 -5 后失焦",
+    "expected": "readInputs 正数归一化：state.qty=1000，页面回显 1000，费用与功率无负值",
+    "actual": "输入 -5 → state.qty=1000，输入框回显 1000，首段功率 1075.3 MW（正值）——负数已被归一化拒绝",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/B-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "B-04",
+    "section": "边界",
+    "title": "超大电量→全部越限引导文案",
+    "steps": "电量输入 1000000000 后失焦",
+    "expected": "所有候选不可行，页面显示「全部 N 条候选路线均超出通道容量…可勾选显示越限」，不崩溃",
+    "actual": "空态卡片：「全部 255 条候选路线均超出通道容量或断面限额\n显示越限方案」",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/B-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "B-05",
+    "section": "边界",
+    "title": "天地图密钥超长输入（5 万字符）",
+    "steps": "网架图→天地图→密钥框粘贴 50000+4 特殊字符→应用密钥→切回测算",
+    "expected": "保存不崩溃（localStorage quota 被吞）、可切回测算页正常测算",
+    "actual": "50504 字符保存成功、无崩溃；切回测算页路线列表正常渲染",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/B-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [
+        "net::ERR_BLOCKED_BY_ORB https://api.tianditu.gov.cn/api?v=4.0&tk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      ],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "B-06",
+    "section": "边界",
+    "title": "密钥注入脚本（XSS 防护）",
+    "steps": "密钥输入 <img src=x onerror=...> 后应用密钥",
+    "expected": "脚本不执行（value 经 esc 转义、URL 经 encodeURIComponent）；页面走降级",
+    "actual": "window.__xss 未定义（未执行）；无效密钥走 loadTianditu onerror 降级；输入框回显为转义文本",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/B-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "B-07",
+    "section": "边界",
+    "title": "localStorage 存入损坏 JSON 后刷新",
+    "steps": "写入 {oops 到 iproute.v2.last，刷新页面",
+    "expected": "try/catch 吸收解析异常，回落全部默认值，应用正常渲染，无未捕获异常",
+    "actual": "损坏 JSON 被吞掉；回落 SC→JS；卡片 8 张正常渲染",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/B-07.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "E-01",
+    "section": "异常",
+    "title": "底图 SDK 加载失败→应用内确认框反馈（2026-09-18 重写，REQ-703 已解冻）",
+    "steps": "拦截 map.qq.com 请求（模拟代理不可用/断网），网架图点击「腾讯地图」并选择「保持内置拓扑图」",
+    "expected": "应用内确认框说明不可用并提供选择（不再静默回退）；保持后仍为内置拓扑图。与 RQ-703 分工：本例在 SDK 请求被拦截路径上验证反馈，RQ-703 验证常规切换路径",
+    "actual": "SDK 被拦截下点击腾讯地图→确认框；保持→svg（provider=svg）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/E-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "E-02",
+    "section": "异常",
+    "title": "天地图无效密钥→降级",
+    "steps": "网架图→天地图，输入 FAKEKEY123，应用密钥",
+    "expected": "loadTianditu onerror → 降级清单，无崩溃",
+    "actual": "❌ page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('#fallback') to be visible\u001b[22m\n\u001b[2m    23 × locator resolved to hidden <div id=\"fallback\"></div>\u001b[22m\n",
+    "pass": false,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/E-02.png",
+    "logs": {
+      "console": [
+        "[error] Failed to load resource: the server responded with a status of 418 ()"
+      ],
+      "pageErrors": [],
+      "failedReq": [
+        "net::ERR_BLOCKED_BY_ORB https://api.tianditu.gov.cn/qv?tk=FAKEKEY123&t=0.8966608028063445&callback=T.qv",
+        "net::ERR_ABORTED https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t1.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t3.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t6.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t2.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t2.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t3.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t1.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t2.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_ABORTED https://t4.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t5.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t7.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t5.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t5.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t0.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t6.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t6.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t5.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_BLOCKED_BY_ORB https://t2.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_BLOCKED_BY_ORB https://t4.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_BLOCKED_BY_ORB https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_BLOCKED_BY_ORB https://t5.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_BLOCKED_BY_ORB https://t5.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_BLOCKED_BY_ORB https://t7.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_BLOCKED_BY_ORB https://t4.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_BLOCKED_BY_ORB https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_BLOCKED_BY_ORB https://t3.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_BLOCKED_BY_ORB https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_BLOCKED_BY_ORB https://t5.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec",
+        "net::ERR_BLOCKED_BY_ORB https://t0.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_BLOCKED_BY_ORB https://t6.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva",
+        "net::ERR_ABORTED https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec"
+      ],
+      "badStatus": [
+        "418 https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec"
+      ]
+    }
+  },
+  {
+    "id": "E-03",
+    "section": "异常",
+    "title": "服务不可用时刷新页面",
+    "steps": "页面加载后切 Offline，执行 reload",
+    "expected": "重载失败（ERR_INTERNET_DISCONNECTED 类错误）；已加载的 DOM 不受影响",
+    "actual": "reload 报「page.reload: net::ERR_INTERNET_DISCONNECTED」；重载前已渲染的 0 张卡片仍在 DOM（纯前端可继续操作）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/E-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [
+        "net::ERR_INTERNET_DISCONNECTED http://127.0.0.1:8734/"
+      ],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "E-04",
+    "section": "异常",
+    "title": "断网状态下应用内继续操作",
+    "steps": "切 Offline 后把省对改为 云南→广东",
+    "expected": "测算链路零网络请求，重算完全正常",
+    "actual": "Offline 下 云南→广东 重算出 6 条路线；核心功能离线可用",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/E-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "E-05",
+    "section": "异常",
+    "title": "空结果：无连通路径的错误引导",
+    "steps": "出发地北京，目的地贵州（库内北方与南方电网间无已录入的连通边）",
+    "expected": "显示「在 10 段以内没有 北京 到 贵州 的连通路径」空态卡片（跳数已固定为上限，不再提示放宽跳数）",
+    "actual": "空态卡片：「在 10 段以内没有 北京 到 贵州 的连通路径」",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/E-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "HR-01",
+    "section": "运行时健壮性",
+    "title": "存储写入失败→可见提示+去重+功能不受影响",
+    "steps": "把 setItem 替换为抛错版本，触发重算与方案切换",
+    "expected": "测算页出现恰好一条存储故障提示；多次失败不重复弹条；测算与切换照常、无未捕获异常",
+    "actual": "提示恰好 1 条（多次失败去重，防渲染循环）；故障下重算 156 条、切方案正常",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/HR-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "HR-02",
+    "section": "运行时健壮性",
+    "title": "重渲染保持折叠态（完整明细 + 无 id 说明面板）",
+    "steps": "展开「完整明细」与任一口径说明面板，改价格、切成本阈值触发重算",
+    "expected": "重建后两者仍为展开态（修复前完整明细会被收回）",
+    "actual": "d-detail 保持展开；说明面板 open=true→true",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/HR-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "HR-03",
+    "section": "运行时健壮性",
+    "title": "错误态往返不发生错位恢复",
+    "steps": "展开完整明细后切到无连通路径省对（错误态），再切回",
+    "expected": "错误态正常渲染空态卡片；切回后 d-detail 按 id 恢复展开，无错位、无异常",
+    "actual": "错误态面板 3 个（数量守卫分支）；切回后卡片 2 张、d-detail 按 id 恢复展开",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/HR-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "HR-04",
+    "section": "运行时健壮性",
+    "title": "最坏参数下持久化记录 < 2KB",
+    "steps": "西藏→江苏（跳数固定上限 10、绕行不限，候选数百条）触发保存",
+    "expected": "iproute.v2.last 低于 2048 字节且不含求解结果（修复前最坏约 12MB）",
+    "actual": "候选 323 条；记录 794B（修复前最坏约 12MB）；含 _res=false",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/HR-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "HR-05",
+    "section": "运行时健壮性",
+    "title": "全局错误兜底：提示条去重计数且不吞控制台",
+    "steps": "注入两次相同未捕获异常与一次不同异常",
+    "expected": "提示条出现且相同错误合并为 ×2；不同错误单列；pageerror 事件照常触发（控制台留痕）",
+    "actual": "提示条含 2 类错误（重复项合并 ×2）；pageerror 触发 3 次未被吞",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/HR-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [
+        "Error: hr05-重复错误",
+        "Error: hr05-重复错误",
+        "Error: hr05-另一错误"
+      ],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "HR-06",
+    "section": "运行时健壮性",
+    "title": "费率库整页重建保持卡片展开态",
+    "steps": "展开第一张通道卡片后切到测算再切回费率库",
+    "expected": "切回后第一张通道卡仍为展开态（此前 renderLib 整页替换会收起）",
+    "actual": "通道卡展开态跨 Tab 往返保持",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/HR-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "R-01",
+    "section": "响应式",
+    "title": "手机竖屏 375×667（iPhone SE）",
+    "steps": "以 375×667 视口打开测算页",
+    "expected": "无横向溢出；#app 限宽 480 生效；底部导航与路线卡片可见可用",
+    "actual": "横向溢出 0px；#app max-width=480px，left=0px（视口 375px）；导航与卡片正常",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/R-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "R-02",
+    "section": "响应式",
+    "title": "平板 768×1024",
+    "steps": "以 768×1024 视口打开测算页",
+    "expected": "无横向溢出；600–899px 平板档 #app max-width:none（铺满视口，不套手机限宽）；布局不拉伸错乱",
+    "actual": "横向溢出 0px；#app max-width=none，left=0px（视口 768px）；导航与卡片正常",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/R-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "R-03",
+    "section": "响应式",
+    "title": "桌面 1440×900 宽布局",
+    "steps": "以 1440×900 视口打开测算页",
+    "expected": "#app 铺满视口（桌面宽布局 max-width 1480px）；无横向溢出",
+    "actual": "横向溢出 0px；#app max-width=1480px，left=0px（视口 1440px）；导航与卡片正常",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/R-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "R-04",
+    "section": "响应式",
+    "title": "两栏 900–1279px：列表与方案同排，不得留大片空白",
+    "steps": "以 900 / 1100 / 1279 视口打开测算页，量两栏布局、两栏顶边差与栏距；再滚动验证左栏吸附",
+    "expected": "均落在两栏布局（348px + 剩余）；.col-side 与 .col-main 同处第一行、顶边齐平（差 ≤2px）；滚动后左栏 sticky 仍吸在 78px（M14）",
+    "actual": "900px 顶边差=0px 栏距=16px；1100px 顶边差=0px 栏距=16px；1279px 顶边差=0px 栏距=16px；滚动 515px 后左栏吸附 top=78px（position:sticky，main overflow-x:clip）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/R-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-01",
+    "section": "PRD-IPRO",
+    "title": "REQ-101：incLoss 通道按落地端结算电量计费",
+    "steps": "宁夏→浙江 取灵绍单段路线 segs[0].fee；四川→江西 取雅湖单段路线 segs[0].fee",
+    "expected": "REQ-101 新口径正确值：灵绍 48.80±0.01 / 雅湖 68.50±0.01（incLoss 通道输电费 = 通道电价 × 落地端电量 qOut，依据发改价格规〔2025〕1490号附件4第十八条）。已取代送端电量旧口径（50.97/72.87）",
+    "actual": "灵绍 fee=48.8000、雅湖 fee=68.5000（落地端电量新口径，1490号第十八条）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-603",
+    "section": "PRD-IPRO",
+    "title": "REQ-603+702：拓扑 SVG 五档视口防裁切/高度自适应",
+    "steps": "五档视口（1920×1080 / 1366×768 / 900×700 / 390×844 / 375×667）打开网架图→拓扑图；再切天地图验证非 svg 模式容器高度行为不变",
+    "expected": "各视口 svg.bottom ≤ 容器.bottom+1；被裁文字节点=0；容器高与绘制高之差 ≤ 容器高×10%；td 模式容器仍走固定高（aspect-ratio 不生效），修复前实测缺陷（1920 裁 126px/1366 裁 322px）已消除",
+    "actual": "1920x1080 容器高916px/越底0/裁字0/高差0%；1366x768 容器高842px/越底0/裁字0/高差0%；900x700 容器高538px/越底0/裁字0/高差0%；390x844 容器高216px/越底0/裁字0/高差0%；375x667 容器高207px/越底0/裁字0/高差0%；td 模式 aspect=auto 高=594px（固定高不变）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-603.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-701",
+    "section": "PRD-IPRO",
+    "title": "REQ-701：费率库省级参数三输入框对齐",
+    "steps": "375×667 与 390×844 展开任一省级参数卡片，量三个 number 输入框 y 坐标；改出清价验证 setPv 取值逻辑",
+    "expected": "三个输入框 y 坐标一致（≤1px）；标签完整可读无裁字截断；setPv 即时生效（PV 更新并按新费率重算），切回测算页结果区仍渲染（H6 修复后不再落入空态）",
+    "actual": "375x667 dy=[0,0,0]；390x844 dy=[0,0,0]；setPv 生效 PV=true，重算 rows=156，切回测算页卡片 8 张（未落入空态）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-701.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-704",
+    "section": "PRD-IPRO",
+    "title": "REQ-704：测算②受端输配电价/基金输入框对齐",
+    "steps": "打开「参数」面板并切到「到户已列费用」；在 375×667 与 390×844 量 #i-pnet 与 #i-fund 输入框 y 坐标；改 #i-pnet 后点「恢复」验证 resetOne 还原",
+    "expected": "两输入框 y 坐标一致（≤1px）；标签完整可读（「受端输配电价」「恢复」无截断）；resetOne 点击后还原核定值（SC→JS 为核定输配电价）",
+    "actual": "375x667 dy=0.00；390x844 dy=0.00；resetOne 51.8→52.8→51.8",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-704.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-401",
+    "section": "PRD-IPRO",
+    "title": "REQ-401：容量电费测算器（折叠卡 · 电压档选择 · 不参与路径比选）",
+    "steps": "打开测算页展开「容量电费测算」卡：断言默认档预选=1~10（20）千伏、P5 固定标注存在；容量方式输入 1000 kVA + 年用电量 12000 MWh → 年费用/分摊断言；切电压档 → 输出随之变化；年电量 0 → 分摊显示 —；西藏（D1 已补录 30/15）按需量校验；再临时移除条目验证缺数据时「暂无数据」",
+    "expected": "默认预选档规则（1~10（20）千伏，无此档取第一档）生效；北京按容量 33 元/kVA·月×1000×12=396,000 元/年、分摊 33.00 元/MWh；切 220千伏及以上档 → 336,000 元/年；P5 固定标注「容量电费与电量来自省内或省外无关，不参与路径比选」含发改价格〔2020〕1441号 / 〔2023〕532号；年电量 0 显示 — 不出 Infinity；西藏需量 30 元/千瓦·月、分摊 30.00 元/MWh；缺 CAP 条目时显示「暂无数据」不补估",
+    "actual": "默认档预选=1~10（20）千伏；BJ 容量 396,000/33.00、需量 624,000/52.00；切档 336,000；年电量0→—；XZ 需量 30.00；移除条目后→暂无数据",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-401.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-705",
+    "section": "PRD-IPRO",
+    "title": "REQ-705：通道（直流）作为必经组件筛方案 + 说明文字可折叠",
+    "steps": "检查 details.explain 默认收起；四川→上海下读取顶部「通道」下拉（直流分组置顶）；选一条直流，再改回「全部通道」",
+    "expected": "长段说明默认收起、点击可展开；通道下拉完整列出候选通道、直流分组在最前；选中后方案全部包含该通道，且下拉清单不被收窄（仍可改选）；改回全部通道后恢复全量",
+    "actual": "说明区 4 处默认收起；下拉 67 条（直流分组 34 条置顶）；筛出 1/255 条；改回全部通道后恢复",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-705.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-602",
+    "section": "PRD-IPRO",
+    "title": "REQ-602：本地价格覆盖 priceVersion 校验",
+    "steps": "预置旧版本地费率覆盖（pv=0000）后加载页面，应用内确认框点「丢弃本地修改」",
+    "expected": "出现应用内提示并丢弃旧覆盖，CH 恢复当前核定值（条数与 DATA.CH 一致且内容非占位）",
+    "actual": "应用内提示出现（priceVersion 不一致）；丢弃后 CH 恢复核定值（91 条）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-602.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-602b",
+    "section": "PRD-IPRO",
+    "title": "REQ-602b：保留旧版价格覆盖时费率库出现核对横幅",
+    "steps": "预置旧版本地费率覆盖后加载，应用内确认框选「暂保留」，进入费率库；再点「恢复检索原始值」",
+    "expected": "费率库顶部出现「旧版价格数据」核对横幅；应用内确认恢复后横幅消失",
+    "actual": "暂保留时横幅出现：「⚠ 本机保存的费率修改基于旧版价格数据（priceVersion 不一致），当前…」；恢复后横幅消失",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-602b.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-02a",
+    "section": "PRD-IPRO",
+    "title": "REQ-201：方案含未确认通道黄条",
+    "steps": "北京→四川 测算（首条经渝鄂背靠背直流，tradable=false 且非区域网架接口）；再对照 江苏→上海（仅苏沪联络线，属区域网架）",
+    "expected": "方案自有段含未确认通道时出现「当期可交易性待确认」黄条；区域网架内的联络线不再触发告警（REQ-201 范围收窄为自有通道）",
+    "actual": "BJ→SC 自有未确认段 渝鄂联络线 → 黄条；JS→SH 区域网架联络线 → 无黄条",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-02a.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-02b",
+    "section": "PRD-IPRO",
+    "title": "REQ-202：通道交易网络徽标",
+    "steps": "费率库搜索「苏沪联络线」，展开卡片",
+    "expected": "卡片摘要可见「交易网络·待确认」徽标；时间轴同款",
+    "actual": "匹配 1 条，徽标可见",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-02b.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-02c",
+    "section": "PRD-IPRO",
+    "title": "REQ-203：仅按已确认可交易通道开关",
+    "steps": "出发地北京，在「参数」面板把通道范围切为「仅专项工程」",
+    "expected": "北京相连通道均为未确认联络线，开启后为空态引导文案（非脚本报错）",
+    "actual": "空态：北京 暂无接入的跨省通道",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-02c.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-03a",
+    "section": "PRD-IPRO",
+    "title": "REQ-301：容量校验口径声明",
+    "steps": "查看方案区容量口径固定小字",
+    "expected": "声明存在且含「ATC」",
+    "actual": "ATC 声明可见",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-03a.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-03b",
+    "section": "PRD-IPRO",
+    "title": "REQ-302：中长期占用扣减容量校验",
+    "steps": "中长期占用填 30 后失焦",
+    "expected": "方案区占用按 cap×(1−0.3) 放大约 1/(1−0.3) 倍，越限判定联动",
+    "actual": "occ=30；maxLoad 0.1493→0.2133（×1.4286）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-03b.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-04",
+    "section": "PRD-IPRO",
+    "title": "REQ-303：单时点测算声明",
+    "steps": "展开「政策与取值依据」折叠区，查看测算范围声明",
+    "expected": "声明存在且写明单时段边界（「省间中长期单时段交付成本…合同分时曲线、交易组织…需另行处理」）",
+    "actual": "单时段边界声明可见（合同分时曲线、交易组织、安全校核另行处理）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-05",
+    "section": "PRD-IPRO",
+    "title": "REQ-304：口径三非结算口径标注",
+    "steps": "（未实现）查看「送端收益」按钮提示与⑦口径位置标注",
+    "expected": "按钮 title 含「非结算口径」；⑦口径位置旁有同义标注",
+    "actual": "未实现，不计入通过率：口径比选入口已随界面重构移除（排序固定），「送端收益」按钮与「非结算口径」标注在构建产物中不存在",
+    "pass": false,
+    "skipped": true,
+    "skipReason": "口径比选入口已随界面重构移除（排序固定），「送端收益」按钮与「非结算口径」标注在构建产物中不存在",
+    "shot": "",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-06",
+    "section": "PRD-IPRO",
+    "title": "REQ-305：区域电网费适用性标注",
+    "steps": "（未实现）查看②区区域电网输电价格说明",
+    "expected": "说明含 S14 3.4.2(a) 统一计入口径（新语义）",
+    "actual": "未实现，不计入通过率：REQ-305 的 S14 3.4.2(a)「统一计入买方区域」标注已随区域计费口径改为 network 默认而不存在",
+    "pass": false,
+    "skipped": true,
+    "skipReason": "REQ-305 的 S14 3.4.2(a)「统一计入买方区域」标注已随区域计费口径改为 network 默认而不存在",
+    "shot": "",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-306",
+    "section": "PRD-IPRO",
+    "title": "REQ-306：结算机制折叠区",
+    "steps": "（未实现）展开完整明细，查看「结算机制」",
+    "expected": "折叠块存在且四条齐备（买方支出/卖方边际价/执行顺序/日清月结 D+5）",
+    "actual": "未实现，不计入通过率：「结算机制」折叠区（买方支出/卖方边际价/执行顺序/日清月结 D+5）在构建产物中不存在",
+    "pass": false,
+    "skipped": true,
+    "skipReason": "「结算机制」折叠区（买方支出/卖方边际价/执行顺序/日清月结 D+5）在构建产物中不存在",
+    "shot": "",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-307",
+    "section": "PRD-IPRO",
+    "title": "REQ-307：页脚定位声明",
+    "steps": "任意 Tab 滚到底",
+    "expected": "页脚存在「不构成交易建议」声明",
+    "actual": "页脚声明可见",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-307.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-405",
+    "section": "PRD-IPRO",
+    "title": "REQ-405：费率库筛选扩展",
+    "steps": "点击「含线损」「落地端计费」chips",
+    "expected": "匹配计数与列表正确（当前数据各 9 条）",
+    "actual": "含线损:9；落地端计费:9",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-405.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-402",
+    "section": "PRD-IPRO",
+    "title": "REQ-402：价格时效徽标",
+    "steps": "费率库搜索「灵绍」，查看摘要徽标",
+    "expected": "显示「现行」徽标含 558 号；展开可见 2 条调价历史",
+    "actual": "徽标含 现行/558；调价历史区块=1",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-402.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-404",
+    "section": "PRD-IPRO",
+    "title": "REQ-404：方案报告导出",
+    "steps": "测算页点「导出报告」",
+    "expected": "触发 Markdown 下载，含三口径、费用拆解、逐段文号与 priceVersion",
+    "actual": "下载 省间测算报告-四川-江苏.md，1089 字符，含全部关键段",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-404.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-403",
+    "section": "PRD-IPRO",
+    "title": "REQ-403：价差敏感性分析",
+    "steps": "展开「价差敏感性」折叠卡",
+    "expected": "36 个价格档（100~800 步长 20）全量输出，含最优路线与落地成本列",
+    "actual": "敏感性表 36 档",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-403.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "RQ-703",
+    "section": "PRD-IPRO",
+    "title": "REQ-703：底图切换不可用时应用内弹框反馈",
+    "steps": "非代理环境点击「腾讯地图」，应用内确认框分别走「保持内置拓扑图」与「改用天地图」",
+    "expected": "应用内弹框说明不可用并提供选择；取消后保持拓扑图（provider 仍 svg），确定后切到天地图",
+    "actual": "应用内弹框=\"腾讯地图不可用…\"；保持→svg；改用→td",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/RQ-703.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MAP-01",
+    "section": "网架升级",
+    "title": "仅渲染选中方案：开关与候选/全网架图例退场",
+    "steps": "打开网架图拓扑视图，检查连线归属、开关与图例；重载后复查（change: grid-map-single-route-and-fixes）",
+    "expected": "SVG 的 data-chan 热区仅属选中方案通道；「显示全网架」开关与「其它候选/全网架/价格线型」图例不存在；重载后无 mapNet 状态",
+    "actual": "仅选中方案 1 条通道在线；开关与图例已移除；重载一致",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MAP-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MAP-06",
+    "section": "网架升级",
+    "title": "路线选择下拉：默认推荐 #1，切换即重绘",
+    "steps": "打开网架图拓扑视图检查下拉默认值；选择另一条候选路线后核对地图与测算页选中态（change: grid-map-single-route-and-fixes）",
+    "expected": "下拉默认选中推荐路线（#1）；切换后 state.sel 更新、图上 data-chan 全部属于新方案；测算页选中卡片一致",
+    "actual": "默认推荐 #1；切到 #2（#2 · 建苏直流 · 四川→江苏 · 442 …）后仅画新方案；测算页卡片同步 #2",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MAP-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MAP-07",
+    "section": "网架升级",
+    "title": "拓扑图标注防重叠：省名>站名>段名",
+    "steps": "深链打开川→陕→甘→宁（换流站与省节点几乎同点的拥挤路线），两两检查拓扑图文字标注矩形",
+    "expected": "任意两个文字标注的相交面积 ≤4px²；省名优先保留，冲突的站名/段名换侧或省略（change: grid-map-single-route-and-fixes）",
+    "actual": "12 个文字标注，最大相交 1.4px²（3|甘肃）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MAP-07.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MAP-02",
+    "section": "网架升级",
+    "title": "选中方案线路名与站名标注 + 视野聚焦",
+    "steps": "打开网架图拓扑视图（默认四川→江苏锦苏直流）",
+    "expected": "SVG 含段线路名「锦苏直流」、段序号 1、起止站名标注；viewBox 聚焦路线包围盒",
+    "actual": "标注齐备；viewBox=219.0 182.1 323.7 157.4…",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MAP-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MAP-03",
+    "section": "网架升级",
+    "title": "点击通道=必经过滤联动测算页",
+    "steps": "拓扑图点击选中方案上的一条通道段，再点击一次取消",
+    "expected": "点击后 state.mustHave 含该通道、测算页 i-chan 同步、路线图重绘；再点恢复",
+    "actual": "点击 g2 → mustHave 联动并同步测算页；再点解除",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MAP-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MAP-04",
+    "section": "网架升级",
+    "title": "点击站点展示站点信息浮层",
+    "steps": "拓扑图点击选中路线上的站点标记",
+    "expected": "浮层显示站名与省份/站址信息，可关闭",
+    "actual": "站点浮层：关闭\n锦屏换流站　四川\n四川凉山州西昌市裕隆乡\n区域归属：华…",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MAP-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MAP-05",
+    "section": "网架升级",
+    "title": "拓扑图快照导出 PNG",
+    "steps": "拓扑图视图点击「导出快照 PNG」，拦截下载动作检查文件名",
+    "expected": "触发下载且文件名含 iproute-grid-<priceVersion> 前缀（内容与水印已由导出样张实证）",
+    "actual": "导出触发成功，文件名=iproute-grid-5f5f316c.png…",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MAP-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-01",
+    "section": "体验修复",
+    "title": "FR-1 送端报价超长数字：钳制+缩略+版式稳定",
+    "steps": "送端报价输入 20 位数字后失焦，再改回合法值",
+    "expected": "state 只存钳制值 10000；红框红字提示出现；hero 大字不溢出、title 可见完整值；修正后提示消失",
+    "actual": "pGen→10000 钳制；提示出现/消失均断言；hero 304/304px 不溢出",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-02",
+    "section": "体验修复",
+    "title": "FR-1 容量电费测算器超大输入：三卡不破版",
+    "steps": "展开容量电费测算卡，容量输入 5e9 后失焦",
+    "expected": "capValue 钳制为 1e6 并提示；三卡 .mc .v 全部入视口（V2 曾推出右缘 170px）；年费用以万/亿缩略",
+    "actual": "capValue→1e6；三卡右缘 [125,237,349]；年费用「3.8亿元/年」",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-03",
+    "section": "体验修复",
+    "title": "FR-1 钳制值持久化：重启不复发",
+    "steps": "超限输入触发钳制后重载页面",
+    "expected": "重载后 state.pGen 为钳制后合法值（saveLast 只存钳制值），版式正常",
+    "actual": "重载后 pGen=10000（钳制值持久化）；旧版未钳制存档恢复亦钳制且不破版",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-04",
+    "section": "体验修复",
+    "title": "FR-2 空输入保留密钥 + 清除密钥降级",
+    "steps": "预置已存密钥切到天地图：清空输入点「应用密钥」；再点「清除密钥」",
+    "expected": "空输入不改动已存密钥并显示常驻灰字；清除后立即降级拓扑图，密钥清空并持久化（重启不回弹）",
+    "actual": "空输入保留 TESTKEY1234（灰字常驻）；清除后 svg + 密钥清空持久化；零天地图请求",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-05",
+    "section": "体验修复",
+    "title": "FR-2 瓦片级探针状态机（mock Image 两分支）",
+    "steps": "切天地图，注入 T 桩与受控 Image 桩，分别触发探针 onload / onerror",
+    "expected": "onload(naturalWidth≥256) → 成功静默（提示清空，不再显示「密钥有效」）；onerror → 自动切回内置拓扑图 + 红字降级说明（区分「密钥无效/被风控拦截」与「网络不可达」，grid-map-device-fixes D4 推翻 D-2 保留容器口径）；全程无「加载成功」假阳性",
+    "actual": "onload→静默；onerror→自动降级 svg + 红字说明（密钥无效或被风控拦截）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-06",
+    "section": "体验修复",
+    "title": "FR-3 新手导览：首启弹出/跳过持久化/帮助入口/不阻塞",
+    "steps": "独立干净 context（无导览预置）加载 → 验证不阻塞 → 跳过 → 重载 → 点页头「帮助」",
+    "expected": "首启自动弹出导览且主流程可正常操作；跳过写键、重载不再弹；帮助入口可重开导览",
+    "actual": "干净 context 首启自动弹出且不阻塞（sel=1 可点）；跳过持久化；重载不弹；帮助入口重开成功",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-07",
+    "section": "体验修复",
+    "title": "FR-4 推荐失效提示（renderAI 两分支）",
+    "steps": "构造旧结果对象挂 state._ai，渲染 renderAI 对比 res 不一致/一致",
+    "expected": "不一致 → 含「参数已变化，原推荐已失效」与「重新推荐」按钮；一致 → 无失效提示",
+    "actual": "过期分支含提示+按钮（有按钮）；一致分支无提示",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-07.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-08",
+    "section": "体验修复",
+    "title": "FR-5 费率库容量电价分区：搜索/筛选/与测算器同源",
+    "steps": "费率库切「容量电价」分区，搜索「北京」，交叉核对首档容量电价与 CAP 取值",
+    "expected": "分区含省份/档别/容量电价/需量电价/来源；搜索北京命中；表内数值与测算器 CAP 同源一致；筛选可用",
+    "actual": "搜索北京命中；首档容量电价 33.0 元/千伏安·月与 CAP 同源；筛选 0/33 省",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-08.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UX-09",
+    "section": "体验修复",
+    "title": "A5 状态深链：hash 恢复 / 非法参数容错 / 复制链接",
+    "steps": "打开 #from=NX&to=ZJ&sel=1；再打开非法参数（XX 省 + 越界 sel）；网架图点「复制链接」",
+    "expected": "恢复宁夏→浙江且 sel=1、hash 用后即清；非法参数按默认态打开无报错、越界 sel 收敛；复制链接产出含三参数的 URL",
+    "actual": "深链恢复 NX→ZJ sel=1；非法参数回退 SC/sel 收敛无报错；链接 URL=.0.0.1:8734/#from=SC&to=JS&sel=0",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UX-09.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "P1-01",
+    "section": "网架P1",
+    "title": "走廊折线渲染：waypoints 折线化且计价不变",
+    "steps": "运行时给锦苏直流注入 2 个走廊中间点后重绘网架图",
+    "expected": "该通道以 polyline（4 点）渲染；候选路线与落地价与注入前完全一致（走廊仅影响呈现，spec 硬约束）",
+    "actual": "折线点数=4；落地价/候选数注入前后一致（436.2609427960465 元/MWh）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/P1-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "P1-02",
+    "section": "网架P1",
+    "title": "单一选中层：弱化层与 tier 图例退场、选中层无 dash",
+    "steps": "拓扑视图检查无任何 dasharray 虚线与「价格线型」图例；选中方案线无 dasharray（change: grid-map-single-route-and-fixes）",
+    "expected": "全网/候选弱化层移除后全图无 dasharray；图例不含「价格线型」；选中蓝线存在且无 dasharray",
+    "actual": "选中线 1 条；全图 0 处 dasharray；tier 图例已移除",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/P1-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "P1-03",
+    "section": "网架P1",
+    "title": "容量浮层：信息+待补+必经切换",
+    "steps": "搜索定位一条容量待补且不在当前方案中的通道（mapGotoChan）打开浮层，再点浮层「设为必经通道」",
+    "expected": "浮层显示输电价/容量（缺失显「待补」）/占用与必经按钮；点按钮后 mustHave 生效且浮层显示必经过滤中",
+    "actual": "通道 g9：浮层含容量(待补)/占用/按钮；设为必经联动生效",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/P1-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "P1-04",
+    "section": "网架P1",
+    "title": "断面选择器：成员高亮与限额信息行",
+    "steps": "网架图选择一个成员可映射且含非当前方案成员的断面，再切回不选",
+    "expected": "选中断面后出现紫色晕圈垫层与限额信息行；清除后晕圈与信息行消失",
+    "actual": "断面 YG：晕圈 1（可映射成员 1）、信息行在场；清除后归零",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/P1-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "P1-05",
+    "section": "网架P1",
+    "title": "站点/通道搜索：聚焦+浮层+无结果反馈",
+    "steps": "搜索「锦屏」点命中项；再搜不存在的词",
+    "expected": "命中后视野收拢到站点并弹站名浮层；无命中给明确提示；搜索与聚焦不改变 state.sel 与 mustHave",
+    "actual": "聚焦收拢（219.0 182.1 32…→204.0 214.5 14…）；浮层在场；无命中提示在场；sel/mustHave 不变",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/P1-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "P1-06",
+    "section": "网架P1",
+    "title": "区域归属上图：着色环+图例+浮层归属",
+    "steps": "开启「按区域着色」检查省份节点区域环与图例；点途经站点看区域归属；关闭后恢复",
+    "expected": "开启后节点出现多色区域环、图例列出六大区域、站点浮层含区域归属；关闭后环消失、恢复默认分层显示",
+    "actual": "区域环 31 个 / 6 色；六区域图例+依据在场；浮层含归属；关闭恢复默认",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/P1-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MF-01",
+    "section": "真机修复",
+    "title": "页头一行化：360px 视口单行（D1）",
+    "steps": "360px 视口打开应用；再在费率库修改一条费率后回页头",
+    "expected": "标题/徽章/？按钮同行（bottom 差≤2px）且无横向溢出；徽章默认「公开数据」，改价后「费率已本地修改」仍单行",
+    "actual": "默认「公开数据」单行（溢出 0px）；改价后「费率已本地修改」仍单行",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MF-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MF-02",
+    "section": "真机修复",
+    "title": "拓扑图触摸：平移/捏合/双击复位 + 拖动不误触（D2）",
+    "steps": "合成 pointer 事件：单指拖动（>6px）、拖动同步派发 click、再普通点通道、双指捏合、双击",
+    "expected": "拖动平移 viewBox 且不触发过滤；拖动后的 click 被吞、之后普通点击照常；捏合改变视野宽度；双击回到聚焦视野",
+    "actual": "平移（219.0 182.1 323.…→336.0 182.1 323.…）；拖动 click 被吞、普通点击照常；捏合宽 323.7→539.5；双击复位",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MF-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MF-03",
+    "section": "真机修复",
+    "title": "触摸视野保持与复位时机（D2）",
+    "steps": "手动缩放后切 Tab 再回来；回测算页点另一张路线卡片再进网架图",
+    "expected": "切 Tab 视野保持（重绘从 state.mapView 恢复）；选中方案变化后视野复位到聚焦且 mapView 清空",
+    "actual": "切 Tab 视野保持（40.0 30.0 330.0 215.…）；点路线卡片后复位（225.3 177.5 318.9 16…）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MF-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MF-04",
+    "section": "真机修复",
+    "title": "缩放后导出快照所见即所得（D2）",
+    "steps": "手动缩放后调用 exportTopo，拦截导出 SVG 源检查 viewBox",
+    "expected": "导出序列化包含当前所见 viewBox（与画面一致）",
+    "actual": "缩放后导出源含 viewBox=60.0 40.0 300.0 196.0",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MF-04.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MF-05",
+    "section": "真机修复",
+    "title": "清空搜索恢复路线视野（D3）",
+    "steps": "搜索「锦屏」点命中聚焦后清空输入",
+    "expected": "聚焦后视野收拢；清空后视野回到路线聚焦且搜索聚焦清除，sel/mustHave 不变",
+    "actual": "聚焦收拢后清空 → 回到路线聚焦；sel/mustHave 不变",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MF-05.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MF-06",
+    "section": "真机修复",
+    "title": "无密钥进天地图视图：SDK 常驻也不画（D4）",
+    "steps": "注入天地图 SDK 桩（模拟本页已常驻），无密钥切入天地图视图",
+    "expected": "不绘制任何叠加物（SDK 桩零实例化），直接降级为网架清单并提示填密钥",
+    "actual": "SDK 常驻桩零实例化；容器隐藏 + 网架清单 + 提示填密钥",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MF-06.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "MF-07",
+    "section": "真机修复",
+    "title": "错误密钥瓦片探针失败：自动降级拓扑图（D4）",
+    "steps": "注入 SDK 桩 + mock Image（onerror）+ fetch 立即 resolve；填入密钥点「应用密钥」",
+    "expected": "探针 onerror 自动切回内置拓扑图并显示红字说明（区分原因），mapProvider=svg 持久化，不出现无底图叠加物画面",
+    "actual": "探针 onerror → 自动降级 svg + 红字说明（密钥无效或被风控拦截）；持久化",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/MF-07.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "TH-01",
+    "section": "外观主题",
+    "title": "外观面板切换三套主题：data-theme 与系统栏颜色同步",
+    "steps": "点页头「外观」→ 明暗选「深色」→「浅色」→ 风格选「科技」→ 再切回「清晰」",
+    "expected": "data-theme 依次为 clear-dark / clear / tech / clear；<meta name=\"theme-color\"> 与安卓壳桥 IPRouteShell.setSystemBars 随主题取 --system-bar（深底配浅色图标）；偏好写入 iproute.v2.ui",
+    "actual": "依次切换：clear-dark(#1C1F24) → clear(#FFFFFF) → tech(#070E1A) → clear(#FFFFFF)；偏好存本机；面板可关闭",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/TH-01.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "TH-02",
+    "section": "外观主题",
+    "title": "主题偏好刷新后保持，首帧即生效；「跟随系统」随系统明暗切换",
+    "steps": "选「科技」→ 刷新 → 检查首个脚本执行时的 data-theme；改回「清晰 · 跟随系统」→ 模拟系统深色 / 浅色",
+    "expected": "刷新后 data-theme 仍为 tech，且在应用脚本运行前（DOMContentLoaded 之前）已设好，<meta name=\"theme-color\"> 同时已是科技的 --system-bar；跟随系统时系统切深色 → clear-dark、切浅色 → clear",
+    "actual": "刷新保持 tech（首帧即 tech，theme-color #070E1A）；跟随系统 深→clear-dark 浅→clear；选定浅色后不跟随（clear）",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/TH-02.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "TH-03",
+    "section": "外观主题",
+    "title": "科技风格下「明暗」组禁用并说明；网架图页切换主题即重绘",
+    "steps": "进入网架图页 → 打开「外观」→ 选「科技」→ 检查明暗三按钮与说明 → 切回「清晰」",
+    "expected": "科技风格下明暗三按钮 disabled，出现「科技风格固定为深色」；切回清晰后恢复可点；网架图 SVG 随主题重绘（画布底色取新主题的 --map-ground）",
+    "actual": "科技：明暗组禁用 + 说明；网架图画布 rgb(247, 248, 250) → rgb(9, 19, 36) 重绘；切回清晰恢复",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/TH-03.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  },
+  {
+    "id": "UI-HIT",
+    "section": "外观主题",
+    "title": "小控件扩大的点击区不抢相邻控件（测算页 390/320px、网架图搜索结果与工具条、弹层）",
+    "steps": "对挂了透明扩区的控件逐个取样：测算页（390px、320px；默认与「全部路线 + 含越限」）、网架图搜索「换流站」后的结果与工具条、天地图密钥栏、参数弹层、外观面板；另外实点「锦屏换流站」下沿与「含越限」上方那张路线卡的下沿",
+    "expected": "每个控件外沿 1–2px 与扩区内命中的都是控件自己或空白，扩区不压别的可点控件；点「锦屏换流站」下沿打开的是锦屏的浮层（不是下一行的奉贤）；点路线卡下沿选中该路线、「含越限」不被切换",
+    "actual": "取样 测算页 320px 8 个、测算页·全部路线 320px 7 个、测算页 390px 8 个、测算页·全部路线 390px 7 个、网架图·搜索结果与工具条 13 个、网架图·天地图密钥栏 9 个、参数弹层 2 个、外观面板 6 个，无抢点；下拉与「含越限」空档 10px 点击无状态变化；「锦屏换流站」下沿打开锦屏浮层",
+    "pass": true,
+    "skipped": false,
+    "skipReason": "",
+    "shot": "shots/UI-HIT.png",
+    "logs": {
+      "console": [],
+      "pageErrors": [],
+      "failedReq": [],
+      "badStatus": []
+    }
+  }
+]
