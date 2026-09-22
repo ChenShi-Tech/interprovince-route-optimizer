@@ -145,7 +145,7 @@ maxSourceQuote = (pDst − F)/A            // 别名 senderNet，语义是「可
 4. **改动算法后必须跑基线**，`node tools/baseline-check.mjs` 全绿才算完成（条数以脚本输出为准）。基线只证明实现未漂移、不证明费率数值正确——校验前会用基线快照覆盖 `CH`；费率正确性靠 `audit-fees.mjs` / `audit-voltage-tariffs.mjs` 与一手原件。基线变更须 `node tools/baseline2.mjs --accept` 显式接受。
 5. **新功能开新 worktree + 新分支**，不在 `main` 工作区直接改：`git worktree add .claude/worktrees/<分支名把/换成-> -b feat/<名字> origin/main`（`.claude/worktrees/` 已在 `.gitignore`；旧的 `.worktrees/` 约定作废，存量随各自 PR 合并自然消亡；该目录多会话共享，收尾只 `git worktree remove` 自己那一个）。多个 worktree 同时跑 e2e 时 8734 端口会冲突，用 `E2E_BASE=http://127.0.0.1:<私有端口>/` 指向自己的静态服务。**不在功能分支上跑 `release.mjs`**——`tools/push-github.mjs` 把分支写死为 `main`，会把未合并的改动推到远端。
 6. **数据准确性优先于界面与新功能。** 数据分支阻塞时先审、先修、先合并，再动功能。
-7. **大改动完成后同步 Slack。** 功能落地、数据/费率更新、发版、重要修复、阶段收尾等大改动**完成且验证通过后**，向 Slack 频道 **#跨省电力小程序**（channel_id `C0C23DYR0S0`，私有频道，用 ID 直发）发一条通知：**消息第一行带用户名前缀**（如 `【daiding】`；用户名优先问用户，确认不到取 `git config user.name`），**list 列表、简洁，每条一句话说清干了什么**，中文，不等用户催。详见 `AGENTS.md`。
+7. **大改动完成后同步 Slack。** 功能落地、数据/费率更新、发版、重要修复、阶段收尾等大改动**完成且验证通过后**，向 Slack 频道 **#跨省电力小程序**（channel_id `C0C23DYR0S0`，私有频道，用 ID 直发）发一条通知：**消息第一行带用户名前缀**（如 `【daiding】`；用户名优先问用户，确认不到取 `git config user.name`），**list 列表、简洁，每条一句话说清干了什么**，中文，不等用户催；**先问后发（硬规则）：任何消息发出前必须先把拟发全文给用户过目、得到明确同意后才能发，没有例外，每次发送前都要重新确认，用户未回应或拒绝就不发**。详见 `AGENTS.md`。
 8. **界面改动按设计系统纪律走**：只用令牌、390px 截图验收、三套主题过对比度，流程与 PR 自查清单见 `docs/12-设计系统与界面规范.md` 第 13–14 节；合并后同步设计系统 Artifact（在 Claude Code 里说「按最新代码重新同步设计系统」）。
 
 ## 底图与合规
