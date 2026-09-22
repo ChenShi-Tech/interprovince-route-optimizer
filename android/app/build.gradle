@@ -10,8 +10,8 @@ android {
         applicationId "com.iproute.calc"
         minSdk 26          // 自适应图标 (adaptive icon) 需要 API 26+，覆盖 Android 8.0 (2017) 以上设备
         targetSdk 34
-        versionCode 9
-        versionName "1.2.1"
+        versionCode 10
+        versionName "1.2.2"
     }
 
     // 正式发布签名：密钥不入库，靠环境变量传入（发版流水线从仓库 Secrets 还原到临时文件）。
