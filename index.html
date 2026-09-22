@@ -747,16 +747,20 @@ body.sheet-open{overflow:hidden}
 .fee-entry{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;padding:3px 0;font-family:inherit;line-height:1;color:var(--ink);cursor:pointer;text-align:left}
 .fee-entry .fee-entry-hint{font-size:11px;font-weight:400;color:var(--ink3)}
 .fee-entry svg{display:block;flex:none;margin-left:auto;color:var(--ink3)}
+/* 「各段明细」行（用户要求）：整行靠左展示，行内三元素（箭头/文字/问号）水平垂直互相对中，
+   样式口径参照「天地图密钥」折叠行（.tk-fold）：gap:4px 节奏、无固定行高、行盒贴内容压矮。 */
 .route-seg-row{display:flex;align-items:center;gap:4px}
 /* 折叠按钮不再 flex:1 占满整行（change: 问号紧跟文字）：收缩为内容宽度，行尾问号按钮
-   （站点位置说明弹窗入口）随之贴住文字末尾，而不是被顶到卡片最右。 */
-.route-seg-toggle{display:flex;align-items:center;gap:6px;min-height:28px;background:none;border:0;padding:2px 0;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--ink2);cursor:pointer;text-align:left}
+   （站点位置说明弹窗入口）随之贴住文字末尾，而不是被顶到卡片最右。
+   对齐 .tk-fold 口径：去 min-height/内边距；line-height:1 让行盒贴住字面——normal 行高下中文字体
+   （雅黑/手机字体）上伸部偏高压高行盒、字面沉降，视觉上图标与文字错位；SVG display:block 消除行内基线缝隙。 */
+.route-seg-toggle{display:flex;align-items:center;gap:4px;background:none;border:0;padding:0;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--ink2);cursor:pointer;text-align:left}
 .route-seg-toggle svg{display:block;flex:none;color:var(--ink3);transform:rotate(-90deg);transition:transform .2s}
 .route-seg-toggle[aria-expanded="true"] svg{transform:rotate(0deg)}
 /* 「各段明细」行尾站点位置说明问号按钮：与折叠按钮为兄弟节点，点击互不冲突；问号图标同 SVG_HELP 口径。
-   三元素（箭头/文字/问号）垂直居中：line-height:1 让行盒贴住字面——normal 行高下中文字体
-   （雅黑/手机字体）上伸部偏高压高行盒、字面沉降，视觉上图标与文字错位；SVG display:block 消除行内基线缝隙。 */
-.note-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;border:0;background:none;padding:0;color:var(--ink3);cursor:pointer;border-radius:var(--radius-field)}
+   同 .tk-fold 行内问号 <i> 口径：不设固定宽高，盒子贴 13px 图标、图标在盒内水平垂直居中，
+   三元素中线一致。 */
+.note-icon-btn{display:inline-flex;align-items:center;justify-content:center;flex:none;border:0;background:none;padding:0;color:var(--ink3);cursor:pointer}
 .note-icon-btn svg{display:block}
 @media (min-width:600px){
   .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:var(--radius-sheet) 0 0 var(--radius-sheet);transform:translateX(100%);box-shadow:var(--shadow-sheet-side)}
@@ -1156,7 +1160,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-22 06:03';
+const BUILD_TIME='2026-09-22 07:22';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -4598,7 +4602,7 @@ function renderMap(){
        点开才见逐段明细；展开态按 mapRouteDetailOpen 恢复（切方案/切底图/切区域着色重建不弹回），
        切换只翻转 DOM 不重走 renderMap（见 toggleRouteDetail），避免整图重绘。 */
     out+=`<div style="margin-top:11px;padding-top:11px;border-top:var(--hairline) solid var(--line2)">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span style="font-size:12.5px;font-weight:600;flex:none">选中方案</span>
         <select id="i-maproute" onchange="mapPick(+this.value)" style="flex:1;min-width:0;padding:6px 26px 6px 9px;font-size:11px;font-weight:600">
           ${items.map(it=>`<option value="${it.i}" ${it.i===cur?'selected':''}>${esc(routeOptLabel(it))}</option>`).join('')}
