@@ -480,14 +480,24 @@ input.clamp-bad{border-color:var(--red);box-shadow:var(--focus-ring-bad)}
 .mc .v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 批次 B：tier 线型图例样本（虚/点线用 border 复刻 SVG dasharray 语义） */
 .lg-line{display:inline-block;width:16px;height:0;vertical-align:middle;margin-right:4px}
-/* 密钥输入框：掩码显示 + 右侧小眼睛切换可见性（toggleTkVis 在 ui/map.js） */
+/* 密钥输入框：普通文本框明文直显（change: 取消掩码——手机端 password 调起密码键盘、
+   剪贴板建议不可见，粘贴密钥不便；眼睛显隐切换随掩码一并移除） */
 .tk-wrap{position:relative}
-.tk-wrap input{padding-right:38px}
-.tk-eye{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:30px;height:30px;
-  border:0;background:none;cursor:pointer;padding:6px;color:var(--ink3);
-  display:flex;align-items:center;justify-content:center;border-radius:var(--radius-mini)}
-.tk-eye:hover{background:var(--gray-bg);color:var(--ink2)}
-.tk-eye svg{width:18px;height:18px;display:block;pointer-events:none}
+/* 「天地图密钥 ?」标题行即折叠开关（change: 密钥输入完成后自动收起）：行首小箭头随开合旋转，
+   口径同 .route-seg-toggle（收起旋右 -90°、展开回正）；inline-flex 让箭头与文字基线对齐。
+   旋转只命中直接子级箭头（> 选择器）：行内问号图标在 <i> 里、非直接子级，始终保持正立。
+   选择器必须带上 `label.f span` 前缀（特异性 0,2,2 > label.f span 的 0,1,2）：标题行在
+   label.f 内，否则会被 `label.f span{display:block}` 压回块级，display:block 的箭头独占一行。 */
+.tk-fold,label.f span.tk-fold{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.tk-fold>svg{display:block;flex:none;color:var(--ink3);transform:rotate(-90deg);transition:transform .2s}
+.tk-fold[aria-expanded="true"]>svg{transform:rotate(0deg)}
+/* 折叠行尾标（change: 失败提示行收起到折叠行）：面板收起时页面只留折叠行一行，
+   加载/失败状态由尾标承载（加载中… / 加载失败），详情收在展开面板内 #tk-msg。
+   同样要带 `label.f span` 前缀：否则被 label.f span 的 color/margin-bottom 压住，
+   尾标会被染色并带 5px 下边距造成行内错位；空内容时 :empty 隐藏，不留多余 gap。 */
+.tk-state,label.f span.tk-state{color:var(--ink3);margin-bottom:0}
+.tk-state[data-kind="fail"],label.f span.tk-state[data-kind="fail"]{color:var(--error-text);font-weight:600}
+label.f span.tk-state:empty{display:none}
 /* 该字段在当前口径下不参与计算：置灰但保留在 DOM 中（readInputs 仍按 id 读取） */
 label.f.off span{color:var(--ink3)}
 label.f.off input{background:var(--gray-bg);color:var(--ink3)}
@@ -737,8 +747,10 @@ body.sheet-open{overflow:hidden}
 .fee-entry{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;padding:3px 0;font-family:inherit;line-height:1;color:var(--ink);cursor:pointer;text-align:left}
 .fee-entry .fee-entry-hint{font-size:11px;font-weight:400;color:var(--ink3)}
 .fee-entry svg{display:block;flex:none;margin-left:auto;color:var(--ink3)}
-.route-seg-row{display:flex;align-items:center;gap:2px}
-.route-seg-toggle{flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:28px;background:none;border:0;padding:2px 0;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--ink2);cursor:pointer;text-align:left}
+.route-seg-row{display:flex;align-items:center;gap:4px}
+/* 折叠按钮不再 flex:1 占满整行（change: 问号紧跟文字）：收缩为内容宽度，行尾问号按钮
+   （站点位置说明弹窗入口）随之贴住文字末尾，而不是被顶到卡片最右。 */
+.route-seg-toggle{display:flex;align-items:center;gap:6px;min-height:28px;background:none;border:0;padding:2px 0;font-family:inherit;font-size:12px;font-weight:600;line-height:1;color:var(--ink2);cursor:pointer;text-align:left}
 .route-seg-toggle svg{display:block;flex:none;color:var(--ink3);transform:rotate(-90deg);transition:transform .2s}
 .route-seg-toggle[aria-expanded="true"] svg{transform:rotate(0deg)}
 /* 「各段明细」行尾站点位置说明问号按钮：与折叠按钮为兄弟节点，点击互不冲突；问号图标同 SVG_HELP 口径。
@@ -808,19 +820,16 @@ input[type=checkbox],input[type=radio]{appearance:auto;accent-color:var(--blue);
    控件自建层叠上下文（z-index:0）、伪元素垫在 -1 层：扩出的透明区压在邻近静态内容之上可点，
    但压不住控件自己的子元素（复选框、图标、角标），点它们时命中的仍是子元素本身 */
 .sheet-x,.help-link,.tg,.btn.ghost,.seg:not(.wrap) button,details.adv>summary,details.explain>summary,.plan-issues>summary{position:relative;z-index:0}
-.tk-eye{z-index:0}
-.sheet-x::after,.tk-eye::after,.help-link::after,.tg::after,.btn.ghost::after,.seg:not(.wrap) button::after,
+.sheet-x::after,.help-link::after,.tg::after,.btn.ghost::after,.seg:not(.wrap) button::after,
 details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::after{content:"";position:absolute;
   top:min(0px,calc(50% - 22px));bottom:min(0px,calc(50% - 22px));left:min(0px,calc(50% - 22px));right:min(0px,calc(50% - 22px));z-index:-1}
 /* 紧凑排布的扩区：相邻两个可点控件朝对方扩出的距离加起来，不超过两者间距减 2px（留给舍入），否则会盖住邻居、抢走它边缘的点击。
    · 纵向不扩、只横向扩：.hit-x（网架图换行排布的搜索结果，行距 6px；「复制链接」，下隔 10px 是底图切换；
      「导出快照」在图层面板内右端、左邻「按区域着色」相隔 10px）与所有复选框标签 .tg（网架图两行开关只隔 4px；「含越限」上邻路线卡、下邻展开按钮）；
-   · 限幅：小号分段按钮 .seg.small（网架图底图切换）上下各最多 4px；密钥显隐按钮叠在输入框右端，向左最多 4px，
-     不越过输入框给它预留的 38px 右内边距、不抢打字区的点击。
+   · 限幅：小号分段按钮 .seg.small（网架图底图切换）上下各最多 4px。
    tests/e2e.mjs 的 UI-HIT 在控件外沿与扩区内逐点取样守住这几条；规范见 docs/12 第 7 节。 */
 .btn.hit-x::after,.tg::after{top:0;bottom:0}
 .seg.small:not(.wrap) button::after{top:max(-4px,min(0px,calc(50% - 22px)));bottom:max(-4px,min(0px,calc(50% - 22px)))}
-.tk-eye::after{left:max(-4px,min(0px,calc(50% - 22px)))}
 /* 方案卡片：路线（左）+ 价格（右，突出）→ 价格组成条（悬停 / 聚焦显示分项）→ 关键指标 → 标签与区域网损对照 */
 .plan-hd{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
 .plan-no{font-size:12.5px;font-weight:700;color:var(--ink2)}
@@ -1147,7 +1156,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-22 04:10';
+const BUILD_TIME='2026-09-22 06:03';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -3754,6 +3763,23 @@ const tdQueue=[];
   （如空输入应用的「已保留密钥」常驻提示），迟到的旧结论会把新提示盖掉——每次 tkMsg/显式
   写入使代数 +1，在途回写发现代数不符即放弃（元素身份检查仍保留，防跨重绘污染）。 */
 let tkMsgGen=0;
+/* tkPhase / tkMsgHtml：密钥区反馈收起后的状态承载（change: 失败提示行收起到折叠行）。
+   面板收起时页面只留折叠行一行，失败/加载中的状态改由折叠行尾标呈现（tkStateSync）；
+   消息正文存 tkMsgHtml——renderMap 重建 DOM 后按它复原 #tk-msg，展开面板即见完整说明，
+   与尾标状态始终一致（不写入则不显示）。tkPhase: '' | 'loading' | 'fail'。 */
+let tkPhase='', tkMsgHtml='';
+function tkStateSync(){
+  const el=document.getElementById('map-tk-state'); if(!el) return;
+  el.textContent=tkPhase==='loading'?' · 加载中…':(tkPhase==='fail'?' · 加载失败':'');
+  if(tkPhase) el.dataset.kind=tkPhase; else el.removeAttribute('data-kind');
+}
+/* 提示写入统一入口：正文进 tkMsgHtml（重绘后复原）、状态驱动折叠行尾标，两者同步，
+   不再各自 el.innerHTML 直写——避免收起态尾标与面板内正文口径打架。 */
+function tkWrite(el, html, phase){
+  tkMsgHtml=html||''; tkPhase=phase||'';
+  if(el&&el.isConnected) el.innerHTML=tkMsgHtml;
+  tkStateSync();
+}
 /* 服务端风控（CloudWAF）的封禁会因继续请求而延长：判定为服务端拦截后本地静默 10 分钟，
    冷却期内点「应用密钥」不再发请求，只提示剩余等待；更换密钥或刷新页面可立即重试一次。 */
 const TD_COOLDOWN_MS=10*60*1000;
@@ -3765,11 +3791,8 @@ const TD_COOLDOWN_MS=10*60*1000;
    但仍保留在清单里作为保守的就绪门槛，不放宽实测得出的时序约束。 */
 const TD_REQUIRED=['Map','LngLat','Point','Icon','Marker','Polyline','Label'];
 const TD_WAIT_MS=5000, TD_POLL_MS=100;
-/* tkVis：密钥输入框的可见性状态（默认掩码）。切换只改 DOM 的 type/图标，不走 renderMap——
-   整卡重渲染会打断输入焦点；renderMap 重绘时按 tkVis 恢复上次选择的可见性。 */
-let tkVis=false;
-const SVG_EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-const SVG_EYE_OFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+/* 密钥输入框改为普通文本框（change: 取消掩码）：type=password 在手机端调起密码键盘、
+   看不到剪贴板建议，粘贴密钥不便——取消掩码形式，明文直显；眼睛显隐切换随之移除。 */
 /* 问号帮助图标（help-circle）：内联 SVG 与密钥小眼睛同款做法，浏览器 / 安卓 WebView / iOS
    WKWebView 渲染一致；stroke=currentColor 随所在元素的颜色令牌（--ink3）走，三套主题自动适配。 */
 const SVG_HELP='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
@@ -3786,12 +3809,10 @@ let _feeSheetOpen=false;
    口径同上——会话内记忆、不入档不进深链，renderMap 重建时按标志恢复。 */
 let mapSecNoteOpen=false;
 let mapLayerOpen=false;
-function toggleTkVis(){
-  tkVis=!tkVis;
-  const inp=document.getElementById('i-tk'), btn=document.querySelector('.tk-eye');
-  if(inp) inp.type=tkVis?'text':'password';
-  if(btn){ btn.innerHTML=tkVis?SVG_EYE_OFF:SVG_EYE; btn.setAttribute('aria-label',tkVis?'隐藏密钥':'显示密钥'); btn.title=btn.getAttribute('aria-label'); }
-}
+/* mapTkOpen：天地图密钥面板开合（change: 密钥输入完成后自动收起）。三态——null=未操作过，
+   渲染按「无密钥默认展开引导、有密钥默认收起」；非 null=用户已显式开/合或应用后自动收起，
+   渲染只看本值（口径同 mapRouteDetailOpen 会话标志：不入档，renderMap 重建按值恢复）。 */
+let mapTkOpen=null;
 function tdApiReady(){
   if(typeof T==='undefined') return false;
   if(!TD_REQUIRED.every(k=>typeof T[k]==='function')) return false;
@@ -4512,20 +4533,36 @@ function renderMap(){
     out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
   }
   if(mode==='td'){
-    out+=`<label class="f"><span style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" onclick="event.preventDefault();tkHelpDlg()">天地图密钥<i aria-hidden="true" style="display:inline-flex;color:var(--ink3)">${SVG_HELP}</i></span>
-      <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
-        <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
-      </div></label>
-      <div class="row3" style="margin-bottom:10px;padding-top:6px">
+    /* 密钥面板折叠收纳（change: 密钥输入完成后自动收起）：收起就在「天地图密钥 ?」标题行本身，
+       不另起一行——标题行挂 toggleTkPanel（行首小箭头随开合旋转，同各段明细行口径；
+       问号图标不参与旋转——.tk-fold 的旋转只命中直接子级箭头，问号在 <i> 内不受影响），
+       输入框与三键收进 #map-tk-body。底图切换三键独占一行在前、折叠行在其下（change: 撤销同行合并）。
+       默认态——无密钥展开引导填写、有密钥收起为一行；
+       点「应用密钥」输入完成后自动收起（applyTk 置 mapTkOpen=false）。
+       问号图标单独弹申请说明（stopPropagation 不触发开合）；preventDefault 阻断 label
+       把点击转发给输入框（点标题只开合，不弹手机键盘）。
+       tk-msg 收进面板内（change: 失败提示行收起到折叠行）：收起时页面不再被一行红字占位，
+       状态由折叠行尾标（#map-tk-state，加载中…/加载失败）承载，展开面板看完整说明。 */
+    const tkExpanded=mapTkOpen!==null?mapTkOpen:!state.tiandituKey;
+    const tkState=tkPhase==='loading'?' · 加载中…':(tkPhase==='fail'?' · 加载失败':'');
+    out+=`<label class="f" style="margin:2px 0 8px">
+      <span id="map-tk-toggle" class="tk-fold" role="button" aria-expanded="${tkExpanded}" aria-controls="map-tk-body" onclick="event.preventDefault();toggleTkPanel(this)">${SVG_CHEV_D}天地图密钥<i aria-hidden="true" style="display:inline-flex;color:var(--ink3)" onclick="event.stopPropagation();tkHelpDlg()">${SVG_HELP}</i><span id="map-tk-state" class="tk-state"${tkPhase?` data-kind="${tkPhase}"`:''}>${tkState}</span></span>
+      <div id="map-tk-body"${tkExpanded?'':' hidden'}>
+      <div class="tk-wrap"><input id="i-tk" type="text" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
+      </div>
+      <!-- 三键字号/内边距/圆角对齐 .seg.small（拓扑图/腾讯地图/天地图），两行按钮高度一致；
+           触屏命中区仍由 .btn.ghost::after 透明扩区机制负责。row3 与输入框的间距 ≥12px：
+           按钮上扩区约上伸 11.5px，不足会压住 input（原间距来自 label.f 的 margin-bottom:11px，
+           row3 移进面板后须自带，UI-HIT 审计口径）。 -->
+      <div class="row3" style="margin-bottom:10px;padding-top:12px">
         <button class="btn ghost" style="font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)" onclick="applyTk()">应用密钥</button>
         <button class="btn ghost" style="font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)" onclick="clearTk()">清除密钥</button>
         <button class="btn ghost" style="font-size:11px;padding:5px 6px;border-radius:var(--radius-mini)" onclick="window.open('https://cloudcenter.tianditu.gov.cn/center/development/myApp','_blank')">去申请密钥</button>
       </div>
-      <!-- 三键字号/内边距/圆角对齐 .seg.small（拓扑图/腾讯地图/天地图），两行按钮高度一致；
-           触屏命中区仍由 .btn.ghost::after 透明扩区机制负责。上边距 8px 让本行扩区盒与上方
-           密钥显隐钮的向下扩区错开（44px 扩区盒随按钮变小而上移，贴太近会互相抢点，UI-HIT 审计） -->
-      <div id="tk-msg" class="note" style="margin:0 0 10px"></div>`;
-      /* 密钥申请说明收进弹框：点「天地图密钥 ?」行内文字（问号图标）弹出（title 原生 tooltip
+      <div id="tk-msg" class="note" style="margin:0 0 4px">${tkMsgHtml}</div>
+      </div>
+      </label>`;
+      /* 密钥申请说明收进弹框：点「天地图密钥 ?」行内问号图标弹出（title 原生 tooltip
          在触屏 / WebView 不生效，弃用）；申请入口仍由「去申请密钥」按钮承担，不再常驻占一屏文案。 */
   }
 
@@ -4631,6 +4668,17 @@ function toggleRouteDetail(btn){
   btn.setAttribute('aria-expanded',open?'true':'false');
   mapRouteDetailOpen=open;
 }
+/* ---------- 天地图密钥面板开合（change: 密钥输入完成后自动收起） ----------
+   口径同 toggleRouteDetail：只翻转 hidden 属性与 aria-expanded、同步会话标志 mapTkOpen，
+   不重走 renderMap（重绘会打断天地图底图初始化，代价过重）。 */
+function toggleTkPanel(btn){
+  const box=document.getElementById('map-tk-body');
+  if(!box) return;
+  const open=box.hasAttribute('hidden');
+  if(open) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
+  btn.setAttribute('aria-expanded',open?'true':'false');
+  mapTkOpen=open;
+}
 /* ---------- 断面备注「详情」展开/收起（change: grid-map-declutter） ----------
    口径同 toggleRouteDetail：只翻转 hidden 与 aria-expanded、同步会话标志，不重走 renderMap；
    renderMap 重建时按 mapSecNoteOpen 恢复。 */
@@ -4653,7 +4701,7 @@ function toggleMapLayers(btn){
   btn.setAttribute('aria-expanded',open?'true':'false');
   mapLayerOpen=open;
 }
-/* 「各段明细」行尾问号弹出的站点位置说明框（change: grid-map-collapse-fee-sheet 二次收敛）：
+/* 「各段明细」文字尾问号弹出的站点位置说明框（change: grid-map-collapse-fee-sheet 二次收敛）：
    结构与样式令牌同 tkHelpDlg（天地图密钥说明），单按钮「知道了」，Esc / 点遮罩均可关闭。
    原页面流内的站点位置 note 段落移除，改由本弹窗承载；问号按钮与折叠按钮是兄弟节点，
    两个点击事件互不冒泡、互不冲突。 */
@@ -4729,9 +4777,10 @@ function applyTk(){
     const m=document.getElementById('tk-msg');
     if(m){
       tkMsgGen++;   // 使在途启动探针的异步回写失效，「已保留」为常驻提示（PRD FR-2）
-      m.innerHTML=state.tiandituKey
+      /* 常驻提示不带折叠行尾标：空输入不改动密钥（功能正常），收起后无需状态位 */
+      tkWrite(m, state.tiandituKey
         ?'<span style="color:var(--ink2)">输入为空，已保留本机已存密钥（尾号 '+esc(state.tiandituKey.slice(-4))+'）。要换新密钥请粘贴后再点「应用密钥」；要停用天地图请点「清除密钥」。</span>'
-        :'<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>';
+        :'<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>','');
     }
     return;
   }
@@ -4740,6 +4789,7 @@ function applyTk(){
   const cooling=(!changed && k && Date.now()<tdCooldownUntil);
   if(changed){ tdTried=''; tdCooldownUntil=0; }
   if(!cooling) tdTried='';
+  mapTkOpen=false;   // 输入完成自动收起：面板折为「已保存（尾号 …）」一行，反馈见折叠行尾标 + 展开面板
   renderMap();
   // 点击后立刻给出可见反馈（REQ-703 同理：不得静默无响应）；最终定性由瓦片级探针给出（FR-2）
   if(!cooling) tkMsg(k?'loading':'empty');
@@ -4748,6 +4798,8 @@ function clearTk(){
   /* FR-2：显式清除密钥——清空存储并立即降级为内置拓扑图（mapProvider 随 LS_MAP 持久化，重启不回弹）。
      同步清掉风控冷却与尝试记录，下次填入新密钥即可立即重试。 */
   state.tiandituKey=''; tdReady=false; tdTried=''; tdAttempted=false; tdCooldownUntil=0;
+  tkPhase=''; tkMsgHtml='';   // 清掉收起态尾标与面板内提示，避免残留旧结论
+  mapTkOpen=null;    // 清除后回到默认口径：无密钥自动展开引导填写
   saveMap();
   state.mapProvider='svg'; saveMap(); renderMap();
 }
@@ -4768,15 +4820,16 @@ function tkHelpDlg(){
   ov.querySelector('button').focus();
 }
 /* 密钥应用的各阶段反馈：loading/ok/empty/loadfail/drawfail。
-   script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。 */
+   script 标签拿不到 HTTP 状态码（天地图无 CORS 头），失败时给出排查清单而非单一定性。
+   全部经 tkWrite 写入：正文进面板内 #tk-msg，状态进折叠行尾标（收起态唯一可见的反馈）。 */
 function tkMsg(kind){
   const el=document.getElementById('tk-msg'); if(!el) return;
   const gen=++tkMsgGen;   // 新消息使一切在途异步回写失效
-  if(kind==='ok'){ tdTileProbe(el,gen); return; }
-  if(kind==='loading'){ el.innerHTML='<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>'; return; }
-  if(kind==='empty'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>'; return; }
-  if(kind==='drawfail'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>'; return; }
-  if(kind==='incomplete'){ el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。'; return; }
+  if(kind==='ok'){ tkWrite(el,'','loading'); tdTileProbe(el,gen); return; }
+  if(kind==='loading'){ tkWrite(el,'<span style="color:var(--ink2)">密钥已保存到本机，正在加载天地图 API…</span>','loading'); return; }
+  if(kind==='empty'){ tkWrite(el,'<span style="color:var(--error-text);font-weight:600">✗ 尚未填入密钥：请先在上方粘贴天地图 tk，再点「应用密钥」。</span>',''); return; }
+  if(kind==='drawfail'){ tkWrite(el,'<span style="color:var(--error-text);font-weight:600">✗ 密钥已通过校验，但底图渲染失败（天地图 API 兼容性问题），已降级为网架清单。</span>','fail'); return; }
+  if(kind==='incomplete'){ tkWrite(el,'<span style="color:var(--error-text);font-weight:600">✗ 天地图 SDK 已下载，但组件注册不完整（缺 T.Label 等叠加物）。</span>请刷新页面重试；若持续出现，说明 SDK 版本有变。已降级为网架清单。','fail'); return; }
   tkFailDiagnose(el,gen);
 }
 /* 探针失败自动降级（grid-map-device-fixes D4，推翻《PRD-体验问题修复-20260918》决策 D-2：
@@ -4809,11 +4862,11 @@ function tdTileProbe(el,gen){
     img.onload=()=>{
       if(!live()) return;
       if(img.naturalWidth>=256){
-        el.innerHTML='';            // 成功静默：不显示「密钥有效」提示，仅清空旧消息
+        tkWrite(el,'','');         // 成功静默：不显示「密钥有效」提示，仅清空旧消息与尾标
         state.tdDegradeNote=null;   // grid-map-device-fixes D4：有效密钥成功即清除降级说明
         return;
       }
-      el.innerHTML=failMsg('瓦片返回内容异常（未能解码为有效图片）。');
+      tkWrite(el,failMsg('瓦片返回内容异常（未能解码为有效图片）。'),'fail');
       tdDegrade('key');
     };
     img.onerror=()=>{
@@ -4821,10 +4874,10 @@ function tdTileProbe(el,gen){
       let probe;
       try{ probe=fetch(url,{mode:'no-cors'}); }catch(e){ probe=Promise.reject(e); }
       probe.then(
-        ()=>{ if(!live()) return; el.innerHTML=failMsg('瓦片请求被拒（密钥无效或被风控拦截）。'); tdDegrade('key'); },
-        ()=>{ if(!live()) return; el.innerHTML=failMsg('网络不可达，瓦片加载失败。'); tdDegrade('net'); });
+        ()=>{ if(!live()) return; tkWrite(el,failMsg('瓦片请求被拒（密钥无效或被风控拦截）。'),'fail'); tdDegrade('key'); },
+        ()=>{ if(!live()) return; tkWrite(el,failMsg('网络不可达，瓦片加载失败。'),'fail'); tdDegrade('net'); });
     };
-    el.innerHTML='<span style="color:var(--ink2)">SDK 已加载，正在验证瓦片…</span>';
+    tkWrite(el,'<span style="color:var(--ink2)">SDK 已加载，正在验证瓦片…</span>','loading');
     img.src=url;
   }catch(e){}
 }
@@ -4833,11 +4886,11 @@ function tdTileProbe(el,gen){
    fetch 失败＝传输层不通（代理/防火墙/DNS）。 */
 function tkFailDiagnose(el,gen){
   if(typeof location!=='undefined'&&location.protocol==='file:'){
-    el.innerHTML='<span style="color:var(--error-text);font-weight:600">✗ 天地图 API 加载失败。</span>当前为离线包（file://）环境，请依次检查：①设备网络能否访问 api.tianditu.gov.cn（关闭飞行模式/代理）；②密钥是否有效（可在天地图开放平台「我的应用」核对）；③仍失败时点上方「拓扑图」使用内置底图。已降级为网架清单。';
+    tkWrite(el,'<span style="color:var(--error-text);font-weight:600">✗ 天地图 API 加载失败。</span>当前为离线包（file://）环境，请依次检查：①设备网络能否访问 api.tianditu.gov.cn（关闭飞行模式/代理）；②密钥是否有效（可在天地图开放平台「我的应用」核对）；③仍失败时点上方「拓扑图」使用内置底图。已降级为网架清单。','fail');
     return;
   }
   if(!tdAttempted){ tkFailShow(el, tdFailKind, false); return; }  // 本次未发新请求：沿用上次诊断，不额外探测
-  el.innerHTML='<span style="color:var(--ink2)">✗ 天地图 API 加载失败，正在区分原因…</span>';
+  tkWrite(el,'<span style="color:var(--ink2)">✗ 天地图 API 加载失败，正在区分原因…</span>','loading');
   let probe;
   try{ probe=fetch('https://api.tianditu.gov.cn/api?v=4.0',{mode:'no-cors'}); }
   catch(e){ probe=Promise.reject(e); }
@@ -4846,12 +4899,12 @@ function tkFailDiagnose(el,gen){
 }
 function tkFailShow(el, kind, fresh){
   if(kind==='server'){
-    el.innerHTML = (!fresh && Date.now()<tdCooldownUntil)
+    tkWrite(el, (!fresh && Date.now()<tdCooldownUntil)
       ? '<span style="color:var(--error-text);font-weight:600">天地图风控拦截仍未解除。反复重试会延长封禁。</span><span style="color:var(--ink3)">已降级为网架清单。</span>'
-      : '<span style="color:var(--error-text);font-weight:600">天地图服务端拦截了本次请求/临时风控，请勿反复点击。</span><span style="color:var(--ink3)">已降级为网架清单。</span>';
+      : '<span style="color:var(--error-text);font-weight:600">天地图服务端拦截了本次请求/临时风控，请勿反复点击。</span><span style="color:var(--ink3)">已降级为网架清单。</span>','fail');
     return;
   }
-  el.innerHTML = '<span style="color:var(--error-text);font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。';
+  tkWrite(el,'<span style="color:var(--error-text);font-weight:600">✗ 本机网络到不了 api.tianditu.gov.cn。</span>若开了代理，请将其设为直连或暂时关闭。已降级为网架清单。','fail');
 }
 
 /* ===== src/app/ui/ai.js ===== */
