@@ -159,6 +159,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--blue);box-shadow:var(
 textarea{resize:vertical;min-height:64px;line-height:1.5;font-size:13px}
 /* 下拉箭头是 data: URI 里的 SVG（箭头色写死在 URI 中、不认 CSS 变量），整条 url(...) 放在令牌 --select-chevron 里，各主题各写一条 */
 select{background-image:var(--select-chevron);background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+/* 网架图页断面/选中方案下拉的「展开选项列表」钉 10.5px：原生弹层的选项字号不随收起态
+   select 的 font-size 走（用户口径：列表 10.5px，收起态控件保持各自原字号）。 */
+#i-mapsec option,#i-maproute option{font-size:10.5px}
 input[type=number]{font-variant-numeric:tabular-nums;font-family:var(--font-num)}
 input:disabled{cursor:not-allowed}
 /* FR-1（PRD-体验问题修复）三层防御之显示层与 CSS 兜底：
@@ -295,19 +298,25 @@ td b{font-weight:600}
 .prow:first-of-type{font-size:10.5px;color:var(--ink3)}
 .prow .pn{font-size:12px;font-weight:500}
 .prow input{padding:5px 6px;font-size:12px;border-radius:var(--radius-inline)}
-/* 高度预算 290→250（change: grid-map-declutter）：断面条收一行、图例行折叠后工具区变矮，
-   手机端地图相应增高；min-height 下限与宽屏（721 行）口径不动。 */
-#map-view,#fallback{width:100%;height:calc(100vh - 250px);min-height:320px;border-radius:var(--r);overflow:hidden;background:var(--map-fallback);border:var(--hairline) solid var(--line)}
+/* 高度预算 290→250→200→300（change: grid-map-declutter + 真机验收红框口径）：
+   地图容器最终定在约六成视口高（100vh-300px），三底图统一；文档流不变、页面滚动不受影响；
+   min-height 下限与宽屏（721 行）口径不动。 */
+#map-view,#fallback{width:100%;height:calc(100vh - 300px);min-height:320px;border-radius:var(--r);overflow:hidden;background:var(--map-fallback);border:var(--hairline) solid var(--line)}
 /* 地图 API（天地图/腾讯）内部图层 z-index 高达 200~1000+：容器若不建立层叠上下文，
    这些图层会在根层叠环境里压过 z-index:30 的固定底栏（容器延伸到视口底时必现）。
    contain:paint 把全部后代绘制（含 fixed）裁进容器并创建层叠上下文，z-index:0 兜底。 */
 #map-view{contain:paint;position:relative;z-index:0}
-/* REQ-603+702：svg 拓扑模式容器高度随绘制纵横比自适应（viewBox 660×430），
-   仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则。
+/* REQ-603+702：svg 拓扑模式容器与 qq/td 同一视口预算（真机验收红框口径：地图占约六成视口高），
+   画布 660×520 内容等比铺开、垂直居中；仅约束 .topo-svg；qq/td 底图模式仍走上方固定高规则。
    change: grid-map-device-fixes（D2）：拓扑模式接管触摸——touch-action:none 阻止浏览器
    手势（滚动/双指缩放页面）与自定义捏合冲突；user-select:none 防拖动时选中 SVG 文字。
    qq/td 模式不设 touch-action，保留底图原生手势。 */
-#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/430;touch-action:none;user-select:none;-webkit-user-select:none}
+#map-view.topo-svg{height:auto;min-height:0;aspect-ratio:660/520;touch-action:none;user-select:none;-webkit-user-select:none}
+/* 真机验收红框口径（≤720px 手机端）：拓扑与 qq/td 底图统一约六成视口高（画布 660×520 内容垂直居中，
+   非拉伸）；桌面端保持上一行的画布比例定高——1366×768 实测视口预算会把贴边省名（陕西）推出画布顶被裁。 */
+@media (max-width:720px){
+  #map-view.topo-svg{height:calc(100vh - 300px);min-height:320px;max-height:70vh}
+}
 #fallback{display:none;padding:16px;font-size:12px;color:var(--ink2);overflow:auto}
 .empty{text-align:center;padding:36px 20px;color:var(--ink3);font-size:12.5px;line-height:1.7}
 .empty-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px}
@@ -499,7 +508,7 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
   top:min(0px,calc(50% - 22px));bottom:min(0px,calc(50% - 22px));left:min(0px,calc(50% - 22px));right:min(0px,calc(50% - 22px));z-index:-1}
 /* 紧凑排布的扩区：相邻两个可点控件朝对方扩出的距离加起来，不超过两者间距减 2px（留给舍入），否则会盖住邻居、抢走它边缘的点击。
    · 纵向不扩、只横向扩：.hit-x（网架图换行排布的搜索结果，行距 6px；「复制链接」，下隔 10px 是底图切换；
-     「导出快照」，下隔 6px 是拓扑图）与所有复选框标签 .tg（网架图两行开关只隔 4px；「含越限」上邻路线卡、下邻展开按钮）；
+     「导出快照」在图层面板内右端、左邻「按区域着色」相隔 10px）与所有复选框标签 .tg（网架图两行开关只隔 4px；「含越限」上邻路线卡、下邻展开按钮）；
    · 限幅：小号分段按钮 .seg.small（网架图底图切换）上下各最多 4px；密钥显隐按钮叠在输入框右端，向左最多 4px，
      不越过输入框给它预留的 38px 右内边距、不抢打字区的点击。
    tests/e2e.mjs 的 UI-HIT 在控件外沿与扩区内逐点取样守住这几条；规范见 docs/12 第 7 节。 */

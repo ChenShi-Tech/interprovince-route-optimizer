@@ -952,7 +952,7 @@ const tests = [
         ok(r.diffPct <= 10, `${w}x${h}：容器与绘制高差 ${r.diffPct}%（应 ≤10%）`);
         summary.push(`${w}x${h} 容器高${r.boxH}px/越底${r.over}/裁字${r.clipped}/高差${r.diffPct}%`);
       }
-      // qq/td 底图模式容器高度行为不变：td 模式不应带 aspect-ratio，仍吃固定高 calc(100vh-290px)
+      // qq/td 底图模式容器高度行为不变：td 模式不应带 aspect-ratio，仍吃固定高 calc(100vh-200px)
       await page.setViewportSize({ width: 390, height: 844 });
       await page.click('#t-calc');
       await page.click('#t-map');
@@ -963,8 +963,8 @@ const tests = [
         return { aspect: cs.aspectRatio, h: parseFloat(cs.height) };
       });
       ok(td.aspect === 'auto', `td 模式容器不应有 aspect-ratio，实际 ${td.aspect}`);
-      // 高度预算 250px（change: grid-map-declutter，原 290px）
-      ok(Math.abs(td.h - (844 - 250)) <= 2, `td 模式容器高应≈594px（844-250），实际 ${td.h}px`);
+      // 高度预算 300px（真机验收红框口径，历 290→250→200→300）
+      ok(Math.abs(td.h - (844 - 300)) <= 2, `td 模式容器高应≈544px（844-300），实际 ${td.h}px`);
       set(summary.join('；') + `；td 模式 aspect=${td.aspect} 高=${td.h}px（固定高不变）`);
     },
   },
@@ -1616,7 +1616,7 @@ const tests = [
       ok(r.name, '应含段线路名标注（锦苏直流）');
       ok(r.seq, '应含段序号标注');
       ok(r.st, '应含站点名标注');
-      ok(r.vb && r.vb !== '0 0 660 430', `视野应聚焦路线，viewBox=${r.vb}`);
+      ok(r.vb && r.vb !== '0 0 660 520', `视野应聚焦路线，viewBox=${r.vb}`);
       set(`标注齐备；viewBox=${(r.vb || '').slice(0, 32)}…`);
     },
   },

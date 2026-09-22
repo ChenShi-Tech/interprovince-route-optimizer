@@ -407,7 +407,7 @@ function topoProj(){
   const lngs=ids.map(k=>PV[k].lng), lats=ids.map(k=>PV[k].lat);
   const lngMin=Math.min(...lngs)-1.2, lngMax=Math.max(...lngs)+1.2;
   const latMin=Math.min(...lats)-1.6, latMax=Math.max(...lats)+1.6;
-  const W=660,H=430,PAD=14;
+  const W=660,H=520,PAD=14;
   const kx=Math.cos((latMin+latMax)/2*Math.PI/180);
   const w=(lngMax-lngMin)*kx, hgt=(latMax-latMin);
   const s=Math.min((W-2*PAD)/w,(H-2*PAD)/hgt);
@@ -645,7 +645,7 @@ function mapSvgClick(e){
 const TOPO_DRAG_PX=6;
 function topoVBof(){
   if(state.mapView) return {...state.mapView};
-  return {...((topoViewMeta&&topoViewMeta.base)||{x:0,y:0,w:660,h:430})};
+  return {...((topoViewMeta&&topoViewMeta.base)||{x:0,y:0,w:660,h:520})};
 }
 function topoViewSet(vb){
   if(!topoViewMeta) return;
@@ -851,13 +851,13 @@ function renderMap(){
   const selR=(r&&r.length)?r[Math.min(state.sel,r.length-1)]:null;
   /* 断面信息单行收纳（change: grid-map-declutter，取代原琥珀色提示条）：断面名不重复
      （下拉已示当前值）；限额直读；note 收进「详情」展开（esc 原文输出，不改写不截断）；
-     成员通道未映射到本图时才追加红字警示；未选断面时仅拓扑图模式渲染本行（承载导出入口）。 */
+     未映射红字与限额/详情同行；极窄屏红字省略号兜底不换行。仅选中断面时渲染本行
+     （D8 增量：原行右端的「导出快照」移入图层面板，未选断面时不再出现孤行按钮行）。 */
   const secObj=state.mapSec?SEC.find(s=>s.id===state.mapSec):null;
   const secUnmapped=secObj&&!secMemberIds(state.mapSec).length;
-  const secRow=(secObj||mode==='svg')?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 6px;min-height:28px">
-      ${secObj?`${secUnmapped?'<span style="font-size:11px;color:var(--red)">成员通道未映射到本图</span>':''}<span style="font-size:11px;color:var(--ink2)">限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}</span>${secObj.note?`<button type="button" class="btn ghost hit-x" style="width:auto;padding:5px 10px;font-size:11px;display:inline-flex;align-items:center;gap:3px" aria-expanded="${mapSecNoteOpen}" aria-controls="map-sec-note" onclick="toggleSecNote(this)">详情<span style="display:inline-flex;transform:rotate(${mapSecNoteOpen?0:-90}deg)">${SVG_CHEV_D}</span></button>`:''}`:''}
-      ${mode==='svg'?`<button type="button" class="btn ghost hit-x" style="margin-left:auto;width:auto;padding:5px 10px;font-size:11px" onclick="exportTopo()">导出快照 PNG</button>`:''}
-    </div>${secObj&&secObj.note?`<div id="map-sec-note" style="font-size:11px;color:var(--ink3);line-height:1.6;margin:0 0 8px"${mapSecNoteOpen?'':' hidden'}>${esc(secObj.note)}</div>`:''}`:'';
+  const secRow=secObj?`<div style="display:flex;align-items:center;gap:6px;margin:0 0 6px;min-height:28px">
+      ${secUnmapped?'<span style="font-size:11px;color:var(--red);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">成员通道未映射到本图</span>':''}<span style="flex:none;font-size:11px;color:var(--ink2);white-space:nowrap">限额 ${esc(String(secObj.limit))} ${esc(secObj.unit||'MW')}</span>${secObj.note?`<button type="button" class="btn ghost hit-x" style="flex:none;width:auto;padding:3px 8px;font-size:10.5px;white-space:nowrap" aria-expanded="${mapSecNoteOpen}" aria-controls="map-sec-note" onclick="toggleSecNote(this)">详情</button>`:''}
+      </div>${secObj.note?`<div id="map-sec-note" style="font-size:11px;color:var(--ink3);line-height:1.6;margin:0 0 8px"${mapSecNoteOpen?'':' hidden'}>${esc(secObj.note)}</div>`:''}`:'';
   // 批次 B 增补：区域着色图例（动态，依据 REGION_OF 区域电网分区）
   const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
   const regionLegend=rPal?`<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink3);margin:0 0 8px;align-items:center">
@@ -877,7 +877,7 @@ function renderMap(){
     out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
   }
   if(mode==='td'){
-    out+=`<label class="f"><span style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" onclick="tkHelpDlg()">天地图密钥<i aria-hidden="true" style="display:inline-flex;color:var(--ink3)">${SVG_HELP}</i></span>
+    out+=`<label class="f"><span style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" onclick="event.preventDefault();tkHelpDlg()">天地图密钥<i aria-hidden="true" style="display:inline-flex;color:var(--ink3)">${SVG_HELP}</i></span>
       <div class="tk-wrap"><input id="i-tk" type="${tkVis?'text':'password'}" value="${esc(state.tiandituKey||'')}" placeholder="在天地图开放平台申请后粘贴到这里" autocomplete="off" spellcheck="false">
         <button type="button" class="tk-eye" onclick="toggleTkVis()" aria-label="${tkVis?'隐藏密钥':'显示密钥'}" title="${tkVis?'隐藏密钥':'显示密钥'}">${tkVis?SVG_EYE_OFF:SVG_EYE}</button>
       </div></label>
@@ -896,15 +896,17 @@ function renderMap(){
 
   /* 图例与「按区域着色」开关折叠收纳（change: grid-map-declutter）：原常驻图例行收进标题行
      「图层」入口下的默认收起面板（display 直翻，hidden 属性会被内联 flex 盖掉）；
-     开关 id/onchange 不变，区域着色开启时的色点图例（regionLegend）保持原位不进面板。 */
+     开关 id/onchange 不变，区域着色开启时的色点图例（regionLegend）保持原位不进面板。
+     D8 增量：「导出快照」从断面信息行右端移入面板内右端（仅拓扑图模式渲染，行为不变）。 */
   out+=`<div id="map-layer-panel" style="display:${mapLayerOpen?'flex':'none'};gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--ink2);margin:8px 0 4px;align-items:center">
       <span><i style="display:inline-block;width:16px;height:3px;background:var(--map-route);vertical-align:middle;margin-right:5px"></i>选中方案</span>
       <span style="margin-left:auto;white-space:nowrap;display:flex;align-items:center"><label class="tg" style="gap:4px"><input type="checkbox" id="i-mapregion" ${state.mapRegion?'checked':''} onchange="state.mapRegion=this.checked;renderMap()">按区域着色</label></span>
+      ${mode==='svg'?`<button type="button" class="btn ghost hit-x" style="flex:none;width:auto;padding:3px 8px;font-size:10.5px;white-space:nowrap" onclick="exportTopo()">导出快照</button>`:''}
     </div>
     ${regionLegend}
     <div style="display:flex;gap:8px;margin:0 0 8px;align-items:center">
-      <input id="map-q" type="search" placeholder="搜索站点 / 通道…" value="${esc(state.mapQ||'')}" oninput="mapQSearch(this.value)" style="flex:1;min-width:0;padding:7px 10px;font-size:12px">
-      <select id="i-mapsec" onchange="state.mapSec=this.value||null;renderMap()" style="flex:none;max-width:48%;padding:7px 24px 7px 8px;font-size:12px">
+      <input id="map-q" type="search" placeholder="搜索站点 / 通道…" value="${esc(state.mapQ||'')}" oninput="mapQSearch(this.value)" style="flex:1;min-width:0;height:32px;padding:7px 10px;font-size:12px">
+      <select id="i-mapsec" onchange="state.mapSec=this.value||null;renderMap()" style="flex:none;max-width:48%;height:32px;padding:7px 24px 7px 8px;font-size:12px">
         <option value="">按断面高亮…</option>
         ${SEC.map(s=>`<option value="${esc(s.id)}" ${state.mapSec===s.id?'selected':''}>${esc(s.n)}</option>`).join('')}
       </select>
@@ -996,7 +998,6 @@ function toggleRouteDetail(btn){
 }
 /* ---------- 断面备注「详情」展开/收起（change: grid-map-declutter） ----------
    口径同 toggleRouteDetail：只翻转 hidden 与 aria-expanded、同步会话标志，不重走 renderMap；
-   收起态箭头旋成右向（同 .route-seg-toggle 的 CSS 语义，这里用内联 transform），
    renderMap 重建时按 mapSecNoteOpen 恢复。 */
 function toggleSecNote(btn){
   const box=document.getElementById('map-sec-note');
@@ -1004,8 +1005,6 @@ function toggleSecNote(btn){
   const open=box.hasAttribute('hidden');
   if(open) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
   btn.setAttribute('aria-expanded',open?'true':'false');
-  const ic=btn.querySelector('span');
-  if(ic) ic.style.transform=open?'':'rotate(-90deg)';
   mapSecNoteOpen=open;
 }
 /* ---------- 「图层」面板开合（change: grid-map-declutter） ----------
