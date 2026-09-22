@@ -762,6 +762,24 @@ body.sheet-open{overflow:hidden}
    三元素中线一致。 */
 .note-icon-btn{display:inline-flex;align-items:center;justify-content:center;flex:none;border:0;background:none;padding:0;color:var(--ink3);cursor:pointer}
 .note-icon-btn svg{display:block}
+/* 「通道费用分布」表格截断单元格「悬浮/点按看全文」（用户要求，参照测算页价格组成条 data-tip + tabindex 口径：
+   web 悬浮、APK 触屏点按聚焦弹出）。截断收进单元格内 .cut（保留省略号），tip 挂 .cut 上——
+   全局 th,td 的 overflow:hidden 会把弹出层裁掉，不能挂 td 本身；弹层向下展开，首行由表头行垫底。
+   令牌全用价格组成条提示气泡同款（--tooltip-* / --radius-mini / --focus-ring-bar），三主题自动适配。 */
+#fee-sheet td{overflow:visible}
+#fee-sheet .cut{display:block;position:relative;outline:none;cursor:help;border-radius:var(--radius-mini)}
+#fee-sheet .cut-t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fee-sheet .cut-sub{display:block}
+#fee-sheet .cut:focus{box-shadow:var(--focus-ring-bar)}
+#fee-sheet .cut::after{content:attr(data-tip);display:none;position:absolute;left:0;top:calc(100% + 6px);background:var(--tooltip-bg);color:var(--tooltip-ink);font-size:11.5px;font-weight:500;line-height:1.4;padding:5px 9px;border-radius:var(--radius-mini);white-space:normal;width:max-content;max-width:240px;pointer-events:none;z-index:5;text-align:left}
+/* 悬浮显示只在真有鼠标的设备生效：触屏（hover:none）点按后 :hover 会黏住不消失，
+   只认 :focus（feeCutClick 主动 blur 收起）；tip-off 压制桌面「点收起后指针仍在格上」的悬浮，
+   指针移开（mouseout）即解除 */
+@media (hover:hover){
+  #fee-sheet .cut:hover::after{display:block}
+}
+#fee-sheet .cut:focus::after,#fee-sheet .cut:focus:hover::after{display:block}
+#fee-sheet .cut.tip-off::after{display:none}
 @media (min-width:600px){
   .sheet-panel{left:auto;top:0;width:400px;max-height:none;border-radius:var(--radius-sheet) 0 0 var(--radius-sheet);transform:translateX(100%);box-shadow:var(--shadow-sheet-side)}
   .sheet-grab{display:none}
@@ -1160,7 +1178,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-22 07:50';
+const BUILD_TIME='2026-09-22 08:38';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -4725,17 +4743,43 @@ function stationNoteDlg(){
    history.pushState（安卓返回键 / 浏览器后退先关面板，boot.js popstate 统一收口）+ 焦点管理。
    表格改为打开时才渲染，口径与原内联表格逐字一致。 */
 function feeTableHTML(){
+  /* 截断单元格「悬浮/点按看全文」（用户要求，参照测算页价格组成条 data-tip + tabindex 口径）：
+     web 悬浮、APK 触屏点按聚焦弹出全文；通道名恒带全文 tip（列宽随字体浮动，无法按字数判定截断），
+     输电价仅在带「（仅起点送出省）」标注时带 tip */
   return `<table><tr><th style="width:40%">通道</th><th>输电价 / 送出省参考价</th><th>物理估算线损</th><th>容量</th></tr>
   ${[...CH].filter(c=>c.t!=null).sort((a,b)=>a.t-b.t).map(c=>`<tr>
-    <td>${esc(c.n)}<br><span style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
-    <td>${fmt(c.t)}${c.regional?'（仅起点送出省）':''}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>`;
+    <td><span class="cut" tabindex="0" data-tip="${esc(c.n)}"><span class="cut-t">${esc(c.n)}</span></span><span class="cut-sub" style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
+    <td>${c.regional?`<span class="cut" tabindex="0" data-tip="${fmt(c.t)}（仅起点送出省）"><span class="cut-t">${fmt(c.t)}（仅起点送出省）</span></span>`:fmt(c.t)}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>`;
+}
+/* 「通道费用分布」截断单元格点按开关（用户要求：触屏上 focus 不因点空白移走，气泡会一直挂着）：
+   首次点按 → focusin 先于 click 发生（_feeJustFocused 标记），气泡弹出；同格再点 → 无新 focusin，
+   click 里识别为「第二次」主动 blur 收起；点格外空白 → 收起当前聚焦格。桌面 hover 看全文不受影响 */
+function feeCutFocusin(e){ if(e.target.classList&&e.target.classList.contains('cut')){ e.target._feeJustFocused=1; e.target.classList.remove('tip-off'); } }
+function feeCutMouseout(e){ const cut=e.target.closest&&e.target.closest('.cut'); if(cut) cut.classList.remove('tip-off'); }
+function feeCutClick(e){
+  const cut=e.target.closest('.cut');
+  if(!cut){
+    const cur=document.activeElement;
+    if(cur&&cur.classList&&cur.classList.contains('cut')) cur.blur();
+    return;
+  }
+  if(document.activeElement===cut&&!cut._feeJustFocused){ cut.blur(); cut.classList.add('tip-off'); }
+  cut._feeJustFocused=0;
 }
 function openFeeSheet(){
   const el=document.getElementById('fee-sheet');
   if(!el||_feeSheetOpen) return;
   _feeSheetOpen=true;
   const body=document.getElementById('fee-sheet-body');
-  if(body) body.innerHTML=feeTableHTML();
+  if(body){
+    body.innerHTML=feeTableHTML();
+    // 函数引用不变，重复 addEventListener 会被去重；面板反复开合不叠加
+    body.addEventListener('focusin',feeCutFocusin);
+    body.addEventListener('click',feeCutClick);
+    // mouseout 解除 tip-off（桌面点收起后指针移开，允许悬浮重新生效）；不接上这条，桌面上
+    // tip-off 后悬浮永不恢复
+    body.addEventListener('mouseout',feeCutMouseout);
+  }
   el.classList.add('open'); el.setAttribute('aria-hidden','false');
   document.body.classList.add('sheet-open');
   // 压一条历史记录：安卓返回键 / 浏览器后退时先关闭面板（同参数 / 外观弹层）

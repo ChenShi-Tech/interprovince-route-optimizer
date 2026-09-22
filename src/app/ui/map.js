@@ -1077,17 +1077,43 @@ function stationNoteDlg(){
    history.pushState（安卓返回键 / 浏览器后退先关面板，boot.js popstate 统一收口）+ 焦点管理。
    表格改为打开时才渲染，口径与原内联表格逐字一致。 */
 function feeTableHTML(){
+  /* 截断单元格「悬浮/点按看全文」（用户要求，参照测算页价格组成条 data-tip + tabindex 口径）：
+     web 悬浮、APK 触屏点按聚焦弹出全文；通道名恒带全文 tip（列宽随字体浮动，无法按字数判定截断），
+     输电价仅在带「（仅起点送出省）」标注时带 tip */
   return `<table><tr><th style="width:40%">通道</th><th>输电价 / 送出省参考价</th><th>物理估算线损</th><th>容量</th></tr>
   ${[...CH].filter(c=>c.t!=null).sort((a,b)=>a.t-b.t).map(c=>`<tr>
-    <td>${esc(c.n)}<br><span style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
-    <td>${fmt(c.t)}${c.regional?'（仅起点送出省）':''}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>`;
+    <td><span class="cut" tabindex="0" data-tip="${esc(c.n)}"><span class="cut-t">${esc(c.n)}</span></span><span class="cut-sub" style="color:var(--ink3);font-size:10.5px">${esc(N(c.from))}→${esc(N(c.to))}</span></td>
+    <td>${c.regional?`<span class="cut" tabindex="0" data-tip="${fmt(c.t)}（仅起点送出省）"><span class="cut-t">${fmt(c.t)}（仅起点送出省）</span></span>`:fmt(c.t)}</td><td>${fmt(c.loss,2)}%</td><td>${c.cap||'待补'}</td></tr>`).join('')}</table>`;
+}
+/* 「通道费用分布」截断单元格点按开关（用户要求：触屏上 focus 不因点空白移走，气泡会一直挂着）：
+   首次点按 → focusin 先于 click 发生（_feeJustFocused 标记），气泡弹出；同格再点 → 无新 focusin，
+   click 里识别为「第二次」主动 blur 收起；点格外空白 → 收起当前聚焦格。桌面 hover 看全文不受影响 */
+function feeCutFocusin(e){ if(e.target.classList&&e.target.classList.contains('cut')){ e.target._feeJustFocused=1; e.target.classList.remove('tip-off'); } }
+function feeCutMouseout(e){ const cut=e.target.closest&&e.target.closest('.cut'); if(cut) cut.classList.remove('tip-off'); }
+function feeCutClick(e){
+  const cut=e.target.closest('.cut');
+  if(!cut){
+    const cur=document.activeElement;
+    if(cur&&cur.classList&&cur.classList.contains('cut')) cur.blur();
+    return;
+  }
+  if(document.activeElement===cut&&!cut._feeJustFocused){ cut.blur(); cut.classList.add('tip-off'); }
+  cut._feeJustFocused=0;
 }
 function openFeeSheet(){
   const el=document.getElementById('fee-sheet');
   if(!el||_feeSheetOpen) return;
   _feeSheetOpen=true;
   const body=document.getElementById('fee-sheet-body');
-  if(body) body.innerHTML=feeTableHTML();
+  if(body){
+    body.innerHTML=feeTableHTML();
+    // 函数引用不变，重复 addEventListener 会被去重；面板反复开合不叠加
+    body.addEventListener('focusin',feeCutFocusin);
+    body.addEventListener('click',feeCutClick);
+    // mouseout 解除 tip-off（桌面点收起后指针移开，允许悬浮重新生效）；不接上这条，桌面上
+    // tip-off 后悬浮永不恢复
+    body.addEventListener('mouseout',feeCutMouseout);
+  }
   el.classList.add('open'); el.setAttribute('aria-hidden','false');
   document.body.classList.add('sheet-open');
   // 压一条历史记录：安卓返回键 / 浏览器后退时先关闭面板（同参数 / 外观弹层）
