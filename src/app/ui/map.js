@@ -954,7 +954,7 @@ function renderMap(){
        点开才见逐段明细；展开态按 mapRouteDetailOpen 恢复（切方案/切底图/切区域着色重建不弹回），
        切换只翻转 DOM 不重走 renderMap（见 toggleRouteDetail），避免整图重绘。 */
     out+=`<div style="margin-top:11px;padding-top:11px;border-top:var(--hairline) solid var(--line2)">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span style="font-size:12.5px;font-weight:600;flex:none">选中方案</span>
         <select id="i-maproute" onchange="mapPick(+this.value)" style="flex:1;min-width:0;padding:6px 26px 6px 9px;font-size:11px;font-weight:600">
           ${items.map(it=>`<option value="${it.i}" ${it.i===cur?'selected':''}>${esc(routeOptLabel(it))}</option>`).join('')}
