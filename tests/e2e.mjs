@@ -17,6 +17,10 @@ fs.mkdirSync(SHOTS, { recursive: true });
 
 const ok = (cond, msg) => { if (!cond) throw new Error(msg); };
 const results = [];
+/* R- 真实输入家族守门状态（赖批复①）：R-ENV-01 环境自检的结果。
+   null=尚未自检；true=通过；false=失败——此时后续 R- 用例硬 fail「环境自检未过」进报告，
+   不得 skip、不得空跑。仅约束真实输入家族（R-ENV/R-MAP/R-MF/R-DC-），不影响既有 R-01~R-04 响应式用例。 */
+let touchEnvOk = null;
 
 async function runTest(browser, def) {
   const rec = { id: def.id, section: def.section, title: def.title, steps: def.steps, expected: def.expected, actual: '', pass: false, skipped: false, skipReason: def.skip || '', shot: '', logs: { console: [], pageErrors: [], failedReq: [], badStatus: [] } };
@@ -28,7 +32,9 @@ async function runTest(browser, def) {
     console.log(`⏭️  ${def.id} ${def.title}（未实现，不计入通过率）`);
     return;
   }
-  const context = await browser.newContext({ viewport: def.viewport || { width: 390, height: 844 } });
+  // 真实输入设施（grid-map-real-input-e2e）：用例级 touch:true 才注入 hasTouch 上下文，
+  // 默认不开——非 touch 用例的 options 与改造前逐字节一致，既有 93 条用例零影响。
+  const context = await browser.newContext({ viewport: def.viewport || { width: 390, height: 844 }, ...(def.touch ? { hasTouch: true } : {}) });
   // FR-3 新手导览预置「已读」：导览仅在安装后首启弹出，若不预置会闯进每个用例的点击路径与截图。
   // 导览自身行为由 UX-06 专项验证（清除该键后重载触发首启分支）。
   await context.addInitScript(() => { try { localStorage.setItem('iproute.v2.guide', '1'); } catch (e) {} });
@@ -40,6 +46,10 @@ async function runTest(browser, def) {
   page.on('response', r => { if (r.status() >= 400) logs.badStatus.push(`${r.status()} ${r.url().slice(0, 90)}`); });
 
   try {
+    // 守门（赖批复①）：环境自检未过时，R- 真实输入用例立即硬 fail，报告呈现原因，不 skip 不空跑。
+    if (touchEnvOk === false && /^R-(ENV|MAP|MF|DC)-/.test(def.id) && def.id !== 'R-ENV-01') {
+      throw new Error('环境自检未过（R-ENV-01 失败），真实输入用例按硬 fail 口径终止，不空跑');
+    }
     await def.run(page, s => { rec.actual = s; });
     if (!rec.actual) rec.actual = '通过';
     rec.pass = true;
@@ -47,6 +57,7 @@ async function runTest(browser, def) {
     rec.pass = false;
     rec.actual = (rec.actual ? rec.actual + ' ｜ ' : '') + '❌ ' + String(e.message || e).slice(0, 300);
   }
+  if (def.id === 'R-ENV-01') touchEnvOk = rec.pass;   // 守门结果落账，供后续 R- 用例判定
   try {
     await page.screenshot({ path: path.join(SHOTS, def.id + '.png'), fullPage: true });
     rec.shot = `shots/${def.id}.png`;
@@ -150,6 +161,322 @@ const hitAudit = (page, scope) => page.evaluate(async (scope) => {
 
 const G = BASE, DCL = { waitUntil: 'domcontentloaded', timeout: 20000 };
 const tests = [
+
+  /* ================= 真实输入（grid-map-real-input-e2e） =================
+     R-ENV-01 为家族守门用例（赖批复①：自检硬 fail 进报告，不得 skip；
+     它 fail 则后续全部 R- 用例以「环境自检未过」硬 fail，不空跑），
+     故置于 tests 数组首位，保证任何位置插入的 R- 用例都排在其后。 */
+  {
+    id: 'R-ENV-01', section: '真实输入', title: '触摸管线环境自检（守门：headless 下 hasTouch + touchscreen.tap 真实可用）',
+    steps: 'touch:true 建 hasTouch 上下文 → addInitScript 在 document 预挂 touchstart/touchend/click 记录器（含 isTrusted 等触摸管线证据）→ 打开首页 → touchscreen.tap 点击 #app 中心',
+    expected: 'touchstart/touchend/click 三事件均收到且 isTrusted=true；touch 事件为 TouchEvent 并带真实 Touch 点（identifier/radiusX）；点击处理器被触发。自检失败必须 fail 进报告，不得静默 skip',
+    touch: true,
+    async run(page, set) {
+      await page.addInitScript(() => {
+        window.__envTap = [];
+        const rec = (type) => (e) => window.__envTap.push({
+          type,
+          trusted: e.isTrusted,
+          isTouch: typeof TouchEvent !== 'undefined' && e instanceof TouchEvent,
+          id: e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].identifier : null,
+          radiusX: e.changedTouches && e.changedTouches[0] ? e.changedTouches[0].radiusX : null,
+        });
+        document.addEventListener('touchstart', rec('touchstart'), true);
+        document.addEventListener('touchend', rec('touchend'), true);
+        document.addEventListener('click', rec('click'), true);
+      });
+      await page.goto(G, DCL);
+      ok(await page.evaluate(() => 'ontouchstart' in window), 'hasTouch 上下文应暴露 ontouchstart');
+      const box = await page.locator('#app').boundingBox();
+      ok(box, '找不到 #app 点击目标');
+      const x = box.x + box.width / 2, y = box.y + Math.min(box.height / 2, 400);
+      ok(y < 844, `tap 目标 y=${Math.round(y)} 超出视口`);
+      await page.touchscreen.tap(x, y);
+      await page.waitForTimeout(300);
+      const evs = await page.evaluate(() => window.__envTap);
+      const has = (t) => evs.find(e => e.type === t);
+      const ts = has('touchstart'), te = has('touchend'), ck = has('click');
+      ok(ts, `未收到 touchstart，实际 ${JSON.stringify(evs)}`);
+      ok(te, `未收到 touchend，实际 ${JSON.stringify(evs)}`);
+      ok(ck, `未收到 click（触摸未合成点击），实际 ${JSON.stringify(evs)}`);
+      ok(ts.trusted === true && ts.isTouch && ts.id === 0 && ts.radiusX !== null,
+        `touchstart 非真实触摸管线（isTrusted/TouchEvent/Touch 点证据不足）：${JSON.stringify(ts)}`);
+      ok(te.trusted === true && te.isTouch && te.id === 0,
+        `touchend 非真实触摸管线（isTrusted/TouchEvent/Touch 点证据不足）：${JSON.stringify(te)}`);
+      set(`touchstart/touchend/click 均收到且 isTrusted=true，Touch 点 identifier=0、radiusX=${ts.radiusX}；点击处理器已触发`);
+    },
+  },
+
+  {
+    id: 'R-MAP-01', section: '真实输入', title: '真实触摸点击通道段线（替代 MAP-03 合成版）',
+    steps: 'hasTouch 上下文打开网架图 → 沿选中段线 polyline[data-chan] 扫描线中附近的首个未被标注覆盖的笔画点（elementFromPoint 验证命中 data-chan）→ touchscreen.tap → 再 tap 一次解除（对齐 MAP-03 再点恢复）',
+    expected: '与 MAP-03 完全对齐：tap 后 state.mustHave 含该通道、测算页 i-chan 同步、路线图重绘；再 tap 恢复',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      // change: grid-map-single-route-and-fixes：候选/全网架层退场后，点击热区仅剩选中方案通道段（polyline）
+      await page.waitForSelector('#map-view svg polyline[data-chan]');
+      // 真实 tap 必须打在段线笔画像素上：线中点常被段名 <text> 覆盖（该文本暂无 data-chan，属 data-chan 补齐范畴），
+      // 沿折线按 5% 步长扫描，取 elementFromPoint 确认命中本段 data-chan 的首个屏幕点
+      const pick = () => page.evaluate(() => {
+        const l = document.querySelector('#map-view svg polyline[data-chan]');
+        const cid = l.getAttribute('data-chan');
+        const total = l.getTotalLength();
+        const fr = [0.5];                                   // 从中点向两侧 5% 步长交替扫描
+        for (let d = 0.05; d <= 0.4; d += 0.05) fr.push(0.5 - d, 0.5 + d);
+        for (const f of fr) {
+          const p = l.getPointAtLength(total * f);
+          const s = new DOMPoint(p.x, p.y).matrixTransform(l.getScreenCTM());
+          if (s.x < 0 || s.x >= 390 || s.y < 0 || s.y >= 844) continue;
+          const hit = document.elementFromPoint(s.x, s.y);
+          if (hit && hit.closest && hit.closest(`#map-view svg polyline[data-chan="${cid}"]`) === l) return { x: s.x, y: s.y, cid, f };
+        }
+        return null;
+      });
+      const pt = await pick();
+      ok(pt, '段线扫描未找到未被标注覆盖的笔画点（线体被浮层/标注完全盖住）');
+      await page.touchscreen.tap(pt.x, pt.y);
+      await page.waitForTimeout(300);
+      ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([pt.cid]), `mustHave 应为 [${pt.cid}]`);
+      const chan = await page.evaluate(() => (document.getElementById('i-chan') || {}).value);
+      ok(chan === pt.cid, `测算页通道筛选应同步为 ${pt.cid}，实际 ${chan}`);
+      const pt2 = await pick();   // 过滤后路线图重绘，重新取点再 tap（对齐 MAP-03 再点恢复）
+      ok(pt2, '二次 tap 前未找到可命中笔画点');
+      await page.touchscreen.tap(pt2.x, pt2.y);
+      await page.waitForTimeout(300);
+      ok((await page.evaluate(() => state.mustHave.length)) === 0, '再次 tap 应解除过滤');
+      set(`真实 tap ${pt.cid}（线体 ${(pt.f * 100) | 0}% 处）→ mustHave 联动并同步测算页；再 tap 解除`);
+    },
+  },
+  {
+    id: 'R-MAP-02', section: '真实输入', title: '真实触摸点击站点（替代 MAP-04 合成版）',
+    steps: 'hasTouch 上下文打开网架图 → 取首个 [data-st] 站点标记 boundingBox 中心 → touchscreen.tap',
+    expected: '与 MAP-04 完全对齐：浮层显示站名与省份/站址信息，可关闭',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg [data-st]');
+      const st = await page.evaluate(() => document.querySelector('#map-view svg [data-st]').getAttribute('data-st'));
+      // 站点标记为 fill:none 的描边圆（boundingBox 中心是未绘制空洞，命中测试会穿透），
+      // 且 [data-st] 同时挂在圆与站名 text 上——取圆元素，沿笔画环扫描 elementFromPoint 确认命中的点
+      const pt = await page.evaluate((id) => {
+        const c = document.querySelector(`#map-view svg circle[data-st="${id}"]`);
+        if (!c) return null;
+        const b = c.getBoundingClientRect();
+        const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+        const r = Math.min(b.width, b.height) / 2;   // 笔画环中径附近
+        for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2, Math.PI / 4, -Math.PI / 4, 3 * Math.PI / 4, -3 * Math.PI / 4]) {
+          const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+          if (x < 0 || x >= 390 || y < 0 || y >= 844) continue;
+          const hit = document.elementFromPoint(x, y);
+          if (hit && hit.closest && hit.closest(`#map-view svg circle[data-st="${id}"]`) === c) return { x, y };
+        }
+        return null;
+      }, st);
+      ok(pt, '站点环扫描未找到可命中的笔画点');
+      await page.touchscreen.tap(pt.x, pt.y);
+      await page.waitForTimeout(150);
+      const pop = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      ok(pop.trim().length > 5, `浮层应含站点信息，实际「${pop.slice(0, 40)}」`);
+      await page.evaluate(() => document.querySelector('#map-pop button').click());
+      ok((await page.evaluate(() => document.getElementById('map-pop').innerText.trim())) === '', '关闭后浮层应清空');
+      set(`站点浮层（真实 tap）：${pop.slice(0, 30)}…`);
+    },
+  },
+  {
+    id: 'R-MAP-03', section: '真实输入', title: '真实触摸站点浮层内容（替代 P1-06 合成版）',
+    steps: 'hasTouch 上下文打开网架图 → 展开图层面板开「按区域着色」→ 检查区域环与图例 → 真实 tap 途经站点 → 检查浮层区域归属 → 关闭恢复（对齐 P1-06 前置与断言）',
+    expected: '与 P1-06 完全对齐：开启后节点出现多色区域环、图例列出六大区域、站点浮层含区域归属；关闭后环消失、恢复默认分层显示',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      // 图层面板默认收起（grid-map-declutter）：先展开「图层」再操作开关，开关行为不变
+      await page.click('#map-layer-btn');
+      await page.locator('#i-mapregion').check();
+      await page.waitForTimeout(300);
+      const r1 = await page.evaluate(() => {
+        const rings = [...document.querySelectorAll('#map-view svg circle[fill="none"]')];
+        // 区域环颜色是令牌引用 var(--map-region-N)，按计算后的实际颜色去重
+        const colors = [...new Set(rings.map(c => getComputedStyle(c).stroke))];
+        const legend = document.getElementById('v-map').innerText;
+        return {
+          n: rings.length, colors,
+          hasAll: ['华北', '华东', '华中', '东北', '西北', '南方'].every(x => legend.includes(x)),
+          basis: legend.includes('区域电网分区'),
+        };
+      });
+      ok(r1.n >= 20, `区域着色环应覆盖省份节点（实际 ${r1.n} 个）`);
+      ok(r1.colors.length >= 6, `应出现 ≥6 种区域颜色，实际 ${r1.colors.length} 色`);
+      ok(r1.hasAll, '图例应列出六大区域');
+      ok(r1.basis, '图例应标注着色依据（区域电网分区）');
+      const st = await page.evaluate(() => document.querySelector('#map-view svg [data-st]').getAttribute('data-st'));
+      // 同 R-MAP-02：站点为 fill:none 描边圆，取笔画环上 elementFromPoint 确认命中的点（[data-st] 圆/text 双挂，锁定 circle）
+      const pt = await page.evaluate((id) => {
+        const c = document.querySelector(`#map-view svg circle[data-st="${id}"]`);
+        if (!c) return null;
+        const b = c.getBoundingClientRect();
+        const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+        const r = Math.min(b.width, b.height) / 2;
+        for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2, Math.PI / 4, -Math.PI / 4, 3 * Math.PI / 4, -3 * Math.PI / 4]) {
+          const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+          if (x < 0 || x >= 390 || y < 0 || y >= 844) continue;
+          const hit = document.elementFromPoint(x, y);
+          if (hit && hit.closest && hit.closest(`#map-view svg circle[data-st="${id}"]`) === c) return { x, y };
+        }
+        return null;
+      }, st);
+      ok(pt, '站点环扫描未找到可命中的笔画点');
+      await page.touchscreen.tap(pt.x, pt.y);
+      await page.waitForTimeout(150);
+      ok((await page.evaluate(() => document.getElementById('map-pop').innerText)).includes('区域归属'), '站点浮层应含区域归属');
+      await page.locator('#i-mapregion').uncheck();
+      await page.waitForTimeout(300);
+      const n2 = await page.evaluate(() => [...document.querySelectorAll('#map-view svg circle[fill="none"]')].length);
+      ok(n2 === 0, `关闭后区域环应消失，实际 ${n2} 个`);
+      set(`真实 tap：区域环 ${r1.n} 个 / ${r1.colors.length} 色；六区域图例+依据在场；浮层含归属；关闭恢复默认`);
+    },
+  },
+
+  {
+    id: 'R-MF-01', section: '真实输入', title: '真实触摸拖动地图（替代 MF-02 合成 PointerEvent 拖动）',
+    steps: 'hasTouch 上下文打开网架图 → CDP Input.dispatchTouchEvent 真实 touchStart + 多段 touchMove（300,200→180,200，>6px 阈值）+ touchEnd → 抬指前后分别检查',
+    expected: '与 MF-02 现行拖动断言对齐：拖动标记 topoDragged 超阈值置位、viewBox 平移且 state.mapView 置位；拖动不得触发通道必经过滤',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      const vb0 = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      // 真实触摸拖动只能走 CDP（Playwright touchscreen 仅暴露 tap）；
+      // 触摸事件经 Chromium 派生 pointer 事件送达 attachTopoGestures（map.js），#map-view.topo-svg 已 touch-action:none 不会被浏览器接管
+      const cdp = await page.context().newCDPSession(page);
+      const mv = (t, x, y) => cdp.send('Input.dispatchTouchEvent', { type: t, touchPoints: x === null ? [] : [{ x, y, id: 1 }] });
+      await mv('touchStart', 300, 200);
+      await mv('touchMove', 280, 200);          // 位移 20px > TOPO_DRAG_PX 6px
+      // 移动任务已处理、抬指未发：此刻读拖动标志（evaluate 排在输入任务之后，确定性的）
+      const flagged = await page.evaluate(() => typeof topoDragged !== 'undefined' && topoDragged === true);
+      for (const x of [260, 240, 220, 180]) await mv('touchMove', x, 200);
+      await mv('touchEnd', null);
+      await page.waitForTimeout(150);
+      const r1 = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: !!state.mapView, mh: state.mustHave.length }));
+      ok(flagged, '拖动标志 topoDragged 应在移动超阈值后、抬指前置位');
+      ok(r1.mv && r1.vb !== vb0, `单指拖动应平移视野：${vb0.slice(0, 20)}… → ${r1.vb.slice(0, 20)}…`);
+      ok(r1.mh === 0, '拖动不得触发通道必经过滤');
+      set(`真实拖动 ${vb0.slice(0, 16)}…→${r1.vb.slice(0, 16)}…；topoDragged 置位断言通过；mustHave=0`);
+    },
+  },
+  {
+    id: 'R-MF-02', section: '真实输入', title: '拖动结束后真实 tap 不误触（替代 MF-02 自合成 click，核心用例）',
+    steps: '真实拖动结束（touchEnd）后**立即**在段线笔画点真实 tap（不等待复位）→ 双向断言无点击行为 → 静置后再 tap 一次做正向对照',
+    expected: '与 MF-02「拖动后的 click 应被吞掉」语义对齐：tap 的 touch 事件合成完整 mouse/click 序列（headless msedge 实测环境事实），mapSvgClick 因 topoDragged 早退（map.js:641）不触发——通道过滤状态与浮层状态均不变；复位后普通 tap 照常触发过滤',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg polyline[data-chan]');
+      // 同 R-MAP-01：取段线上未被标注覆盖、elementFromPoint 确认命中的笔画点
+      const pick = () => page.evaluate(() => {
+        const l = document.querySelector('#map-view svg polyline[data-chan]');
+        const cid = l.getAttribute('data-chan');
+        const total = l.getTotalLength();
+        const fr = [0.5];
+        for (let d = 0.05; d <= 0.4; d += 0.05) fr.push(0.5 - d, 0.5 + d);
+        for (const f of fr) {
+          const p = l.getPointAtLength(total * f);
+          const s = new DOMPoint(p.x, p.y).matrixTransform(l.getScreenCTM());
+          if (s.x < 0 || s.x >= 390 || s.y < 0 || s.y >= 844) continue;
+          const hit = document.elementFromPoint(s.x, s.y);
+          if (hit && hit.closest && hit.closest(`#map-view svg polyline[data-chan="${cid}"]`) === l) return { x: s.x, y: s.y, cid };
+        }
+        return null;
+      });
+      const pt = await pick();
+      ok(pt, '段线扫描未找到可命中笔画点');
+      const cdp = await page.context().newCDPSession(page);
+      const mv = (t, x, y) => cdp.send('Input.dispatchTouchEvent', { type: t, touchPoints: x === null ? [] : [{ x, y, id: 1 }] });
+      // 真实拖动（300→180），touchEnd 后不等待立即 tap——吞击窗口内
+      await mv('touchStart', 300, 200);
+      for (const x of [280, 260, 240, 220, 200, 180]) await mv('touchMove', x, 200);
+      await mv('touchEnd', null);
+      const pop0 = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      await page.touchscreen.tap(pt.x, pt.y);   // 真实 tap：合成 mouse/click，必须被 topoDragged 吞掉
+      await page.waitForTimeout(300);
+      const after = await page.evaluate(() => ({ mh: state.mustHave.length, pop: document.getElementById('map-pop').innerText }));
+      ok(after.mh === 0, `拖动后立即 tap 不得触发通道过滤，mustHave 实际 ${JSON.stringify(after.mh === 0 ? 0 : state.mustHave)}`);
+      ok(after.pop === pop0, '拖动后立即 tap 不得改变浮层状态');
+      // 正向对照：吞击标志复位（setTimeout 0 + click 派发后）后，重新取点普通 tap 照常触发过滤
+      // （拖动平移了视野，tap 前必须按当前线体重取坐标，同 R-MAP-01 二次 tap 口径）
+      await page.waitForTimeout(600);
+      const pt2 = await pick();
+      ok(pt2, '复位后未找到可命中笔画点');
+      await page.touchscreen.tap(pt2.x, pt2.y);
+      await page.waitForTimeout(300);
+      ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([pt2.cid]), '复位后普通 tap 仍应触发必经过滤（点击能力未被破坏）');
+      set(`拖动后立即 tap 被吞（过滤/浮层均不变）；复位后同点 tap → mustHave=[${pt2.cid}]`);
+    },
+  },
+  {
+    id: 'R-MF-03', section: '真实输入', title: '真实双击复位（替代 MF-02 合成 dblclick，形态甲-CDP）',
+    steps: '真实拖动制造非基准视野 → 复位窗口后 CDP 连发两次真实 tap（间隔 80ms，同一点）→ 断言复位',
+    expected: '与 MF-02 现行合成 dblclick 语义一致：dblclick 到达且视图复位回聚焦视野（state.mapView=null、viewBox=初始 vb0）',
+    touch: true,
+    async run(page, set) {
+      // 形态甲-CDP（用户 2026-09-23 裁定，不降级）：CDP Input.dispatchTouchEvent 连发两次真实 tap。
+      // 实测依据（2026-09-23 前置实验）：CDP×2 @50/80/120ms 各 20/20、touchscreen.tap×2 @80ms 20/20、
+      // WorkBuddy 独立复跑 CDP×2 @80ms 10/10 出 dblclick；事件序列全轮统一（两 tap 各产 touch 对+合成 mouse 对+click，第二次后补发 dblclick，isTrusted 全真）。
+      await page.addInitScript(() => {
+        // document 捕获计数（#map-view 由应用 JS 在 DOMContentLoaded 之后才渲染，不能届时再取元素挂监听）
+        window.__dbl = 0;
+        document.addEventListener('dblclick', (e) => { if (e.target.closest && e.target.closest('#map-view')) window.__dbl++; }, true);
+      });
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg');
+      const vb0 = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
+      const cdp = await page.context().newCDPSession(page);
+      const mv = (t, x, y) => cdp.send('Input.dispatchTouchEvent', { type: t, touchPoints: x === null ? [] : [{ x, y, id: 1 }] });
+      // 真实拖动改变视野（复位断言的前提）
+      await mv('touchStart', 300, 200);
+      for (const x of [280, 260, 240, 220, 200, 180]) await mv('touchMove', x, 200);
+      await mv('touchEnd', null);
+      await page.waitForTimeout(150);
+      const dragged = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: !!state.mapView }));
+      ok(dragged.mv && dragged.vb !== vb0, `前置拖动应先改变视野：${vb0.slice(0, 20)}… → ${dragged.vb.slice(0, 20)}…`);
+      // 取图上空白语义点：无 data-st/data-chan 归属且离站点 >15px（坐标兜底阈值≈11px 屏幕距离），
+      // 避免两次 tap 的 click 触发过滤或弹站——图内 elementFromPoint 不会命中 svg 本体（背景 rect/走廊全覆盖），
+      // 故按「不归属任何可交互属性 + 离站距离」判定（2026-09-23 实测：默认视野仅 2 个站点标记）
+      const blank = await page.evaluate(() => {
+        const svg = document.querySelector('#map-view svg');
+        const b = svg.getBoundingClientRect();
+        const sts = [...document.querySelectorAll('#map-view svg circle[data-st]')].map(c => { const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+        let best = null, bestD = 0;
+        for (let y = b.top + 6; y < b.bottom - 6; y += 6) for (let x = b.left + 6; x < b.right - 6; x += 6) {
+          const hit = document.elementFromPoint(x, y);
+          if (!hit || !hit.closest || hit.closest('[data-st],[data-chan]')) continue;
+          const d = sts.length ? Math.min(...sts.map(s => Math.hypot(s.x - x, s.y - y))) : 1e9;
+          if (d > 15 && d > bestD) { best = { x, y }; bestD = d; }
+        }
+        return best;
+      });
+      ok(blank, '未找到距站点 15px 以上的无可交互属性空白点');
+      await page.waitForTimeout(500);   // 等吞击标志复位，保证双击序列的 click 走正常路径
+      await mv('touchStart', blank.x, blank.y);
+      await mv('touchEnd', null);
+      await page.waitForTimeout(80);    // 实测双击量级间隔取中间值（50/80/120 均 20/20 稳定）
+      await mv('touchStart', blank.x, blank.y);
+      await mv('touchEnd', null);
+      await page.waitForTimeout(400);   // 等 dblclick 派发 + topoViewReset 的 rAF 重画落账
+      const nDbl = await page.evaluate(() => window.__dbl);
+      ok(nDbl === 1, `两次真实 tap 应合成 1 次 dblclick，实际 ${nDbl}`);
+      const r = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: state.mapView }));
+      ok(r.mv === null && r.vb === vb0, `双击应复位到聚焦视野：${r.vb.slice(0, 24)}…（mapView=${JSON.stringify(r.mv)}）`);
+      set(`CDP 双击（80ms 间隔）：dblclick×${nDbl}；${dragged.vb.slice(0, 16)}… 复位回 ${r.vb.slice(0, 16)}…`);
+    },
+  },
 
   /* ================= 主流程 ================= */
   {
