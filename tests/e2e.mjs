@@ -468,6 +468,63 @@ const tests = [
       ok(!focusLost, '重渲染导致输入框焦点丢失（renderCalc 整体替换 DOM），连续步进被打断');
     },
   },
+  {
+    id: 'I-07', section: '交互', title: '「通道费率」口径说明问号：弹窗正文与三种关闭方式',
+    steps: '费率库 Tab 点「通道费率」旁问号；分别用 Esc / 点遮罩 / 点「知道了」关闭；再切其它 Tab 与整页重建复查',
+    expected: '问号紧跟标题文字且与文字中线对齐（未被 space-between 顶到行中间）；弹窗正文与原文逐字一致且无底色；三种方式均可关闭且不残留；'
+      + '页顶不再有该常驻提示块；其它 Tab 不渲染问号；renderLib 整页重建后问号仍在且只有一颗',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-lib');
+      await page.waitForSelector('.lib-q-btn');
+      const g = await page.evaluate(() => {
+        const box = el => el.getBoundingClientRect();
+        const main = document.querySelector('#v-lib .sec-title .st-main');
+        const btn = document.querySelector('#v-lib .lib-q-btn');
+        const hint = document.querySelector('#v-lib .sec-title .hint');
+        const a = box(main), b = box(btn), c = box(hint);
+        return { text: main.textContent.trim(), mleft: a.left, bl: b.left, br: b.right, bcy: (b.top + b.bottom) / 2, mcy: (a.top + a.bottom) / 2, hl: c.left, warnTop: document.querySelectorAll('#v-lib > .warn').length };
+      });
+      ok(g.text.startsWith('通道费率'), `标题行首应为「通道费率」，实际「${g.text}」`);
+      ok(g.bl > g.mleft && g.hl > g.br, '问号应紧跟标题文字右侧、条数提示仍在其右（未被 space-between 顶到行中间）');
+      ok(Math.abs(g.bcy - g.mcy) < 3, `问号与标题文字应中线对齐，Δcy=${(g.bcy - g.mcy).toFixed(1)}`);
+      ok(g.warnTop === 0, '页顶常驻提示块应已移除（改由问号承载）');
+      // 页面模板里已有多个 [role=dialog]（参数/外观/费用分布 sheet-panel），按内容定位本弹窗（同 tools/ui-shots.mjs 口径）
+      const cnt = () => page.evaluate(() => [...document.querySelectorAll('[role=dialog]')].filter(d => d.textContent.includes('费率口径说明')).length);
+      const waitDlg = () => page.waitForFunction(() => [...document.querySelectorAll('[role=dialog]')].some(d => d.textContent.includes('费率口径说明')));
+      const EXPECT = '本库为按任务提示词实际检索所得。发改委核定类有正式文号与原文摘录可回溯；国网披露类为交易中心公开的结算价格表（含报备价）；区域/送出省口径为第四监管周期规定的省间互济送出省输电价格；待补为估算值，须替换。修改即时生效并保存在本机。';
+      await page.click('.lib-q-btn');
+      await waitDlg();
+      const d = await page.evaluate(() => {
+        const el = [...document.querySelectorAll('[role=dialog]')].find(x => x.textContent.includes('费率口径说明'));
+        return { body: el.querySelector('.lib-note').textContent.trim(), btns: [...el.querySelectorAll('button')].map(b => b.textContent.trim()), bg: getComputedStyle(el.querySelector('.lib-note')).backgroundColor };
+      });
+      ok(d.body === EXPECT, `弹窗正文应与原文逐字一致，实际「${d.body.slice(0, 40)}…」`);
+      ok(d.bg === 'rgba(0, 0, 0, 0)', `正文不应带底色（用户要求去掉），实际 background=${d.bg}`);
+      ok(d.btns.length === 1 && d.btns[0] === '知道了', `应为单按钮「知道了」，实际 ${JSON.stringify(d.btns)}`);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(150);
+      ok(await cnt() === 0, 'Esc 应关闭弹窗');
+      await page.click('.lib-q-btn');
+      await waitDlg();
+      await page.mouse.click(6, 6);   // 点遮罩空白处
+      await page.waitForTimeout(150);
+      ok(await cnt() === 0, '点遮罩应关闭弹窗');
+      await page.click('.lib-q-btn');
+      await waitDlg();
+      await page.locator('[role=dialog]').filter({ hasText: '费率口径说明' }).locator('button').click();
+      await page.waitForTimeout(150);
+      ok(await cnt() === 0, '点「知道了」应关闭弹窗');
+      await page.click('#v-lib .card.seg button:nth-child(2)');   // 省级参数
+      await page.waitForTimeout(100);
+      ok(await page.evaluate(() => document.querySelectorAll('#v-lib .lib-q-btn').length) === 0, '省级参数 Tab 不应出现该问号（只挂通道费率标题）');
+      await page.click('#v-lib .card.seg button:nth-child(1)');   // 回到通道
+      await page.waitForTimeout(100);
+      const re = await page.evaluate(() => { renderLib(); renderLib(); return document.querySelectorAll('#v-lib .lib-q-btn').length; });
+      ok(re === 1, `整页重建后问号应仍在且只有一颗，实际 ${re}`);
+      set('问号布局 / 弹窗正文 / 三种关闭方式 / 重建稳定性均符合预期');
+    },
+  },
 
   /* ================= 边界 ================= */
   {
