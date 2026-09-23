@@ -151,6 +151,12 @@ nav button.on .ic path,nav button.on .ic circle,nav button.on .ic rect{stroke:va
 .card.tight{padding:12px}
 .sec-title{font-size:13px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .sec-title .hint{font-size:11px;font-weight:400;color:var(--ink3)}
+/* 「通道费率」标题行的费率口径说明问号（用户要求）：标题文字与问号作为一组贴左，条数提示仍贴右。
+   .sec-title 是 space-between，三个子元素直接并列会把问号顶到行中间，所以把标题 + 问号包进 .st-main，
+   并由 .st-main 的 gap:4px 提供「图形紧跟文字」的节奏（同「各段明细」行 / .tk-fold 的 gap:4px 口径）。
+   问号按钮类名单独用 .lib-q-btn（样式与 .note-icon-btn 合并成一条规则）：tools/ui-shots.mjs 用
+   .note-icon-btn 定位「各段明细」行尾问号，共用类名会让该选择器同时命中两个元素。 */
+.sec-title .st-main{display:inline-flex;align-items:center;gap:4px;min-width:0}
 label.f{display:block;margin-bottom:11px}
 label.f:last-child{margin-bottom:0}
 label.f span{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px}
@@ -453,9 +459,10 @@ body.sheet-open{overflow:hidden}
 .route-seg-toggle[aria-expanded="true"] svg{transform:rotate(0deg)}
 /* 「各段明细」行尾站点位置说明问号按钮：与折叠按钮为兄弟节点，点击互不冲突；问号图标同 SVG_HELP 口径。
    同 .tk-fold 行内问号 <i> 口径：不设固定宽高，盒子贴 13px 图标、图标在盒内水平垂直居中，
-   三元素中线一致。 */
-.note-icon-btn{display:inline-flex;align-items:center;justify-content:center;flex:none;border:0;background:none;padding:0;color:var(--ink3);cursor:pointer}
-.note-icon-btn svg{display:block}
+   三元素中线一致。
+   .lib-q-btn 是「通道费率」标题行那颗同款问号，只换类名不换样式（见 .st-main 处注释）。 */
+.note-icon-btn,.lib-q-btn{display:inline-flex;align-items:center;justify-content:center;flex:none;border:0;background:none;padding:0;color:var(--ink3);cursor:pointer}
+.note-icon-btn svg,.lib-q-btn svg{display:block}
 /* 「通道费用分布」表格截断单元格「悬浮/点按看全文」（用户要求，参照测算页价格组成条 data-tip + tabindex 口径：
    web 悬浮、APK 触屏点按聚焦弹出）。截断收进单元格内 .cut（保留省略号），tip 挂 .cut 上——
    全局 th,td 的 overflow:hidden 会把弹出层裁掉，不能挂 td 本身；弹层向下展开，首行由表头行垫底。

@@ -1,5 +1,10 @@
 /* 费率库页：通道费率、省级参数、输电断面。 */
 /* ================= 费率库 ================= */
+/* 「通道费率」标题行的费率口径说明问号图标：与 ui/map.js 的 SVG_HELP 同一形状（圆形问号、线性描边、13px）。
+   lib 在 APP_FILES 里排在 map 之前，这里就地声明而不前向引用 map 的常量——模块虽共享作用域，
+   但前向引用依赖声明顺序、坏了只在运行时才报，界面模块之间各留各的图标更稳。
+   （同页的弹窗 libNoteDlg 结构照 map.js 的 tkHelpDlg / stationNoteDlg。） */
+const SVG_HELP_LIB='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
 let libTab='ch';
 function libSearch(v){ state.libQ=v; const b=document.getElementById('lib-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderLibList(); restoreDetails(b,s); } }
 function pvSearch(v){ state.pvQ=v; const b=document.getElementById('pv-list'); if(b){ const s=snapDetails(b); b.innerHTML=renderPvList(); restoreDetails(b,s); } }
@@ -132,9 +137,12 @@ function renderLib(){
   // 重渲染稳定性：整页重建前快照展开的通道/省份卡片，重建后恢复（切 Tab 不丢展开态）
   const _host=document.getElementById('v-lib');
   const _snap=snapDetails(_host);
-  let out=`<div class="warn">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>`
+  /* 「本库为按任务提示词实际检索所得…」原先是页顶常驻 .warn 提示块（用户要求）：
+     整段收进「通道费率」标题行的圆形问号，点开由 libNoteDlg 弹窗展示，页顶不再占版面。
+     四类口径（发改委核定/国网披露/区域·送出省口径/待补）正是「通道费率」那排 tier 筛选的图例，
+     所以问号挂在通道费率标题上；其余 Tab 页顶只剩「旧版价格数据」这条真故障提示。 */
   // REQ-602：加载时用户选择「暂保留」旧版价格覆盖（state.js 置 _libStale），费率库必须给出常驻提示
-  +(state._libStale?`<div class="warn" style="margin-top:8px">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
+  let out=(state._libStale?`<div class="warn">⚠ 本机保存的费率修改基于<b>旧版价格数据</b>（priceVersion 不一致），当前仍在使用这些旧值，测算结果可能与最新核定不符——请逐条核对，或点下方「恢复检索原始值」放弃本地修改；重新改价并保存后本提示自动消失。</div>`:'');
   out+=`<div class="card tight seg">
     <button class="${libTab==='ch'?'on':''}" onclick="libTab='ch';renderLib()">通道 (${CH.length})</button>
     <button class="${libTab==='pv'?'on':''}" onclick="libTab='pv';renderLib()">省级参数 (${Object.keys(PV).length})</button>
@@ -144,7 +152,7 @@ function renderLib(){
 
   if(libTab==='ch'){
     out+=`<div class="card tight">
-      <div class="sec-title">通道费率<span class="hint">共 ${CH.length} 条</span></div>
+      <div class="sec-title"><span class="st-main">通道费率<button type="button" class="lib-q-btn" onclick="libNoteDlg()" aria-label="费率口径说明" title="费率口径说明">${SVG_HELP_LIB}</button></span><span class="hint">共 ${CH.length} 条</span></div>
       <input id="lib-q" type="search" placeholder="搜索通道名 / 别名 / 省份 / 文号…" value="${esc(state.libQ||'')}" oninput="libSearch(this.value)" style="margin-bottom:8px">
       <div class="seg small wrap">
         ${[['all','全部'],['gov','发改委核定'],['grid','国网披露'],['region','区域口径'],['capacity','容量制'],['noCap','缺实际容量'],['incLoss','含线损'],['dd','落地端计费']].map(([k,t])=>
@@ -186,6 +194,24 @@ function renderLib(){
 
   document.getElementById('v-lib').innerHTML=out;
   restoreDetails(_host,_snap);
+}
+/* 「通道费率」标题行问号点开的费率口径说明弹窗（用户要求：原页顶常驻 .warn 提示块改由本弹窗承载）。
+   结构与样式令牌同 ui/map.js 的 tkHelpDlg / stationNoteDlg：单按钮「知道了」，Esc / 点遮罩 / 点按钮均可关闭，
+   打开后聚焦按钮。正文为无底色的普通说明文字（同 tkHelpDlg / stationNoteDlg 的 .lib-note 口径），
+   四类口径仍以 <b> 粗体强调，不再使用页顶那块 .warn 黄底。 */
+function libNoteDlg(){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:4000;background:var(--scrim-dialog);display:flex;align-items:center;justify-content:center;padding:28px';
+  ov.innerHTML=`<div role="dialog" aria-modal="true" style="background:var(--card);border-radius:var(--radius-dialog);max-width:320px;width:100%;padding:18px 16px 14px;box-shadow:var(--shadow-dialog)">
+    <div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">费率口径说明</div>
+    <div class="lib-note" style="font-size:12.5px;color:var(--ink2);line-height:1.7">本库为按任务提示词实际检索所得。<b>发改委核定</b>类有正式文号与原文摘录可回溯；<b>国网披露</b>类为交易中心公开的结算价格表（含报备价）；<b>区域/送出省口径</b>为第四监管周期规定的省间互济送出省输电价格；<b>待补</b>为估算值，须替换。修改即时生效并保存在本机。</div>
+    <div style="display:flex;margin-top:16px"><button class="btn" style="flex:1;font-size:14px;padding:10px">知道了</button></div></div>`;
+  const close=()=>{ ov.remove(); document.removeEventListener('keydown',onKey); };
+  const onKey=e=>{ if(e.key==='Escape') close(); };
+  ov.addEventListener('click',e=>{ if(e.target===ov||e.target.closest('button')) close(); });
+  document.addEventListener('keydown',onKey);
+  document.body.appendChild(ov);
+  ov.querySelector('button').focus();
 }
 /* 费率库改动后立即重算一次（H6）：只把 state._res 置 null 而不重算，切回测算页时
    renderCalc 会落入「请选择不同的出发地与目的地」空态——参数其实完好，用户以为省对失效，
