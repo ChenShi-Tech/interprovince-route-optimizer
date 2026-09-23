@@ -1178,7 +1178,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-22 08:38';
+const BUILD_TIME='2026-09-22 10:26';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -4072,7 +4072,7 @@ if(isProxyEnv()) loadTMap();   // 代理环境：脚本求值即开始下载（b
 /* 内置拓扑图：纯 SVG，不依赖任何外部地图服务，离线与托管环境均可用。
    按站点经纬度做等距圆柱投影，只画节点与连线，不绘制任何行政区划边界。 */
 /* 触摸视图（change: grid-map-device-fixes，design D2）：topoViewMeta 由 topoSVG 每次渲染写入
-   （full=全图视野 / min=最小视野[聚焦 0.5 倍或全图 1/6] / base=本次渲染的基准视野），
+   （full=全图视野 / min=最小视野[聚焦 0.5 倍与全图 1/12 取更深] / base=本次渲染的基准视野），
    供手势层夹取与双击复位；topoDragged=拖动标志，用于吞掉拖动结束后的 click（防误触通道过滤）。 */
 let topoViewMeta=null, topoDragged=false;
 /* 等距圆柱投影参数（真机 B3 复核抽出的共用层）：topoSVG 渲染与 mapSvgClick 的站点热区判定
@@ -4103,80 +4103,13 @@ function topoSVG(){
      注意区域分区在 DATA.RGOF（data.js 未解构成全局），与 lib.js 取法一致。 */
   const rPal=state.mapRegion?regionPalette(DATA.RGOF):null;
 
-  let edges='',segs='',nodes='',labels='';
-  /* 断面高亮垫层（spec: grid-map 断面）：成员通道在底层垫紫色晕圈；基于成员通道高亮，不画虚构地理边界。
-     真机 C3 复核：成员在选中方案上时原先直接跳过，晕圈被路线强视觉完全盖住等于没有反馈——
-     改画更宽的外圈垫层从路线两侧露出（选中视觉仍在最上层，语义不被覆盖）；非成员垫层同步提对比度。 */
-  if(state.mapSec){
-    const mem=new Set(secMemberIds(state.mapSec));
-    CH.forEach(c=>{
-      if(!mem.has(c.id)) return;
-      const ps=chanPts(c,P);
-      if(!ps) return;
-      const hot=v.hot.has(c.id);
-      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" style="stroke:var(--map-section)" stroke-width="${hot?10:5.5}" opacity="${hot?0.55:0.45}" stroke-linecap="round" stroke-linejoin="round"/>`;
-    });
-  }
-  /* 其它候选/全网架连线与热区已随 grid-map-single-route-and-fixes 移除：图上只剩选中方案，
-     点击必经过滤仅在选中方案通道上可用；其余通道经搜索结果浮层查看（mapGotoChan）。 */
-  /* 标注防重叠（change: grid-map-single-route-and-fixes）：省名 > 站名 > 段名 按优先级贪心放置。
-     换流站与省节点经纬度接近时三类文字会叠在同一点（真机实测 川→陕→甘→宁：宝鸡换流站/陕西/
-     甘陕联络线三层相叠不可辨）。冲突的站名/段名先换对侧、仍无位则省略文字——站点圆点与通道线
-     仍可点开浮层看全名。SVG 未入 DOM 拿不到 getBBox，宽度按字符估：CJK≈1em、ASCII≈0.62em，另加 3px 呼吸边。 */
-  const placed=[];
-  const labelBox=(text,fs,cx,cyBase)=>{
-    let w=10;   // 两侧各留 5px：估宽偏小会让「实际相交但估算相离」漏检（MAP-07 实测 337px² 叠压）
-    for(const ch of String(text)) w+=ch.charCodeAt(0)>255?fs:fs*0.62;
-    return {x0:cx-w/2,y0:cyBase-fs*0.9,x1:cx+w/2,y1:cyBase+fs*0.45};
-  };
-  /* 真机/纯直线数据复核（2026-09-20）：本机制此前有两处失效——①y 轴相交条件写反（p.y1<b.y0），
-     垂直方向碰撞永远漏检；②putText 成功后未把盒子登记进 placed，已放标签不占位。走廊 waypoints
-     在场时折线中点天然分散掩盖了这两处，走廊数据还原后 MAP-07 即现形（337px² 叠压）。 */
-  const boxHit=b=>placed.some(p=>b.x0<p.x1&&p.x0<b.x1&&b.y0<p.y1&&p.y0<b.y1);
-  /* 放得下则写入 labels 并返回 true；attrs 携带字号/颜色/点击热区等其余属性 */
-  const putText=(text,fs,x,yBase,attrs)=>{
-    const box=labelBox(text,fs,x,yBase);
-    if(boxHit(box)) return false;
-    placed.push(box);
-    labels+=`<text x="${x.toFixed(1)}" y="${yBase.toFixed(1)}" ${attrs}>${esc(text)}</text>`;
-    return true;
-  };
-  // 选中路线：加粗并编号；段名文字延后到省名/站名之后放置（优先级最低），几何先算好供视野聚焦（design D4）
+  /* 路线包围盒先行（feat/grid-map-deep-zoom）：深层缩放的标注/线符比例系数 lblS 取决于
+     「基准视野（聚焦盒，无路线时全图）/ 当前视野」，须在画任何元素（含断面垫层）前算好。 */
   let fx0=1e9,fy0=1e9,fx1=-1e9,fy1=-1e9;
-  const segCircles=[],segLabelCands=[];
-  if(selR){
-    selR.segs.forEach((sg,i)=>{
-      const ps=chanPts(sg.e,P);
-      if(!ps) return;
-      ps.forEach(p=>{ fx0=Math.min(fx0,p[0]); fx1=Math.max(fx1,p[0]); fy0=Math.min(fy0,p[1]); fy1=Math.max(fy1,p[1]); });
-      const pts=ptsAttr(ps);
-      segs+=`<polyline points="${pts}" fill="none" style="stroke:var(--map-casing)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`;
-      segs+=`<polyline points="${pts}" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="stroke:var(--map-route);pointer-events:stroke"/>`;
-      const m1=ps[Math.floor((ps.length-1)/2)], m2=ps[Math.ceil((ps.length-1)/2)];
-      const mx=(m1[0]+m2[0])/2, my=(m1[1]+m2[1])/2;
-      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="8.5" style="fill:var(--map-route)"/>`
-          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="10" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`;
-      segCircles.push({mx,my});
-      /* 段名候选位：段线比例点 × 上下侧共 8 个。防重叠真正生效后（placed 登记修复），
-         仅靠中点两侧两个候选在拥挤路线（川→陕→甘→宁）上会全冲突而被省略——违反
-         grid-map spec「选中方案 SHALL 逐段标注线路名」（MAP-02）。沿段线挪位让
-         「段名必在场」（MAP-02）与「零叠压」（MAP-07）同时成立。 */
-      const at=f=>{const t=f*(ps.length-1),i0=Math.floor(t),i1=Math.min(ps.length-1,i0+1),k=t-i0;return [ps[i0][0]+(ps[i1][0]-ps[i0][0])*k,ps[i0][1]+(ps[i1][1]-ps[i0][1])*k];};
-      const c05=at(0.5),c035=at(0.35),c065=at(0.65);
-      const sPref=i%2?17:-14,sAlt=i%2?-14:17;
-      segLabelCands.push([
-        {name:sg.e.n,x:c05[0],yBase:c05[1]+sPref},
-        {name:sg.e.n,x:c05[0],yBase:c05[1]+sAlt},
-        {name:sg.e.n,x:c035[0],yBase:c035[1]+sPref},
-        {name:sg.e.n,x:c065[0],yBase:c065[1]+sPref},
-        {name:sg.e.n,x:c035[0],yBase:c035[1]+sAlt},
-        {name:sg.e.n,x:c065[0],yBase:c065[1]+sAlt},
-        {name:sg.e.n,x:c05[0],yBase:c05[1]-30},
-        {name:sg.e.n,x:c05[0],yBase:c05[1]+33},
-      ]);
-    });
-  }
-  // 节点
+  if(selR) selR.segs.forEach(sg=>{
+    const ps=chanPts(sg.e,P); if(!ps) return;
+    ps.forEach(p=>{ fx0=Math.min(fx0,p[0]); fx1=Math.max(fx1,p[0]); fy0=Math.min(fy0,p[1]); fy1=Math.max(fy1,p[1]); });
+  });
   /* 视野聚焦优先级（批次 B）：搜索指定的包围盒（state.mapFocusLL，度）> 选中方案路线包围盒 > 全国视野。
      任何重算（solveState）会清掉搜索聚焦，让位回路线视野。 */
   let focusBox=null;   // px 坐标 {x0,y0,x1,y1}
@@ -4195,21 +4128,102 @@ function topoSVG(){
     :(focusBox?{x:focusBox.x0,y:focusBox.y0,x1:focusBox.x1,y1:focusBox.y1,w:focusBox.x1-focusBox.x0,h:focusBox.y1-focusBox.y0}
               :{x:0,y:0,x1:W,y1:H,w:W,h:H});
   let vbx0=shownBox.x,vbx1=shownBox.x1,vby0=shownBox.y,vby1=shownBox.y1;
+  /* 深层缩放（feat/grid-map-deep-zoom）：视野进入基准以内后，标注与线符按 lblS 反向缩放，
+     屏幕尺寸近似恒定——放大看到的是更大密度的范围而不是更大的字；基准视野及以上 lblS=1，
+     渲染与改动前逐像素一致。放大下限同步放宽到全图 1/12（见 topoViewMeta.min）。 */
+  const topoBaseW=focusBox?(focusBox.x1-focusBox.x0):W;
+  const lblS=Math.min(1,shownBox.w/topoBaseW);
+  const u=v=>Math.round(v*100)/100;
+
+  let edges='',segs='',nodes='',labels='';
+  /* 断面高亮垫层（spec: grid-map 断面）：成员通道在底层垫紫色晕圈；基于成员通道高亮，不画虚构地理边界。
+     真机 C3 复核：成员在选中方案上时原先直接跳过，晕圈被路线强视觉完全盖住等于没有反馈——
+     改画更宽的外圈垫层从路线两侧露出（选中视觉仍在最上层，语义不被覆盖）；非成员垫层同步提对比度。 */
+  if(state.mapSec){
+    const mem=new Set(secMemberIds(state.mapSec));
+    CH.forEach(c=>{
+      if(!mem.has(c.id)) return;
+      const ps=chanPts(c,P);
+      if(!ps) return;
+      const hot=v.hot.has(c.id);
+      edges+=`<polyline points="${ptsAttr(ps)}" fill="none" style="stroke:var(--map-section)" stroke-width="${u((hot?10:5.5)*lblS)}" opacity="${hot?0.55:0.45}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    });
+  }
+  /* 其它候选/全网架连线与热区已随 grid-map-single-route-and-fixes 移除：图上只剩选中方案，
+     点击必经过滤仅在选中方案通道上可用；其余通道经搜索结果浮层查看（mapGotoChan）。 */
+  /* 标注防重叠（change: grid-map-single-route-and-fixes）：省名 > 站名 > 段名 按优先级贪心放置。
+     换流站与省节点经纬度接近时三类文字会叠在同一点（真机实测 川→陕→甘→宁：宝鸡换流站/陕西/
+     甘陕联络线三层相叠不可辨）。冲突的站名/段名先换对侧、仍无位则省略文字——站点圆点与通道线
+     仍可点开浮层看全名。SVG 未入 DOM 拿不到 getBBox，宽度按字符估：CJK≈1em、ASCII≈0.62em，另加 3px 呼吸边。 */
+  const placed=[];
+  const labelBox=(text,fs,cx,cyBase)=>{
+    let w=10*lblS;   // 两侧各留 5px：估宽偏小会让「实际相交但估算相离」漏检（MAP-07 实测 337px² 叠压）；深层缩放随标注同步收缩
+    for(const ch of String(text)) w+=ch.charCodeAt(0)>255?fs:fs*0.62;
+    return {x0:cx-w/2,y0:cyBase-fs*0.9,x1:cx+w/2,y1:cyBase+fs*0.45};
+  };
+  /* 真机/纯直线数据复核（2026-09-20）：本机制此前有两处失效——①y 轴相交条件写反（p.y1<b.y0），
+     垂直方向碰撞永远漏检；②putText 成功后未把盒子登记进 placed，已放标签不占位。走廊 waypoints
+     在场时折线中点天然分散掩盖了这两处，走廊数据还原后 MAP-07 即现形（337px² 叠压）。 */
+  const boxHit=b=>placed.some(p=>b.x0<p.x1&&p.x0<b.x1&&b.y0<p.y1&&p.y0<b.y1);
+  /* 放得下则写入 labels 并返回 true；attrs 携带字号/颜色/点击热区等其余属性 */
+  const putText=(text,fs,x,yBase,attrs)=>{
+    const box=labelBox(text,fs,x,yBase);
+    if(boxHit(box)) return false;
+    placed.push(box);
+    labels+=`<text x="${x.toFixed(1)}" y="${yBase.toFixed(1)}" ${attrs}>${esc(text)}</text>`;
+    return true;
+  };
+  // 选中路线：加粗并编号；段名文字延后到省名/站名之后放置（优先级最低），几何先算好供视野聚焦（design D4）
+  const segCircles=[],segLabelCands=[];
+  if(selR){
+    selR.segs.forEach((sg,i)=>{
+      const ps=chanPts(sg.e,P);
+      if(!ps) return;
+      const pts=ptsAttr(ps);
+      segs+=`<polyline points="${pts}" fill="none" style="stroke:var(--map-casing)" stroke-width="${u(6*lblS)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      segs+=`<polyline points="${pts}" fill="none" stroke-width="${u(3.2*lblS)}" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="stroke:var(--map-route);pointer-events:stroke"/>`;
+      const m1=ps[Math.floor((ps.length-1)/2)], m2=ps[Math.ceil((ps.length-1)/2)];
+      const mx=(m1[0]+m2[0])/2, my=(m1[1]+m2[1])/2;
+      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${u(8.5*lblS)}" style="fill:var(--map-route)"/>`
+          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="${u(10*lblS)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`;
+      segCircles.push({mx,my});
+      /* 段名候选位：段线比例点 × 上下侧共 8 个。防重叠真正生效后（placed 登记修复），
+         仅靠中点两侧两个候选在拥挤路线（川→陕→甘→宁）上会全冲突而被省略——违反
+         grid-map spec「选中方案 SHALL 逐段标注线路名」（MAP-02）。沿段线挪位让
+         「段名必在场」（MAP-02）与「零叠压」（MAP-07）同时成立。 */
+      const at=f=>{const t=f*(ps.length-1),i0=Math.floor(t),i1=Math.min(ps.length-1,i0+1),k=t-i0;return [ps[i0][0]+(ps[i1][0]-ps[i0][0])*k,ps[i0][1]+(ps[i1][1]-ps[i0][1])*k];};
+      const c05=at(0.5),c035=at(0.35),c065=at(0.65);
+      const sPref=(i%2?17:-14)*lblS,sAlt=(i%2?-14:17)*lblS;
+      segLabelCands.push([
+        {name:sg.e.n,x:c05[0],yBase:c05[1]+sPref},
+        {name:sg.e.n,x:c05[0],yBase:c05[1]+sAlt},
+        {name:sg.e.n,x:c035[0],yBase:c035[1]+sPref},
+        {name:sg.e.n,x:c065[0],yBase:c065[1]+sPref},
+        {name:sg.e.n,x:c035[0],yBase:c035[1]+sAlt},
+        {name:sg.e.n,x:c065[0],yBase:c065[1]+sAlt},
+        {name:sg.e.n,x:c05[0],yBase:c05[1]-30*lblS},
+        {name:sg.e.n,x:c05[0],yBase:c05[1]+33*lblS},
+      ]);
+    });
+  }
+  // 节点
   /* 省名优先放置（最高优先级）：先放选中方案途经省，再放其余省（节点圆的绘制顺序不影响视觉） */
   const ordered=[...ids.filter(k=>v.routeNodes.has(k)),...ids.filter(k=>!v.routeNodes.has(k))];
   ordered.forEach(k=>{
     const [x,y]=P(PV[k].lng,PV[k].lat);
     const onRoute=v.routeNodes.has(k);
     const isEnd=selR&&(k===selR.nodes[0]||k===selR.nodes[selR.nodes.length-1]);
-    const rad=isEnd?6:(onRoute?4.6:2.6);
+    const radRaw=isEnd?6:(onRoute?4.6:2.6);
+    const rad=u(radRaw*lblS);
     const fill=isEnd?'--map-end':(onRoute?'--map-route':'--map-node');
-    nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" style="fill:var(${fill});stroke:var(--map-casing)" stroke-width="1.3"/>`;
-    if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad+2.8).toFixed(1)}" fill="none" style="stroke:${rPal[REGION_OF[k]]}" stroke-width="1.8" opacity="0.95"/>`;
+    nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad}" style="fill:var(${fill});stroke:var(--map-casing)" stroke-width="${u(1.3*lblS)}"/>`;
+    if(rPal&&REGION_OF[k]) nodes+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${u((radRaw+2.8)*lblS)}" fill="none" style="stroke:${rPal[REGION_OF[k]]}" stroke-width="${u(1.8*lblS)}" opacity="0.95"/>`;
     // 聚焦视野下，离线路径且出画的省名不再绘制（避免跨界半截字，spec: grid-map 聚焦）
     if(focused&&!onRoute&&(x<vbx0||x>vbx1||y<vby0||y>vby1)) return;
-    putText(N(k),onRoute?10.5:9,x,y-rad-3,`font-size="${onRoute?10.5:9}" font-weight="${onRoute?600:400}" style="fill:var(${onRoute?'--map-label-on':'--map-label'})" text-anchor="middle"`);
+    putText(N(k),(onRoute?10.5:9)*lblS,x,y-rad-3*lblS,`font-size="${u((onRoute?10.5:9)*lblS)}" font-weight="${onRoute?600:400}" style="fill:var(${onRoute?'--map-label-on':'--map-label'})" text-anchor="middle"`);
   });
-  segCircles.forEach(c=>placed.push({x0:c.mx-10,y0:c.my-10,x1:c.mx+10,y1:c.my+10}));   // 序号圆占位：站名/段名不得压圆
+  const seqPad=10*lblS;
+  segCircles.forEach(c=>placed.push({x0:c.mx-seqPad,y0:c.my-seqPad,x1:c.mx+seqPad,y1:c.my+seqPad}));   // 序号圆占位：站名/段名不得压圆（深层缩放随 lblS 收缩）
   // 选中路线的换流站
   let sts='';
   if(selR){
@@ -4218,17 +4232,17 @@ function topoSVG(){
       [['from',sg.e.stFrom],['to',sg.e.stTo]].forEach(([side,st])=>{
         if(!st||!ST[st]||seen.has(st)) return; seen.add(st);
         const [x,y]=P(ST[st].lng,ST[st].lat);
-        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" stroke-width="2" data-st="${st}" style="fill:var(--map-casing);stroke:var(--map-end);pointer-events:all"/>`;
+        sts+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${u(3.4*lblS)}" stroke-width="${u(2*lblS)}" data-st="${st}" style="fill:var(--map-casing);stroke:var(--map-end);pointer-events:all"/>`;
         // 站名：默认在点上方，冲突换下方；仍冲突则省略文字（圆点保留，点击看站名浮层）
-        const stAttrs=`font-size="10" font-weight="600" text-anchor="middle" data-st="${st}" style="fill:var(--map-end);pointer-events:all"`;
-        if(!putText(ST[st].n,10,x,y-7,stAttrs)) putText(ST[st].n,10,x,y+14,stAttrs);
+        const stAttrs=`font-size="${u(10*lblS)}" font-weight="600" text-anchor="middle" data-st="${st}" style="fill:var(--map-end);pointer-events:all"`;
+        if(!putText(ST[st].n,10*lblS,x,y-7*lblS,stAttrs)) putText(ST[st].n,10*lblS,x,y+14*lblS,stAttrs);
       });
     });
   }
   /* 段名最后放置（相对省名/站名优先级最低，但 spec 要求逐段必标——按候选序取第一个不冲突位） */
   segLabelCands.forEach(cands=>{
-    const segAttrs='font-size="10" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="3"';
-    for(const c of cands){ if(putText(c.name,10,c.x,c.yBase,segAttrs)) return; }
+    const segAttrs=`font-size="${u(10*lblS)}" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="${u(3*lblS)}"`;
+    for(const c of cands){ if(putText(c.name,10*lblS,c.x,c.yBase,segAttrs)) return; }
   });
 
   /* 视野输出：用户触摸视野 > 聚焦盒（搜索 / 选中方案）> 全国视野；
@@ -4236,7 +4250,12 @@ function topoSVG(){
   const vb=`${shownBox.x.toFixed(1)} ${shownBox.y.toFixed(1)} ${shownBox.w.toFixed(1)} ${shownBox.h.toFixed(1)}`;
   topoViewMeta={
     full:{x:0,y:0,w:W,h:H},
-    min:focusBox?{w:(focusBox.x1-focusBox.x0)/2,h:(focusBox.y1-focusBox.y0)/2}:{w:W/6,h:H/6},
+    /* 深层缩放（feat/grid-map-deep-zoom）：下限由全图 1/6 放宽到 1/12（约 600km→300km 视野）；
+       聚焦时取「聚焦盒 0.5 倍」与「全图 1/12」的更深者。配合 topoSVG 的 lblS 反向缩放，
+       放大只改变可见范围密度，标注/线符屏幕尺寸近似恒定。 */
+    min:focusBox
+      ?{w:Math.min(W/12,(focusBox.x1-focusBox.x0)/2),h:Math.min(H/12,(focusBox.y1-focusBox.y0)/2)}
+      :{w:W/12,h:H/12},
     base:focusBox?{x:focusBox.x0,y:focusBox.y0,w:focusBox.x1-focusBox.x0,h:focusBox.y1-focusBox.y0}:{x:0,y:0,w:W,h:H},
   };
 
@@ -4322,27 +4341,40 @@ function topoVBof(){
   if(state.mapView) return {...state.mapView};
   return {...((topoViewMeta&&topoViewMeta.base)||{x:0,y:0,w:660,h:520})};
 }
+/* 深层缩放（feat/grid-map-deep-zoom）：topoViewSet 只改 viewBox 时，已渲染的符号/文字仍按基准
+   视野的尺寸画，视觉上会跟着放大——缩放发生后按新 lblS 重画 SVG 内容（容器、手势监听不动，
+   rAF 合帧；平移不改 lblS 不重画）。topoSVG 输出自带当前视野的 viewBox，无需再补 setAttribute。 */
+let topoRerenderPending=0;
+function topoRerender(){
+  if(topoRerenderPending) return;
+  topoRerenderPending=requestAnimationFrame(()=>{
+    topoRerenderPending=0;
+    const box=document.getElementById('map-view');
+    if(!box||!topoViewMeta) return;
+    const svg=box.querySelector('svg'); if(!svg) return;
+    box.innerHTML=topoSVG();
+  });
+}
 function topoViewSet(vb){
   if(!topoViewMeta) return;
+  const prevW=state.mapView?state.mapView.w:topoViewMeta.base.w;
   state.mapView=topoViewClamp(vb,topoViewMeta.full,topoViewMeta.min);
-  const m=state.mapView, svg=document.querySelector('#map-view svg');
+  const m=state.mapView;
+  if(Math.abs(m.w-prevW)>0.01){ topoRerender(); return; }   // 缩放：viewBox 随重画一并更新，避免一帧「先放大再缩小」的闪动
+  const svg=document.querySelector('#map-view svg');
   if(svg) svg.setAttribute('viewBox',`${m.x.toFixed(1)} ${m.y.toFixed(1)} ${m.w.toFixed(1)} ${m.h.toFixed(1)}`);
 }
 function topoViewReset(){
   if(!state.mapView) return;
   state.mapView=null;
-  const svg=document.querySelector('#map-view svg');
-  if(svg&&topoViewMeta){
-    const b=topoViewMeta.base;
-    svg.setAttribute('viewBox',`${b.x.toFixed(1)} ${b.y.toFixed(1)} ${b.w.toFixed(1)} ${b.h.toFixed(1)}`);
-  }
+  topoRerender();   // 复位回基准视野（lblS 回 1）；原直改 viewBox 的写法会留下缩放态的符号尺寸
 }
 function attachTopoGestures(box){
   if(!box) return;
   const svg=box.querySelector('svg'); if(!svg) return;
   const ptrs=new Map();
   let start=null, pinch=null;                     // start=单指起点 {x,y,vb,moved}；pinch=捏合基准 {d,vb}
-  const rectOf=()=>svg.getBoundingClientRect();
+  const rectOf=()=>(box.querySelector('svg')||svg).getBoundingClientRect();   // 深层缩放重画会换 svg 节点，每次现查
   /* 客户端坐标 → viewBox 坐标（容器纵横比与 viewBox 一致，线性映射无 letterboxing） */
   const ptOf=(cx,cy)=>{
     const r=rectOf(), vb=topoVBof();
