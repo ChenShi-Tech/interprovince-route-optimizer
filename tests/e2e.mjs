@@ -160,6 +160,12 @@ const hitAudit = (page, scope) => page.evaluate(async (scope) => {
 }, scope);
 
 const G = BASE, DCL = { waitUntil: 'domcontentloaded', timeout: 20000 };
+/* 2026-09-24 L2：doSolve 已异步化（30ms 去抖 + #calc-busy 提示）——触发重算的动作后须等提示走完再读结果。
+   先等 .show 出现（超时就当本次未显示），再等其收起； Solve 本身在收起前已完成（hideCalcBusy 在 finally）。 */
+const waitSolve = async (page, ms = 15000) => {
+  try { await page.waitForSelector('#calc-busy.show', { timeout: 400 }); } catch (e) { /* 极快路径未出提示 */ }
+  await page.waitForFunction(() => !document.getElementById('calc-busy').classList.contains('show'), null, { timeout: ms });
+};
 const tests = [
 
   /* ================= 真实输入（grid-map-real-input-e2e） =================
@@ -237,14 +243,16 @@ const tests = [
       const pt = await pick();
       ok(pt, '段线扫描未找到未被标注覆盖的笔画点（线体被浮层/标注完全盖住）');
       await page.touchscreen.tap(pt.x, pt.y);
-      await page.waitForTimeout(300);
+      await waitSolve(page);   // 2026-09-24 L2：tap → toggleChan 的 doSolve 已异步化（联动 renderMap 在回调），等其完成
+      await page.waitForTimeout(120);
       ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([pt.cid]), `mustHave 应为 [${pt.cid}]`);
       const chan = await page.evaluate(() => (document.getElementById('i-chan') || {}).value);
       ok(chan === pt.cid, `测算页通道筛选应同步为 ${pt.cid}，实际 ${chan}`);
       const pt2 = await pick();   // 过滤后路线图重绘，重新取点再 tap（对齐 MAP-03 再点恢复）
       ok(pt2, '二次 tap 前未找到可命中笔画点');
       await page.touchscreen.tap(pt2.x, pt2.y);
-      await page.waitForTimeout(300);
+      await waitSolve(page);   // 2026-09-24 L2：第二次 tap 的 doSolve 同样异步化
+      await page.waitForTimeout(120);
       ok((await page.evaluate(() => state.mustHave.length)) === 0, '再次 tap 应解除过滤');
       set(`真实 tap ${pt.cid}（线体 ${(pt.f * 100) | 0}% 处）→ mustHave 联动并同步测算页；再 tap 解除`);
     },
@@ -511,6 +519,7 @@ const tests = [
       const before = await page.evaluate(() => state.pNet);
       await page.selectOption('#i-from', 'NX');
       await page.selectOption('#i-to', 'ZJ');
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成再读联动结果
       const after = await page.evaluate(() => state.pNet);
       const dstNet = await page.evaluate(() => PV['ZJ'].net);
       ok(after === dstNet, `pNet 应联动为浙江 ${dstNet}，实际 ${after}`);
@@ -571,6 +580,7 @@ const tests = [
       });
       await page.fill('#i-qty', '3000');
       await page.locator('#i-qty').blur();
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成
       const after = await page.evaluate((key) => {
         state.showBad = true;   // 原路线可能越限沉底,纳入越限方案保证可追踪
         state._res = solve(state, algoData());
@@ -593,6 +603,7 @@ const tests = [
       // 面板收起时控件不可见，须先打开面板再操作；断言语义不变。
       await openParams(page);
       await page.selectOption('#i-bearer', '0');
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成
       const loss = await page.evaluate(() => state._res.rows[0].comp.loss);
       ok(loss === 0, `comp.loss 应为 0，实际 ${loss}`);
       const row = await page.evaluate(() => {
@@ -631,6 +642,7 @@ const tests = [
       await page.goto(G, DCL);
       // 修正(2026-09-18)：跳数输入已移除（固定 MAX_HOPS=10），原 #i-hops=5 选择作废。
       await page.selectOption('#i-to', 'SH');
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成，避免读到旧候选集
       const btn = page.locator('button', { hasText: '展开全部' });
       ok(await btn.count() > 0, '应出现「展开全部」按钮');
       await btn.first().click();
@@ -638,11 +650,46 @@ const tests = [
       const rows = await page.evaluate(() => state._res.rows.length);
       ok(rows > 18, `候选应 >18 条才有展开意义，实际 ${rows}`);
       ok(n === rows, `卡片数 ${n} 应等于 rows ${rows}`);
-      // 修正(2026-09-18)：展开后 hiddenN=0，按钮整体移除（renderRouteList 只在 hiddenN>0 时渲染切换按钮），
-      // 原期望「按钮变收起」在现实现里不可达；断言语义改为「展开后不再有展开入口且 showAll 已置位」。
+      // 2026-09-24 C5② 修复：展开后 toggle 以「收起」形态保留（原实现 hiddenN=0 时整体移除、无法收起），
+      // 往返断言见新用例 C5-02；本用例保持「不再有展开入口且 showAll 已置位」的语义。
       ok(await page.evaluate(() => state.showAll === true), 'state.showAll 应为 true');
       ok(await page.locator('button', { hasText: '展开全部' }).count() === 0, '展开后不应再出现「展开全部」按钮');
-      set(`展开后卡片 ${n} 张 = 候选总数 ${rows}；展开入口消失（showAll=true）`);
+      ok(await page.locator('#btn-showall').count() === 1 && (await page.locator('#btn-showall').innerText()).includes('收起'), '展开后应出现「收起」按钮（C5②）');
+      set(`展开后卡片 ${n} 张 = 候选总数 ${rows}；toggle 变「收起」（showAll=true）`);
+    },
+  },
+  {
+    id: 'C5-02', section: '主流程', title: 'C5②：展开全部 → 收起 → 再展开 往返（bug 排修回归）',
+    steps: '四川→上海，点「展开全部」→ 断言「收起」按钮存在 → 点「收起」恢复阈值截断 → 再点「展开全部」',
+    expected: 'toggle 按钮在 showAll=1 时以「收起」形态常驻；收起后卡片数回到阈值截断数、按钮恢复「展开全部」；再展开回到全量；阈值/越限语义不变',
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.selectOption('#i-to', 'SH');
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成再数候选
+      const rows = await page.evaluate(() => state._res.rows.length);
+      ok(rows > 18, `候选应 >18 条，实际 ${rows}`);
+      // 往返第 1 程：展开全部
+      await page.locator('#btn-showall').click();
+      ok(await page.evaluate(() => state.showAll === true), '第 1 程：showAll 应为 true');
+      let n = await page.locator('.rc').count();
+      ok(n === rows, `第 1 程：卡片数 ${n} 应等于候选总数 ${rows}`);
+      // 往返第 2 程：收起（C5② 修复点：hiddenN=0 时按钮不再消失）
+      await page.locator('#btn-showall').click();
+      ok(await page.evaluate(() => state.showAll === false), '第 2 程：showAll 应回到 false');
+      const thrN = await page.evaluate(() => {
+        const res = state._res;
+        const best = Math.min(...res.rows.map(r => r.landed));
+        const thr = best + Math.abs(best) * (state.degrade ?? 0.10);
+        return res.rows.filter(r => r.landed <= thr).length;
+      });
+      n = await page.locator('.rc').count();
+      ok(n === Math.min(thrN, 18), `第 2 程：收起后卡片数 ${n} 应回到阈值截断 ${Math.min(thrN, 18)}`);
+      ok((await page.locator('#btn-showall').innerText()).includes('展开全部'), '第 2 程：按钮应恢复「展开全部」文案');
+      // 往返第 3 程：再展开
+      await page.locator('#btn-showall').click();
+      n = await page.locator('.rc').count();
+      ok(n === rows && await page.evaluate(() => state.showAll === true), '第 3 程：再展开应回到全量');
+      set(`往返完成：${rows}→全量→截断 ${Math.min(thrN, 18)}→全量；toggle 文案 展开全部→收起→展开全部`);
     },
   },
   {
@@ -687,7 +734,8 @@ const tests = [
       await page.goto(G, DCL);
       const det = page.locator('#d-detail');
       ok((await det.getAttribute('open')) === null, '默认应收起');
-      await det.locator('summary').click();
+      // 2026-09-24 文案批 C6/C7：卡内新增嵌套 details（损耗口径/费率依据），summary 取直接子级（同 RQ-401 FR-5 口径）
+      await det.locator('> summary').click();
       ok((await det.getAttribute('open')) !== null, '点击后应展开');
       const tables = await page.locator('#d-detail table tr').count();
       ok(tables > 5, `费用拆解表应有>5 行，实际 ${tables}`);
@@ -862,6 +910,7 @@ const tests = [
       await page.goto(G, DCL);
       await page.fill('#i-qty', '');
       await page.locator('#i-qty').blur();
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等回落与重算落 DOM
       const q = await page.evaluate(() => state.qty);
       ok(q === 1000, `应回落 1000，实际 ${q}`);
       ok(await page.locator('#i-qty').inputValue() === '1000', '页面应回显 1000');
@@ -876,6 +925,7 @@ const tests = [
       await page.goto(G, DCL);
       await page.fill('#i-qty', '0');
       await page.locator('#i-qty').blur();
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等回落落 state
       ok(await page.evaluate(() => state.qty) === 1000, '应回落 1000');
       set('state.qty=1000，正常重算');
     },
@@ -888,6 +938,7 @@ const tests = [
       await page.goto(G, DCL);
       await page.fill('#i-qty', '-5');
       await page.locator('#i-qty').blur();
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等回落与重算落 DOM
       const q = await page.evaluate(() => state.qty);
       ok(q === 1000, `负数应回落 1000，实际 ${q}`);
       ok(await page.locator('#i-qty').inputValue() === '1000', '页面应回显 1000');
@@ -1081,7 +1132,7 @@ const tests = [
       });
       // 修正(2026-09-18)：跳数输入已移除，改用同样会触发重算与持久化的「成本阈值」下拉。
       await page.selectOption('#i-degrade', '0.05');
-      await page.waitForTimeout(150);
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成
       const r1 = await page.evaluate(() => ({
         warnN: [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length,
         rows: state._res.rows.length,
@@ -1090,7 +1141,7 @@ const tests = [
       ok(r1.rows > 0, `存储故障下测算应正常，实际 ${r1.rows} 条`);
       await page.locator('.rc').nth(1).click();
       await page.selectOption('#i-degrade', '0.2');
-      await page.waitForTimeout(150);
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成
       const r2 = await page.evaluate(() => [...document.querySelectorAll('#v-calc .warn')].filter(w => w.textContent.includes('本机存储不可用')).length);
       ok(r2 === 1, `多次写入失败后提示仍应 1 条，实际 ${r2}`);
       await page.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
@@ -1110,12 +1161,12 @@ const tests = [
       });
       await page.fill('#i-pgen', '333');
       await page.locator('#i-pgen').blur();
-      await page.waitForTimeout(150);
+      await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重渲染完成再断言展开态
       ok(await page.evaluate(() => document.getElementById('d-detail').open), '改价格后完整明细应保持展开');
       const ex1 = await page.evaluate(() => { const d = document.querySelector('details.explain'); return d ? d.open : null; });
       // 修正(2026-09-18)：跳数输入已移除，改用「成本阈值」下拉触发第二次重渲染。
       await page.selectOption('#i-degrade', '0.05');
-      await page.waitForTimeout(150);
+      await waitSolve(page);   // 2026-09-24 L2：同上
       ok(await page.evaluate(() => document.getElementById('d-detail').open), '切成本阈值后完整明细应保持展开');
       const ex2 = await page.evaluate(() => [...document.querySelectorAll('details.explain')].some(d => d.open));
       ok(ex2 === true, `无 id 说明面板展开态应保持，实际 ${ex2}`);
@@ -1134,11 +1185,11 @@ const tests = [
       // 往返仍是「错误态 → 恢复结果态」，与 M11 的按 id 恢复展开断言一致。
       await page.selectOption('#i-from', 'BJ');
       await page.selectOption('#i-to', 'GZ');
-      await page.waitForTimeout(150);
+      await waitSolve(page);   // 2026-09-24 L2：省对切换走 doSolveAsync，等错误态渲染完成
       const err = await page.evaluate(() => ({ empty: !!document.querySelector('.empty'), dets: document.querySelectorAll('#v-calc details').length }));
       ok(err.empty, '应进入错误空态');
       await page.selectOption('#i-to', 'JS');
-      await page.waitForTimeout(150);
+      await waitSolve(page);   // 2026-09-24 L2：同上
       const back = await page.evaluate(() => ({
         detailOpen: document.getElementById('d-detail').open,
         cards: document.querySelectorAll('.rc').length,
@@ -1312,6 +1363,7 @@ const tests = [
         await page.goto(G, DCL);
         await page.selectOption('#i-from', from);
         await page.selectOption('#i-to', to);
+        await waitSolve(page);   // 2026-09-24 L2：doSolve 异步化后等重算完成
         return page.evaluate(n => {
           const row = state._res.rows.find(r => r.segs.length === 1 && r.segs[0].e.n === n);
           return row ? row.segs[0].fee : null;
@@ -1477,8 +1529,10 @@ const tests = [
       // 2026-09-18 FR-5：卡内新增「本省全部电压档单价」嵌套 details，summary 需取直接子级（应用行为正确，断言适配）
       await card.locator('> summary').click();
       ok(await card.getAttribute('open') !== null, '点击 summary 应展开');
-      // P5 固定标注（政策口径声明，含文号）
-      const note = await card.locator('.cap-note').innerText();
+      // P5 固定标注（政策口径声明，含文号）；2026-09-24 文案批 C4 起为折叠（details.explain），先展开再读，断言语义不变
+      const capNote = card.locator('.cap-note');
+      if (await capNote.getAttribute('open') === null) await capNote.locator('> summary').click();
+      const note = await capNote.innerText();
       ok(note.includes('容量电费与电量来自省内或省外无关，不参与路径比选'), `P5 固定标注缺失：「${note.slice(0, 40)}」`);
       ok(note.includes('1441') && note.includes('532'), 'P5 标注应含发改价格〔2020〕1441号 / 〔2023〕532号');
       // 默认档预选：受端 JS(江苏) 默认档 = 1~10（20）千伏
@@ -1550,7 +1604,8 @@ const tests = [
       //（d56fc4a「通道改为单选下拉」），按下拉分组与选项重新对齐；筛选语义不变。
       await page.evaluate(() => { state.from = 'SC'; state.to = 'SH'; state.maxHops = MAX_HOPS; state.maxDetour = null;
         state.showBad = true; state.mustHave = []; state.sel = 0; applyBothProv(); doSolve(); });
-      await page.waitForTimeout(250);
+      // 2026-09-24 L2：doSolve 已异步化（30ms 去抖 + 加载提示），等待放宽覆盖 defer + 求解 + 重绘
+      await page.waitForTimeout(600);
       const b = await page.evaluate(() => {
         const av = state._res.availChannels || [];
         const selEl = document.getElementById('i-chan');
@@ -1872,7 +1927,11 @@ const tests = [
       await page.goto(G, DCL);
       await page.waitForSelector('.rc');
       await page.evaluate(() => { const d = document.getElementById('d-sens'); if (d) d.open = true; });
-      await page.waitForTimeout(80);
+      // 2026-09-24 L1：fillSensitivity 未命中时先出 #calc-busy 提示、30ms 后异步重算（此前同步阻塞在 toggle 队列里）。
+      // 断言链：提示出现 → 表就绪 → 提示收起；超时都放宽到秒级（本机实测重算 3.7~5.1s）。
+      await page.waitForSelector('#calc-busy.show', { timeout: 5000 });
+      await page.waitForSelector('#d-sens table tr', { timeout: 30000 });
+      await page.waitForFunction(() => !document.getElementById('calc-busy').classList.contains('show'), null, { timeout: 30000 });
       const r = await page.evaluate(() => {
         const d = document.getElementById('d-sens');
         return { rows: d ? d.querySelectorAll('table tr').length : 0, txt: d ? d.innerText : '' };
@@ -2037,13 +2096,15 @@ const tests = [
       await page.waitForSelector('#map-view svg polyline[data-chan]');
       const cid = await page.evaluate(() => document.querySelector('#map-view svg polyline[data-chan]').getAttribute('data-chan'));
       await page.evaluate(id => document.querySelector(`#map-view svg polyline[data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), cid);
-      await page.waitForTimeout(300);
+      await waitSolve(page);   // 2026-09-24 L2：toggleChan 的 doSolve 已异步化（联动放进回调），等其完成再断言
+      await page.waitForTimeout(120);
       ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([cid]), `mustHave 应为 [${cid}]`);
       const chan = await page.evaluate(() => (document.getElementById('i-chan') || {}).value);
       ok(chan === cid, `测算页通道筛选应同步为 ${cid}，实际 ${chan}`);
       await page.evaluate(id => { const l = document.querySelector(`#map-view svg [data-chan="${id}"]`); if (l) l.dispatchEvent(new MouseEvent('click', { bubbles: true })); }, cid);
       // 2026-09-18 批次 B：选中方案段为 polyline 渲染（走廊折线化），热区选择器不限标签
-      await page.waitForTimeout(300);
+      await waitSolve(page);   // 2026-09-24 L2：第二次点击的 doSolve 同样异步化
+      await page.waitForTimeout(120);
       ok((await page.evaluate(() => state.mustHave.length)) === 0, '再次点击应解除过滤');
       set(`点击 ${cid} → mustHave 联动并同步测算页；再点解除`);
     },
@@ -2628,10 +2689,13 @@ const tests = [
       // 拖动结束后再普通点击 → 过滤照常生效（点击能力未被破坏）
       const cid = await page.evaluate(() => document.querySelector('#map-view svg [data-chan]').getAttribute('data-chan'));
       await page.evaluate(id => document.querySelector(`#map-view svg [data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), cid);
-      await page.waitForTimeout(300);
+      await waitSolve(page);   // 2026-09-24 L2：点击的 doSolve 已异步化（renderMap 在回调），等重绘稳定再断言/后续手势
+      await page.waitForTimeout(120);
       ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([cid]), '拖动后普通点击仍应触发必经过滤');
       await page.evaluate(id => document.querySelector(`#map-view svg [data-chan="${id}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true })), cid);
-      await page.waitForTimeout(300);
+      await waitSolve(page);   // 2026-09-24 L2：解除点击同样异步化
+      await page.waitForTimeout(120);
+      await page.waitForSelector('#map-view svg [data-chan]');
       // 双指捏合（间距 200→120，因子 0.6 → 视野放宽）
       const vbA = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
       await page.evaluate(() => {
@@ -2909,6 +2973,8 @@ const tests = [
         await page.waitForSelector('.card.plan');
         await audit(`测算页 ${w}px`, 'body');
         await page.evaluate(() => { state.showBad = true; state.showAll = true; state.sel = 0; doSolve(); });
+        // 2026-09-24 L2：doSolve 已异步化（30ms 去抖 + 加载提示），等重绘完成再审计命中区
+        await page.waitForTimeout(600);
         await page.waitForSelector('.card.plan');
         await audit(`测算页·全部路线 ${w}px`, 'body');
       }

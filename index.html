@@ -1009,6 +1009,30 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
 }
 /* ==================== 桌面端适配 ==================== */
 .topbar{margin-bottom:0}
+/* W1：长页回顶。取舍：测试流程原建议双击防误触，但回顶无副作用、双击学习成本高，
+   取单击 + 明确箭头图标 + 44px 可点区；滚动超过一屏半才出现，固定在底栏上方不遮导航。
+   显隐由 boot.js 的滚动监听切 .show（display 直翻，避免过渡造成的截图不稳） */
+#to-top{position:fixed;right:14px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:2900;width:44px;height:44px;border-radius:50%;
+  background:var(--card);color:var(--blue);border:var(--hairline) solid var(--line);box-shadow:var(--shadow-guide);
+  display:none;align-items:center;justify-content:center;cursor:pointer;padding:0;font-family:inherit}
+#to-top .ic{width:20px;height:20px}
+#to-top.show{display:flex}
+/* W2（并入 09-17 挂起项 U1）：手机横持（横屏矮视口）压缩页头——标题 16→13px、页头纵向留白减半；
+   横屏横向空间充裕，只缩小不重排；桌面浏览器拉矮窗口不受影响（max-width 门控） */
+@media (orientation:landscape) and (max-height:520px) and (max-width:899px){
+  header{padding:6px 16px 5px}
+  h1{font-size:13px}
+}
+/* L1/L2：测算加载提示（doSolveAsync 与敏感性重算共用）——「脉冲圆点+文字」胶囊固定在页头下方。
+   取舍：不用转圈/骨架——同步求解会占满主线程，CSS 动画届时冻结，转圈 frozen 反而像卡死；
+   圆点+文字冻结后依然可读。显隐由 calc.js showCalcBusy/hideCalcBusy（深度计数配对） */
+#calc-busy{position:fixed;top:calc(58px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:3100;
+  display:none;align-items:center;gap:7px;background:var(--card);border:var(--hairline) solid var(--line);
+  border-radius:var(--radius-pill);padding:6px 13px;font-size:11.5px;color:var(--ink2);box-shadow:var(--shadow-guide);white-space:nowrap;max-width:92vw}
+#calc-busy.show{display:inline-flex}
+#calc-busy .dot{width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none;animation:calc-busy-pulse .9s ease-in-out infinite}
+@keyframes calc-busy-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+@media (min-width:900px){#calc-busy{top:112px}}
 /* 手机端：路线列表 → 方案详情 → 智能推荐 纵向堆叠（DOM 顺序是 列表、推荐、详情，用 order 调整） */
 .layout{display:flex;flex-direction:column}
 .col-side{order:1}.col-main{order:2}.col-ai{order:3}
@@ -1062,6 +1086,14 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
 
   .rlist{flex-direction:column;overflow:visible;gap:6px;padding:0}
   .rlist-foot{margin-top:6px}
+  /* C5③：PC 两栏下筛选区（含越限 / 成本阈值 / 展开收起 toggle）挪至列表上方——展开全部后
+     不必拉到底部才能改筛选。卡片改 flex 列后按 order 重排；移动端无 flex、保持 DOM 顺序，零影响 */
+  .rlist-card{display:flex;flex-direction:column}
+  .rlist-card>.sec-title{order:1}
+  .rlist-card>details.explain{order:2}
+  .rlist-card>.warn{order:3}
+  .rlist-filters{order:4;display:flex;flex-direction:column;gap:2px;margin:0 0 8px}
+  .rlist{order:5}
   .rc{width:100%;display:grid;grid-template-columns:46px minmax(0,1fr) 94px;
     grid-template-rows:auto auto;gap:0 10px;align-items:center;padding:10px 12px}
   .rc-top{display:contents}
@@ -1134,6 +1166,12 @@ details.adv>summary::after,details.explain>summary::after,.plan-issues>summary::
     <button id="t-lib" onclick="go('lib')">
       <svg class="ic" viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>费率库</button>
   </nav>
+  <!-- W1：长页回顶（单击 + 箭头图标，取舍见样式注释；显隐由 boot.js 滚动监听控制） -->
+  <button id="to-top" type="button" aria-label="回到顶部" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+    <svg class="ic" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 16V4M5 9l5-5 5 5"/></svg>
+  </button>
+  <!-- L1/L2：测算加载提示（doSolveAsync / 敏感性重算共用；v-calc 之外，整页重画不影响；显隐见 calc.js showCalcBusy/hideCalcBusy） -->
+  <div id="calc-busy" role="status" aria-live="polite"></div>
   <!-- 参数弹出面板：壳常驻在测算页 #v-calc 之外（测算页整块重画时不会被关掉），正文与价格由 renderParamSheet 刷新（ui/calc.js）。
        手机从底部滑出，≥600px 从右侧滑出 -->
   <div id="param-sheet" class="sheet" aria-hidden="true">
@@ -1185,7 +1223,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-23 06:40';
+const BUILD_TIME='2026-09-24 07:33';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -2770,7 +2808,7 @@ function renderRouteList(res){
   const shown=state.showAll?rows:inThr;
   const cut=rows.length-inThr.length;
   const mustN=(res.mustHave||[]).length;
-  let out=`<div class="card tight">
+  let out=`<div class="card tight rlist-card">
     <div class="sec-title">可选路线<span class="hint">共 ${res.total} 条候选 · 参考未越限 ${res.feasibleCount} 条${res.truncated?' · 已达枚举上限':''}${mustN?' · 已按通道筛选':''}</span></div>
     <details class="explain"><summary>候选与可行的定义<em>费用边界：${isDst?'到户已列费用小计':'只算到受端省界'}</em></summary><div class="inner">
     <p class="note">按所选报价和费用假设比较成本，默认只列出成本不高于最优 ${fmt((state.degrade??0.10)*100,0)}% 的方案${cut>0?'，另有 '+cut+' 条成本更高者已折叠':''}。${isDst?'':'当前费用边界为<b>只算到受端省界</b>，下列金额与排序均<u>不含</u>受端省网输配电价与政府性基金及附加。'}</p>
@@ -2792,22 +2830,26 @@ function renderRouteList(res){
     </button>`;
   });
   out+=`</div>
+    <div class="rlist-filters">
     <div class="rlist-foot">
       <span>按价格从低到高</span>
       <label class="tg"><input type="checkbox" ${state.showBad?'checked':''} onchange="state.showBad=this.checked;state.sel=0;doSolve()"> 含越限</label>
-    </div>`;
-  const hiddenN=rows.length-shown.length;
-  if(hiddenN>0){
-    out+=`<button class="btn ghost" style="margin-top:8px" onclick="state.showAll=${!state.showAll};renderCalc()">${state.showAll?'收起，仅显示成本接近的方案':'展开全部 '+rows.length+' 条路线（含 '+hiddenN+' 条成本更高者）'}</button>`;
-  }
-  out+=`<div class="rlist-foot" style="margin-top:7px">
+    </div>
+    <div class="rlist-foot" style="margin-top:7px">
       <span>成本阈值</span>
       <select id="i-degrade" style="width:auto;padding:3px 20px 3px 7px;font-size:11px;border-radius:var(--radius-inline)">
         ${[[0.03,'3%'],[0.05,'5%'],[0.10,'10%'],[0.20,'20%'],[9,'不限']].map(([v,t])=>
           `<option value="${v}" ${(state.degrade??0.10)==v?'selected':''}>${t}</option>`).join('')}
       </select>
     </div>`;
-  out+=`</div>`;
+  const hiddenN=rows.length-shown.length;
+  /* C5②（bug 确认排修）：toggle 在 showAll=1 时也必须渲染——收起态 hiddenN=0 会让「收起」分支不可达。
+     语义不变：showAll 只控制截断展示，阈值/越限口径不动。 */
+  if(hiddenN>0||state.showAll){
+    out+=`<button id="btn-showall" class="btn ghost" style="margin-top:8px" onclick="state.showAll=${!state.showAll};renderCalc()">${state.showAll?'收起，仅显示成本接近的方案':'展开全部 '+rows.length+' 条路线（含 '+hiddenN+' 条成本更高者）'}</button>`;
+  }
+  out+=`</div>
+  </div>`;
   return out;
 }
 /* ---------- 通道：按通道优选方案（顶部主卡） ----------
@@ -3073,8 +3115,14 @@ function renderDetail(res,r){
       <div class="mc"><div class="l">计费网损电量</div><div class="v">${fmt(r.lossMwh,2)}<small>MWh</small></div></div>
       <div class="mc"><div class="l">计费线损率</div><div class="v">${fmt((1-r.D)*100,3)}<small>%</small></div></div>
     </div>
-    ${Math.abs(r.Dphys-r.D)>1e-9?`<p class="note" style="margin-top:6px">串联损耗估算：送端电量 ${fmt(r.genMWhPhys,1)} MWh，物理网损 ${fmt(r.lossMwhPhys,2)} MWh（${fmt((1-r.Dphys)*100,3)}%）。物理链用于容量校验；计费链剔除已含在输电价中的网损，以及区域共用交流接口的估算损耗，避免重复计费。</p>`:''}
-    <p class="note" style="margin-top:6px">送端省内网损：${state.sourceQuote==='export'?'送出关口报价已含，不另计':state.originLossMode==='separate'?'按公开参数另计 '+fmt(r.cOriginLoss,2)+' 元/交付MWh':'按报价已覆盖处理，不另计'}。公开送省外上网环节线损率：${r.exportLossPct!=null?fmt(r.exportLossPct,2)+'%':'未获取'}。</p>
+    <details class="explain" style="margin-top:8px"><summary>损耗口径与送达系数说明<em>D = ${fmt(r.D,4)}</em></summary><div class="inner">
+      ${Math.abs(r.Dphys-r.D)>1e-9?`<p class="note">串联损耗估算：送端电量 ${fmt(r.genMWhPhys,1)} MWh，物理网损 ${fmt(r.lossMwhPhys,2)} MWh（${fmt((1-r.Dphys)*100,3)}%）。物理链用于容量校验；计费链剔除已含在输电价中的网损，以及区域共用交流接口的估算损耗，避免重复计费。</p>`:''}
+      <p class="note">送端省内网损：${state.sourceQuote==='export'?'送出关口报价已含，不另计':state.originLossMode==='separate'?'按公开参数另计 '+fmt(r.cOriginLoss,2)+' 元/交付MWh':'按报价已覆盖处理，不另计'}。公开送省外上网环节线损率：${r.exportLossPct!=null?fmt(r.exportLossPct,2)+'%':'未获取'}。</p>
+      <div class="formula">
+        <div class="mono">送达系数 D = ${fmt(r.D,6)}　送端需发电 ${fmt(r.genQty,6)} MWh / 每交付 1 MWh</div>
+        <div class="txt">多段串联时线损为乘法关系：D = Π(1−ηᵢ)。网损因此是乘法项，不能直接作为路径搜索的边权。</div>
+      </div>
+    </div></details>
     <div class="g3" style="margin-top:8px">
       <div class="mc"><div class="l">路径长度</div><div class="v">${fmt(r.dist,0)}<small>km</small></div></div>
       <div class="mc"><div class="l">直线距离</div><div class="v">${fmt(r.straight,0)}<small>km</small></div></div>
@@ -3086,10 +3134,6 @@ function renderDetail(res,r){
       <div><b>电压等级</b>：${esc(r.kvList.join(' / ')||'—')}　<b>直流/交流</b>：${r.dcCount} / ${r.acCount} 段</div>
       <div><b>涉及区域</b>：${esc(r.regionList.join('、')||'—')}</div>
       ${r.stationList.length?`<div><b>换流/变电站</b>：${esc(r.stationList.map(stName).join('、'))}</div>`:''}
-    </div>
-    <div class="formula" style="margin-top:9px">
-      <div class="mono">送达系数 D = ${fmt(r.D,6)}　送端需发电 ${fmt(r.genQty,6)} MWh / 每交付 1 MWh</div>
-      <div class="txt">多段串联时线损为乘法关系：D = Π(1−ηᵢ)。网损因此是乘法项，不能直接作为路径搜索的边权。</div>
     </div>
 
     <div class="sub">断面校验<em>${r.secHits.length?r.secHits.length+' 个断面':'本路径未经过已录入断面'}</em></div>
@@ -3105,6 +3149,7 @@ function renderDetail(res,r){
     ${r.segs.map((s,si)=>{const e=s.e;return `<div class="segblk">
       <div class="hd"><span>第 ${si+1} 段　${esc(N(s.a))} → ${esc(N(s.b))}</span><em>${esc(e.n)}${sharedRegionOf(s)?' · '+esc(sharedRegionOf(s))+'区域网架参考接口，不单独计费':''}</em></div>
       <div class="src" style="margin-top:4px;padding-top:0;border-top:0">
+        <details class="explain" style="margin:0"><summary>费率依据：${e.doc?esc(e.doc):'无发改委文号'}${e.eff?'　生效 '+esc(e.eff):(e.pubDate?'　发布 '+esc(e.pubDate):'')}　输电价 ${fmt(s.t)} 元/MWh</summary><div class="inner">
         ${tierTag(e.tier)}　${e.doc?esc(e.doc):'无发改委文号'}${e.eff?'　生效 '+esc(e.eff):(e.pubDate?'　发布 '+esc(e.pubDate):'')}<br>
         ${e.docTitle?esc(e.docTitle)+'<br>':''}
         ${e.regional?`区域接口单独通道费 0；${si===0?'起点送出省价格 '+fmt(s.sf0)+' 元/MWh':'不叠加过境省外送费'}；计费损耗 ${fmt(s.billLossPct,2)}%，物理估算损耗 ${fmt(e.loss,2)}%。<br>`:''}
@@ -3119,6 +3164,7 @@ function renderDetail(res,r){
         ${e.note?esc(e.note)+'<br>':''}
         ${e.excerpt?`<q>原文摘录：${esc(e.excerpt)}</q>`:''}
         ${e.hist&&e.hist.length?`<div style="margin-top:6px"><b>调价历史</b>${e.hist.map(h=>`<br>· ${esc(h.effective_from||'—')}　${esc(h.tariff_raw||'')}${h.loss_rate_pct!=null?'　线损 '+h.loss_rate_pct+'%':''}　${esc(h.doc_number||'')}${h.note?'　'+esc(h.note):''}`).join('')}</div>`:''}
+        </div></details>
       </div>
     </div>`;}).join('')}
 
@@ -3149,16 +3195,53 @@ function renderDetail(res,r){
 }
 
 /* ---------- REQ-403 价差敏感性：对当前省对按送端报价扫描 ---------- */
-/* 扫描要重算 36 次 solve()；跳数放宽到 MAX_HOPS 后单次可达数十毫秒，故只在展开折叠卡时计算，
-   避免每次重渲染（切方案、改参数）都付出这笔开销。重渲染后若面板恢复为展开，toggle 事件会再次触发填充。 */
+/* 扫描要重算 36 次 solve()（本机实测 3.7~5.1s）；跳数放宽到 MAX_HOPS 后单次可达数十毫秒，故只在展开折叠卡时计算，
+   避免每次重渲染（切方案、改参数）都付出这笔开销。重渲染后若面板恢复为展开，toggle 事件会再次触发填充。
+   缓存（2026-09-24 停等点 4 判据回退后键含 qty/hours 全字段）：展开恢复时命中缓存直接回填上次表格，
+   不触发重算。收益门槛实测（sens-benefit-check）：页签往返回测算页在无缓存时整表重算 3.7s，命中后毫秒级
+   回填——收益可观测，保留缓存；改参数场景必 miss（键随 solveInput 全字段变化），由下方 L1/L2 加载提示覆盖。 */
 const SENS_P0=100, SENS_P1=800, SENS_STEP=20;
+let _sensCacheKey=null, _sensCacheHtml=null, _sensTimer=null;
+function sensCacheKey(){
+  /* 键 = solveInput() 规范化 JSON 全字段（含 qty/hours——不得剔除：feasible 通道实测坐实，
+     改 qty/hours 可改变容量/断面校核结果 → 改变表的「最优路线/翻转」列）。
+     剔除 _res：它是求解输出快照（数 MB 且每次求解必变），不是输入，留着键会膨胀且永不命中。
+     键排序序列化保证字段顺序稳定；undefined 值跳过（JSON 语义本来就丢弃）。 */
+  const inp=solveInput();
+  delete inp._res;
+  const o={};
+  Object.keys(inp).sort().forEach(k=>{ if(inp[k]!==undefined) o[k]=inp[k]; });
+  return JSON.stringify(o);
+}
 function renderSensitivity(res){
   if(!res||!res.rows) return '';
   return `<details class="adv boxed" id="d-sens" ontoggle="if(this.open)fillSensitivity(this)"><summary>价差敏感性</summary><div class="inner"></div></details>`;
 }
 function fillSensitivity(el){
-  const box=el.querySelector('.inner');
-  if(box && !box.dataset.done){ box.innerHTML=sensitivityTable(); box.dataset.done='1'; }
+  const box=el&&el.querySelector?el.querySelector('.inner'):null;
+  if(!box||box.dataset.done) return;   // 既有守卫：同一 DOM 生命周期内收起→再展开 0 重算
+  const key=sensCacheKey();
+  if(_sensCacheHtml!=null&&key===_sensCacheKey){
+    box.innerHTML=_sensCacheHtml; box.dataset.done='1';   // 命中：回填上次表格（含表前 note），不重算不提示
+    return;
+  }
+  if(_sensTimer) return;               // 重算在途：去抖，防止连续触发求解风暴
+  /* L1 加载提示：先出提示、下一拍（30ms）再同步重算——与重算同拍绘制会被 4s 级同步计算阻塞画不出来。
+     提示挂在「重计算实际发生」（本函数 miss 分支），不挂在「展开」动作上（命中/守卫路径都无提示）。 */
+  showCalcBusy('正在重算价差敏感性（36 档报价扫描）…');
+  _sensTimer=setTimeout(()=>{
+    _sensTimer=null;
+    /* 在途期间整页可能已被重画：优先填当初请求的盒子，已脱离 DOM 则改填当前 d-sens 盒（若卡片已收起，
+       填进收起态盒子同样生效——done 守卫保证再展开 0 重算）。 */
+    const target=document.contains(box)?box:document.querySelector('#d-sens .inner');
+    try{
+      if(target){
+        target.innerHTML=sensitivityTable();
+        target.dataset.done='1';
+        _sensCacheKey=key; _sensCacheHtml=target.innerHTML;
+      }
+    }finally{ hideCalcBusy(); }
+  },30);
 }
 function sensitivityTable(){
   const P0=SENS_P0,P1=SENS_P1,STEP=SENS_STEP; let prev=null; const rowsA=[];
@@ -3176,8 +3259,7 @@ function sensitivityTable(){
     <td>${pt.best?fmt(pt.best.channelOnly):'—'}</td>
     <td>${pt.flip?'★ 最优切换':''}</td></tr>`).join('');
   return `<p class="note" style="margin:0 0 8px">送端报价 ${P0}~${P1} 元/MWh 扫描（步长 ${STEP}），★ 为最优路线切换点。</p>
-    <table><tr><th>送端报价 元/MWh</th><th>最优路线（口径一）</th><th>落地成本</th><th>过网费</th><th>翻转</th></tr>${trs}</table>
-    <p class="note">纯前端复用 solve() 重算；金额为对应送端报价下的口径一最优方案。切换点表示该价格档起另一条路线成为最优。</p>`;
+    <table><tr><th>送端报价 元/MWh</th><th>最优路线（口径一）</th><th>落地成本</th><th>过网费</th><th>翻转</th></tr>${trs}</table>`;
 }
 
 /* ---------- REQ-404 方案报告导出（Markdown） ---------- */
@@ -3236,6 +3318,18 @@ function exportReport(){
   });
   L.push('');
   L.push('> 本工具为测算与比选辅助，不构成交易建议；实际可交易路径以电力交易中心公布为准。');
+  /* F5（真机 M2 复核新发现）：APK WebView 静默丢弃 <a download>（网架快照同一根因，design D5 的
+     快照桥未覆盖报告）。检测到原生桥时改交 base64 由壳落盘并 Toast（saveFile 泛化，MIME text/markdown）。
+     UTF-8 文本必须 TextEncoder 字节流→base64——btoa 只吃 Latin-1，直接喂中文会抛异常。 */
+  if(window.AndroidBridge&&window.AndroidBridge.saveFile){
+    try{
+      const bytes=new TextEncoder().encode(L.join('\n'));
+      let bin='';
+      for(let i=0;i<bytes.length;i+=0x8000) bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));
+      window.AndroidBridge.saveFile('省间测算报告-'+N(r.nodes[0])+'-'+N(r.nodes[r.nodes.length-1])+'.md','text/markdown',btoa(bin));
+      return;
+    }catch(e){ /* 编码或桥异常时落回下方浏览器路径 */ }
+  }
   const blob=new Blob([L.join('\n')],{type:'text/markdown;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download='省间测算报告-'+N(r.nodes[0])+'-'+N(r.nodes[r.nodes.length-1])+'.md'; a.click();
@@ -3276,11 +3370,44 @@ function reapplyClampMarks(){
   for(const id of Object.keys(_clampBad)) clampApply(document.getElementById(id),_clampBad[id]);
 }
 
-function doSolve(){
+/* L1/L2 加载提示（doSolveAsync 与敏感性重算共用）：「脉冲圆点+文字」胶囊，元素在 template.html（v-calc 之外，
+   整页重画不影响）。取舍：不用转圈/骨架——同步求解会占满主线程，CSS 动画届时冻结，转圈 frozen 反而像卡死；
+   圆点+文字冻结后依然可读。深度计数配对：doSolve → renderCalc → 敏感性 miss 的嵌套场景，外层 hide 不吞内层提示。 */
+function showCalcBusy(msg){
+  const el=document.getElementById('calc-busy');
+  /* VM 测试桩无 appendChild（tools/test-interaction.mjs 的 mk 桩）——提示是纯视觉层，
+     桩环境直接跳过，语义不受影响（与 snapDetails 的桩守卫同风格）；注意此时不得计数，
+     否则配对的 hide 会把深度计成负数钳在 0，真实环境计数错位 */
+  if(!el||typeof el.appendChild!=='function') return;
+  el.textContent='';
+  const dot=document.createElement('i'); dot.className='dot';
+  el.appendChild(dot); el.appendChild(document.createTextNode(msg));
+  el.classList.add('show');
+  _busyDepth++;
+}
+function hideCalcBusy(){
+  _busyDepth=Math.max(0,_busyDepth-1);
+  if(_busyDepth) return;
+  const el=document.getElementById('calc-busy'); if(el&&el.classList&&typeof el.classList.remove==='function') el.classList.remove('show');
+}
+function doSolveSync(){
   readInputs(); state._res=solveState();
   const n=state._res.rows?state._res.rows.length:0;
   if(state.sel>=n) state.sel=0;
   saveLast(); renderCalc();
+}
+let _doSolveTimer=null, _busyDepth=0;
+function doSolve(cb){
+  /* L2 加载提示（覆盖省对切换、参数改动等全部 doSolve 触发点）：先出提示、下一拍（30ms）再同步求解——
+     与求解同拍绘制会被同步计算阻塞画不出来。去抖：30ms 窗口内重复触发只跑最后一次——被 clearTimeout
+     撤掉的触发沿用已显示的提示，不得重复计数（否则其 hide 永不执行，深度计数泄漏、提示卡死）；
+     求解期间主线程被占，天然无重入。cb 在求解完成后回调，供依赖新 state._res 的联动（网架图重绘等）。 */
+  if(_doSolveTimer) clearTimeout(_doSolveTimer);
+  else showCalcBusy('正在重新测算…');
+  _doSolveTimer=setTimeout(()=>{
+    _doSolveTimer=null;
+    try{ doSolveSync(); }finally{ hideCalcBusy(); if(cb) cb(); }
+  },30);
 }
 function readInputs(){
   const g=id=>document.getElementById(id);
@@ -3408,7 +3535,7 @@ function renderCapFee(){
       <label class="f"><span>省份</span><select id="i-capprov">
         ${Object.keys(PV).map(k=>`<option value="${k}" ${k===p?'selected':''}>${esc(PV[k].n)}</option>`).join('')}
       </select></label>
-      <label class="f"><span>电压档（默认预选项 = 1~10（20）千伏档，无此档取第一档）</span><select id="i-captier">
+      <label class="f"><span>电压档</span><select id="i-captier">
         ${tiers.map(t=>`<option value="${esc(t.档别)}" ${tier&&t.档别===tier.档别?'selected':''}>${esc(t.档别)}</option>`).join('')}
       </select></label>
     </div>
@@ -3426,7 +3553,8 @@ function renderCapFee(){
       <div class="mc"><div class="l">年容量电费</div><div class="v" ${annual!=null?`title="完整值 ${num(annual)} 元/年"`:''}>${annual!=null?fmtCompact(annual):'—'}<small>元/年</small></div></div>
       <div class="mc"><div class="l">度电分摊额</div><div class="v" ${per!=null?`title="完整值 ${fmt(per,2)} 元/MWh"`:''}>${per!=null?fmtCompact(per,2):'—'}<small>元/MWh</small></div></div>
     </div>
-    ${tier?`<details class="explain"><summary>本省全部电压档单价<em>1077号附件1</em></summary><div class="inner">
+    ${tier?`<div style="font-size:11px;color:var(--ink3);margin:8px 0 0">默认预选项 = 1~10（20）千伏档，无此档取第一档</div>
+    <details class="explain"><summary>本省全部电压档单价<em>1077号附件1</em></summary><div class="inner">
       <table><tr><th>档别</th><th>容量电价<br>元/千伏安·月</th><th>需量电价<br>元/千瓦·月</th></tr>
       ${(entry.容量电价||[]).map(t=>{
         const dm=(entry.需量电价||[]).find(x=>x.档别===t.档别);
@@ -3440,7 +3568,9 @@ function renderCapFee(){
   }
   return `<details class="adv boxed" id="d-capfee"><summary>容量电费测算<span style="font-weight:400;color:var(--ink3);font-size:11px;margin-left:6px">算一笔容量电费的独立小工具</span></summary><div class="inner">
     ${inner}
-    <p class="note cap-note" style="margin-top:10px"><b>容量电费与电量来自省内或省外无关，不参与路径比选</b>（发改价格〔2020〕1441号 / 〔2023〕532号口径；年费用 = 单价 × ${isCap?'容量':'需量'} × 12，度电分摊 = 年费用 ÷ 年用电量）。</p>
+    <details class="explain cap-note" style="margin-top:10px"><summary>政策口径与年费用公式<em>1441号 / 532号</em></summary><div class="inner">
+      <p class="note"><b>容量电费与电量来自省内或省外无关，不参与路径比选</b>（发改价格〔2020〕1441号 / 〔2023〕532号口径；年费用 = 单价 × ${isCap?'容量':'需量'} × 12，度电分摊 = 年费用 ÷ 年用电量）。</p>
+    </div></details>
   </div></details>`;
 }
 
@@ -3948,6 +4078,22 @@ function drawMapTD(){
   try{
     if(!tdMap){ tdMap=new T.Map('map-view'); tdMap.centerAndZoom(new T.LngLat(108,34),5); }
     tdMap.clearOverLays();
+    const zNow=tdMap.getZoom?tdMap.getZoom():5;
+    /* N2：天地图底图叠加选中方案的站点名称标注（对齐拓扑图站点信息）。缩放层级门控——缩小到
+       字会糊的层级（<6）不画；跨越阈值时 zoomend 整图重绘刷新标注（屏幕尺寸由 SDK 恒定，同
+       拓扑图 lblS 反向缩放「字号不随放大变大」的精神）。避让与拓扑图同口径：冲突时 SDK 无
+       碰撞检测，选中方案站点数少（≤换流站×段数），风险可控。 */
+    tdMap._lblZ=zNow;
+    if(!tdMap._stLblBound && typeof tdMap.addEventListener==='function'){
+      tdMap._stLblBound=true;
+      try{
+        tdMap.addEventListener('zoomend',()=>{
+          const z=tdMap.getZoom?tdMap.getZoom():5;
+          if((z>=6)!==(tdMap._lblZ>=6)) renderMap();
+          tdMap._lblZ=z;
+        });
+      }catch(e){}
+    }
     const v=visibleChannels(), seen=new Set();
     const C=k=>tokenColor(k), D=mapDots();   // 天地图样式只认真实颜色：按当前主题解析令牌
     /* 断面高亮垫层（spec: grid-map 断面，与拓扑图同色同语义）；真机 C3 复核：
@@ -3979,6 +4125,8 @@ function drawMapTD(){
           const mk=new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D.hot,iconSize:new T.Point(14,14)})});
           try{ mk.addEventListener('click',()=>stationPop(st)); }catch(e){}
           tdMap.addOverLay(mk);
+          // N2：站点名称标注（缩放层级门控见上；T.Label 缺失的旧 SDK 上静默跳过，同段名标注口径）
+          if(zNow>=6){ try{ tdMap.addOverLay(new T.Label({text:p.n,position:new T.LngLat(p.lng,p.lat),offset:new T.Point(0,-14)})); }catch(e){} }
         });
         // 段名标注：与拓扑图同源清单（routeLabelList），仅标选中方案
         const a=lngLatOf(s.e,'from'), b=lngLatOf(s.e,'to');
@@ -4303,9 +4451,12 @@ ${edges}${segs}${nodes}${sts}${labels}
 /* 点击通道=必经过滤：与测算页通道组件筛选（boot.js i-chan）同一状态源与语义，再次点击解除 */
 function toggleChan(id){
   state.mustHave=(state.mustHave.length&&state.mustHave[0]===id)?[]:[id];
-  state.sel=0; doSolve();
-  if(!document.getElementById('v-map').hidden) renderMap();   // 地图页联动重绘（spec: grid-map 三处联动）
-  chanPop(id);   // 批次 B（design D13）：点击通道同步弹出容量浮层，必经过滤语义不变
+  state.sel=0;
+  /* doSolve 已异步化（L2 加载提示）：依赖新 state._res 的联动放进回调，避免拿旧结果画图/弹浮层 */
+  doSolve(()=>{
+    if(!document.getElementById('v-map').hidden) renderMap();   // 地图页联动重绘（spec: grid-map 三处联动）
+    chanPop(id);   // 批次 B（design D13）：点击通道同步弹出容量浮层，必经过滤语义不变
+  });
 }
 /* 容量/占用率信息浮层（spec: grid-map 容量浮层）：点击任一通道即出，数据与费率库同源；
    字段缺失显式「待补」，不得以 0 或空白冒充；占用率取当前选中方案该段的 util（未在方案中则说明）。
@@ -4612,9 +4763,11 @@ function renderMap(){
       <button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
     <div class="seg small">${MAP_MODES.map(([k,t])=>`<button class="${mode===k?'on':''}" onclick="switchMap('${k}')">${t}</button>`).join('')}</div>`;
 
-  /* grid-map-device-fixes D4：探针失败自动降级的一次性红字说明（会话标志，成功应用有效密钥后清除） */
+  /* grid-map-device-fixes D4：探针失败自动降级的一次性红字说明（会话标志，成功应用有效密钥后清除）。
+     N1（赖老师口径「提示+一键重填，别自动清密钥」）：提示为常驻，附「一键重填」——切回天地图视图、
+     展开密钥面板、清空输入框并聚焦等用户重新粘贴；已存密钥不动（严禁自动清除路径）。 */
   if(mode==='svg'&&state.tdDegradeNote){
-    out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
+    out+=`<div class="warn bad" style="margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:0;flex:1">${esc(state.tdDegradeNote)}</span><button type="button" class="btn ghost hit-x" style="flex:none;width:auto;padding:4px 10px;font-size:11px;white-space:nowrap" onclick="tkRefill()">一键重填</button></div>`;
   }
   if(mode==='td'){
     /* 密钥面板折叠收纳（change: 密钥输入完成后自动收起）：收起就在「天地图密钥 ?」标题行本身，
@@ -4912,6 +5065,15 @@ function clearTk(){
   mapTkOpen=null;    // 清除后回到默认口径：无密钥自动展开引导填写
   saveMap();
   state.mapProvider='svg'; saveMap(); renderMap();
+}
+/* N1：降级常驻提示里的「一键重填」——只清输入框、不动已存密钥（state.tiandituKey 原样保留）。
+   切到天地图视图并展开密钥面板，用户重新粘贴后点「应用密钥」走完整校验链路。 */
+function tkRefill(){
+  state.mapProvider='td'; mapTkOpen=true; saveMap(); renderMap();
+  setTimeout(()=>{
+    const el=document.getElementById('i-tk');
+    if(el){ el.value=''; try{ el.focus(); }catch(e){} }
+  },0);
 }
 /* 「天地图密钥」旁问号图标点击弹出的说明框：样式令牌与 uiConfirm 同一套，单按钮「知道了」，
    Esc / 点遮罩均可关闭。 */
@@ -5220,6 +5382,12 @@ function go(t){
   if(t==='lib') renderLib(); if(t==='map') renderMap(); if(t==='calc') renderCalc();
   window.scrollTo({top:0});
 }
+/* W1：回顶按钮显隐——滚过一屏半才出现；切页已回顶，监听 scroll 即可（passive 不阻塞滚动） */
+function syncToTop(){
+  const b=document.getElementById('to-top'); if(!b) return;
+  b.classList.toggle('show',window.scrollY>window.innerHeight*1.5);
+}
+if(typeof window.addEventListener==='function') window.addEventListener('scroll',syncToTop,{passive:true});
 document.addEventListener('change',e=>{
   const id=e.target.id;
   if(id==='i-from'||id==='i-to'){
@@ -5229,7 +5397,7 @@ document.addEventListener('change',e=>{
     // 电网主体、电压档与电站专属送出价都是省份相关的，换省后回到该省默认
     if(isFrom) state.srcStation=null; else { state.dstEntity=null; state.dstTier=null; }
     if(isFrom) applyFromProv(); else applyToProv(); // 再用该端的核定值覆盖受影响的项
-    state.sel=0; saveLast(); state._res=solveState(); renderCalc();
+    state.sel=0; doSolve();   // L2：与参数改动同走 doSolveAsync（加载提示 + 30ms 去抖），不再直调 solveState
     return;
   }
   if(id==='i-chan'){ state.mustHave=e.target.value?[e.target.value]:[]; state.sel=0; doSolve(); return; }
@@ -5244,7 +5412,7 @@ document.addEventListener('change',e=>{
     const vt=dstTariff(); state.dstBilling=vt.billing;
     // 新主体不能自动带入（深圳：结构特殊）时不写值，交给 solveState() 里的 syncDstAuto 置空 → 界面提示「缺项须手填」
     if(vt.net!=null) state.pNet=vt.net;
-    state.sel=0; state._res=solveState(); saveLast(); renderCalc();
+    state.sel=0; doSolve();   // L2：与省对切换同走 doSolveAsync（加载提示 + 30ms 去抖），不再直调 solveState
     return;
   }
   if(id==='i-dstcapmode') state.dstCapMode=e.target.value;
