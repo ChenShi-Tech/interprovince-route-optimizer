@@ -988,6 +988,27 @@ const tests = [
     steps: '网架图→天地图，输入 FAKEKEY123，应用密钥',
     expected: 'loadTianditu onerror → 降级清单，无崩溃',
     async run(page, set) {
+      // 页面内桩（形态A：SDK 确定性失败）替代真实网络：与 UX-04 成功路径 T 桩方向相反——
+      // 本例不定义 window.T（tdApiReady 恒 false），失败发生在 script 的 onerror，
+      // 对齐 expected「loadTianditu onerror → 降级清单」。注入在 page.goto 之前（先例见 UX-04/RQ-602）。
+      // a) 包一层 Element.prototype.appendChild（init script 执行时 document.head 尚不存在，
+      //    实测会 pageerror，故挂原型而非 document.head 实例）：src 含 tianditu.gov.cn 的 script
+      //    不真正插入，setTimeout 触发其 onerror（产品原生 s.onerror→done(false)→showMapFallback，
+      //    map.js onerror 分支）；其余 script 一律放行，不影响页面其它注入。
+      // b) fetch 桩（对齐 UX-05 口径）：吃掉 tkFailDiagnose 的 no-cors 诊断请求（定性=服务端有响应=被拒）。
+      let tdReq = 0;
+      page.on('request', (r) => { if (/tianditu\.gov\.cn/.test(r.url())) tdReq++; });
+      await page.addInitScript(() => {
+        const rawAppend = Element.prototype.appendChild;
+        Element.prototype.appendChild = function (node) {
+          if (node && node.tagName === 'SCRIPT' && node.src && node.src.includes('tianditu.gov.cn')) {
+            setTimeout(() => { if (node.onerror) node.onerror(); }, 10);
+            return node;
+          }
+          return rawAppend.call(this, node);
+        };
+        window.fetch = () => Promise.resolve({ ok: true });
+      });
       await page.goto(G, DCL);
       await page.click('#t-map');
       await page.locator('button', { hasText: '天地图' }).click();
@@ -996,7 +1017,9 @@ const tests = [
       await page.waitForSelector('#fallback', { state: 'visible', timeout: 10000 });
       const txt = await page.locator('#fallback').innerText();
       ok(txt.includes('降级'), '应显示降级文案');
-      set('无效 tk → script onerror → showMapFallback 降级清单');
+      await page.waitForTimeout(300);   // 等 tkFailDiagnose 异步回写落定，守卫计数不受其影响（恒 0）
+      ok(tdReq === 0, `隔离守卫：全程零天地图请求（实测 ${tdReq} 次）`);
+      set('无效 tk → script onerror → showMapFallback 降级清单；零天地图请求');
     },
   },
   {
