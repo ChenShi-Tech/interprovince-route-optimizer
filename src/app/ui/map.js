@@ -249,6 +249,22 @@ function drawMapTD(){
   try{
     if(!tdMap){ tdMap=new T.Map('map-view'); tdMap.centerAndZoom(new T.LngLat(108,34),5); }
     tdMap.clearOverLays();
+    const zNow=tdMap.getZoom?tdMap.getZoom():5;
+    /* N2：天地图底图叠加选中方案的站点名称标注（对齐拓扑图站点信息）。缩放层级门控——缩小到
+       字会糊的层级（<6）不画；跨越阈值时 zoomend 整图重绘刷新标注（屏幕尺寸由 SDK 恒定，同
+       拓扑图 lblS 反向缩放「字号不随放大变大」的精神）。避让与拓扑图同口径：冲突时 SDK 无
+       碰撞检测，选中方案站点数少（≤换流站×段数），风险可控。 */
+    tdMap._lblZ=zNow;
+    if(!tdMap._stLblBound && typeof tdMap.addEventListener==='function'){
+      tdMap._stLblBound=true;
+      try{
+        tdMap.addEventListener('zoomend',()=>{
+          const z=tdMap.getZoom?tdMap.getZoom():5;
+          if((z>=6)!==(tdMap._lblZ>=6)) renderMap();
+          tdMap._lblZ=z;
+        });
+      }catch(e){}
+    }
     const v=visibleChannels(), seen=new Set();
     const C=k=>tokenColor(k), D=mapDots();   // 天地图样式只认真实颜色：按当前主题解析令牌
     /* 断面高亮垫层（spec: grid-map 断面，与拓扑图同色同语义）；真机 C3 复核：
@@ -280,6 +296,8 @@ function drawMapTD(){
           const mk=new T.Marker(new T.LngLat(p.lng,p.lat),{icon:new T.Icon({iconUrl:D.hot,iconSize:new T.Point(14,14)})});
           try{ mk.addEventListener('click',()=>stationPop(st)); }catch(e){}
           tdMap.addOverLay(mk);
+          // N2：站点名称标注（缩放层级门控见上；T.Label 缺失的旧 SDK 上静默跳过，同段名标注口径）
+          if(zNow>=6){ try{ tdMap.addOverLay(new T.Label({text:p.n,position:new T.LngLat(p.lng,p.lat),offset:new T.Point(0,-14)})); }catch(e){} }
         });
         // 段名标注：与拓扑图同源清单（routeLabelList），仅标选中方案
         const a=lngLatOf(s.e,'from'), b=lngLatOf(s.e,'to');
@@ -604,9 +622,12 @@ ${edges}${segs}${nodes}${sts}${labels}
 /* 点击通道=必经过滤：与测算页通道组件筛选（boot.js i-chan）同一状态源与语义，再次点击解除 */
 function toggleChan(id){
   state.mustHave=(state.mustHave.length&&state.mustHave[0]===id)?[]:[id];
-  state.sel=0; doSolve();
-  if(!document.getElementById('v-map').hidden) renderMap();   // 地图页联动重绘（spec: grid-map 三处联动）
-  chanPop(id);   // 批次 B（design D13）：点击通道同步弹出容量浮层，必经过滤语义不变
+  state.sel=0;
+  /* doSolve 已异步化（L2 加载提示）：依赖新 state._res 的联动放进回调，避免拿旧结果画图/弹浮层 */
+  doSolve(()=>{
+    if(!document.getElementById('v-map').hidden) renderMap();   // 地图页联动重绘（spec: grid-map 三处联动）
+    chanPop(id);   // 批次 B（design D13）：点击通道同步弹出容量浮层，必经过滤语义不变
+  });
 }
 /* 容量/占用率信息浮层（spec: grid-map 容量浮层）：点击任一通道即出，数据与费率库同源；
    字段缺失显式「待补」，不得以 0 或空白冒充；占用率取当前选中方案该段的 util（未在方案中则说明）。
@@ -913,9 +934,11 @@ function renderMap(){
       <button class="btn ghost hit-x" style="width:auto;padding:3px 10px;font-size:11px;flex:none" onclick="copyMapLink(this)" title="复制带当前起止省与选中方案的链接，打开即恢复">复制链接</button></div>
     <div class="seg small">${MAP_MODES.map(([k,t])=>`<button class="${mode===k?'on':''}" onclick="switchMap('${k}')">${t}</button>`).join('')}</div>`;
 
-  /* grid-map-device-fixes D4：探针失败自动降级的一次性红字说明（会话标志，成功应用有效密钥后清除） */
+  /* grid-map-device-fixes D4：探针失败自动降级的一次性红字说明（会话标志，成功应用有效密钥后清除）。
+     N1（赖老师口径「提示+一键重填，别自动清密钥」）：提示为常驻，附「一键重填」——切回天地图视图、
+     展开密钥面板、清空输入框并聚焦等用户重新粘贴；已存密钥不动（严禁自动清除路径）。 */
   if(mode==='svg'&&state.tdDegradeNote){
-    out+=`<div class="warn bad" style="margin:0 0 8px">${esc(state.tdDegradeNote)}</div>`;
+    out+=`<div class="warn bad" style="margin:0 0 8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="min-width:0;flex:1">${esc(state.tdDegradeNote)}</span><button type="button" class="btn ghost hit-x" style="flex:none;width:auto;padding:4px 10px;font-size:11px;white-space:nowrap" onclick="tkRefill()">一键重填</button></div>`;
   }
   if(mode==='td'){
     /* 密钥面板折叠收纳（change: 密钥输入完成后自动收起）：收起就在「天地图密钥 ?」标题行本身，
@@ -1213,6 +1236,15 @@ function clearTk(){
   mapTkOpen=null;    // 清除后回到默认口径：无密钥自动展开引导填写
   saveMap();
   state.mapProvider='svg'; saveMap(); renderMap();
+}
+/* N1：降级常驻提示里的「一键重填」——只清输入框、不动已存密钥（state.tiandituKey 原样保留）。
+   切到天地图视图并展开密钥面板，用户重新粘贴后点「应用密钥」走完整校验链路。 */
+function tkRefill(){
+  state.mapProvider='td'; mapTkOpen=true; saveMap(); renderMap();
+  setTimeout(()=>{
+    const el=document.getElementById('i-tk');
+    if(el){ el.value=''; try{ el.focus(); }catch(e){} }
+  },0);
 }
 /* 「天地图密钥」旁问号图标点击弹出的说明框：样式令牌与 uiConfirm 同一套，单按钮「知道了」，
    Esc / 点遮罩均可关闭。 */
