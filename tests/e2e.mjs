@@ -1929,7 +1929,9 @@ const tests = [
       await page.evaluate(() => { const d = document.getElementById('d-sens'); if (d) d.open = true; });
       // 2026-09-24 L1：fillSensitivity 未命中时先出 #calc-busy 提示、30ms 后异步重算（此前同步阻塞在 toggle 队列里）。
       // 断言链：提示出现 → 表就绪 → 提示收起；超时都放宽到秒级（本机实测重算 3.7~5.1s）。
-      await page.waitForSelector('#calc-busy.show', { timeout: 5000 });
+      // 2026-09-27 合前评审：全量运行下 waitForSelector 走 rAF 轮询，重算占满主线程期间帧产出停滞，
+      // 会漏掉 .show 的瞬时窗口（单跑不复现）；改页内 setTimeout 数值轮询，谓词与语义不变。
+      await page.waitForFunction(() => document.getElementById('calc-busy').classList.contains('show'), null, { timeout: 15000, polling: 250 });
       await page.waitForSelector('#d-sens table tr', { timeout: 30000 });
       await page.waitForFunction(() => !document.getElementById('calc-busy').classList.contains('show'), null, { timeout: 30000 });
       const r = await page.evaluate(() => {
