@@ -491,6 +491,155 @@ const tests = [
       set(`CDP 双击（80ms 间隔）：dblclick×${nDbl}；${dragged.vb.slice(0, 16)}… 复位回 ${r.vb.slice(0, 16)}…`);
     },
   },
+  {
+    id: 'R-DC-01', section: '真实输入', title: '真实触摸点击段名触发通道过滤（data-chan 补齐验收闸①）',
+    steps: 'hasTouch 打开网架图 → 逐段沿 polyline 中点邻近 ±16px/4px 网格 elementFromPoint 扫描，命中「无 data-st 且内容等于该段通道名」的 <text>（段名；定位不依赖 data-chan，补属性前后同口径）→ touchscreen.tap',
+    expected: '双向断言：① 过滤生效（waitSolve 后 state.mustHave==[cid]、i-chan 同步、#map-pop 呈通道浮层特征「必经过滤中」）；② 不弹站点浮层（不含「区域归属」「站址未采集」）。属性未加前本用例预期红（机制性：命中元素无 data-chan → closest 落空 → 坐标兜底）',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg polyline[data-chan]');
+      // 取点实证口径（2026-09-28 首跑校准）：段名 = 无 data-st、textContent===通道名(CH 同源) 的 <text>；
+      // 禁止取元素中心——沿段线中点邻近网格扫描，取 elementFromPoint 命中该 text 自身的首个点
+      const pt = await page.evaluate(() => {
+        const svg = document.querySelector('#map-view svg');
+        const nameOf = (cid) => { const ch = (typeof CH !== 'undefined') ? CH : (window.CH || []); const c = ch.find(x => x.id === cid); return c ? String(c.n).trim() : null; };
+        for (const l of svg.querySelectorAll('polyline[data-chan]')) {
+          const cid = l.getAttribute('data-chan');
+          const nm = nameOf(cid);
+          if (!nm) continue;
+          const total = l.getTotalLength();
+          const ctm = l.getScreenCTM();
+          for (const f of [0.5, 0.42, 0.58, 0.34, 0.66]) {
+            const p = l.getPointAtLength(total * f);
+            const s = new DOMPoint(p.x, p.y).matrixTransform(ctm);
+            for (let dy = -16; dy <= 16; dy += 4) for (let dx = -16; dx <= 16; dx += 4) {
+              const x = s.x + dx, y = s.y + dy;
+              if (x < 0 || x >= 390 || y < 0 || y >= 844) continue;
+              const hit = document.elementFromPoint(x, y);
+              if (hit && hit.tagName === 'text' && !hit.hasAttribute('data-st') && hit.textContent.trim() === nm)
+                return { x, y, cid, name: nm, hitTag: hit.tagName, hitDc: hit.getAttribute('data-chan') };
+            }
+          }
+        }
+        return null;
+      });
+      ok(pt, '段名网格扫描未命中任何「内容===通道名」的段名 <text>（取点口径不成立，属脚手架问题）');
+      await page.touchscreen.tap(pt.x, pt.y);
+      await waitSolve(page);   // 2026-09-24 L2：toggleChan 的 doSolve 已异步化（renderMap+chanPop 在回调）
+      await page.waitForTimeout(120);
+      const mh = await page.evaluate(() => state.mustHave);
+      const chan = await page.evaluate(() => (document.getElementById('i-chan') || {}).value);
+      const pop = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      const clue = `命中 ${pt.hitTag}(data-chan=${pt.hitDc}) 点(${(pt.x | 0)},${(pt.y | 0)})`;
+      ok(JSON.stringify(mh) === JSON.stringify([pt.cid]), `mustHave 应为 [${pt.cid}]，实际 ${JSON.stringify(mh)}（${clue}）`);
+      ok(chan === pt.cid, `测算页通道筛选应同步为 ${pt.cid}，实际 ${chan}（${clue}）`);
+      ok(pop.includes('必经过滤中'), `#map-pop 应呈通道浮层特征「必经过滤中」，实际「${pop.slice(0, 40)}」（${clue}）`);
+      ok(!pop.includes('区域归属') && !pop.includes('站址未采集'), `#map-pop 不得含站点浮层特征（区域归属/站址未采集），实际「${pop.slice(0, 40)}」`);
+      set(`段名「${pt.name}」真实 tap → mustHave=[${pt.cid}]、i-chan 同步、通道浮层、无站点浮层`);
+    },
+  },
+  {
+    id: 'R-DC-02', section: '真实输入', title: '真实触摸点击编号徽标触发通道过滤（data-chan 补齐验收闸②）',
+    steps: 'hasTouch 打开网架图 → 逐段取 polyline 中点，定位「圆心距中点 ≤3px 且无 data-st」的 circle（编号徽标；半径 8.5*lblS 随缩放，禁止写死像素）→ 圆内网格 elementFromPoint 实证命中（circle 或圆内序号 text 均可）→ touchscreen.tap',
+    expected: '同 R-DC-01：过滤生效（mustHave/i-chan/通道浮层特征）+ 不弹站点浮层。属性未加前本用例预期红（机制性）',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg polyline[data-chan]');
+      // 取点实证口径（2026-09-28 首跑校准）：徽标圆心=段线中点（map.js 同 sg 闭包取点），
+      // 以「圆心距中点 ≤3px」定位徽标 circle（排除 data-st 站标圆与省节点圆），再在圆内取 elementFromPoint 实证命中点
+      const pt = await page.evaluate(() => {
+        const svg = document.querySelector('#map-view svg');
+        for (const l of svg.querySelectorAll('polyline[data-chan]')) {
+          const cid = l.getAttribute('data-chan');
+          const p = l.getPointAtLength(l.getTotalLength() * 0.5);
+          const s = new DOMPoint(p.x, p.y).matrixTransform(l.getScreenCTM());
+          const badge = [...svg.querySelectorAll('circle')].find(c => {
+            if (c.hasAttribute('data-st')) return false;
+            const b = c.getBoundingClientRect();
+            return Math.hypot(b.left + b.width / 2 - s.x, b.top + b.height / 2 - s.y) <= 3;
+          });
+          if (!badge) continue;
+          const b = badge.getBoundingClientRect();
+          const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+          const r = Math.min(b.width, b.height) / 2;
+          for (const [dx, dy] of [[0, 0], [r / 2, 0], [-r / 2, 0], [0, r / 2], [0, -r / 2], [r / 2, r / 2], [-r / 2, -r / 2], [r / 2, -r / 2], [-r / 2, r / 2]]) {
+            const x = cx + dx, y = cy + dy;
+            if (x < 0 || x >= 390 || y < 0 || y >= 844) continue;
+            const hit = document.elementFromPoint(x, y);
+            if (!hit) continue;
+            const hb = hit.getBoundingClientRect();
+            const inCircle = Math.hypot(hb.left + hb.width / 2 - cx, hb.top + hb.height / 2 - cy) <= r + 1;
+            if (hit === badge || (hit.tagName === 'text' && inCircle))
+              return { x, y, cid, r: Math.round(r * 10) / 10, hitTag: hit.tagName, hitDc: hit.getAttribute('data-chan') };
+          }
+        }
+        return null;
+      });
+      ok(pt, '徽标扫描未找到「圆心距段线中点 ≤3px」的徽标 circle（取点口径不成立，属脚手架问题）');
+      await page.touchscreen.tap(pt.x, pt.y);
+      await waitSolve(page);   // 2026-09-24 L2：toggleChan 的 doSolve 已异步化（renderMap+chanPop 在回调）
+      await page.waitForTimeout(120);
+      const mh = await page.evaluate(() => state.mustHave);
+      const chan = await page.evaluate(() => (document.getElementById('i-chan') || {}).value);
+      const pop = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      const clue = `命中 ${pt.hitTag}(data-chan=${pt.hitDc}) 点(${(pt.x | 0)},${(pt.y | 0)})`;
+      ok(JSON.stringify(mh) === JSON.stringify([pt.cid]), `mustHave 应为 [${pt.cid}]，实际 ${JSON.stringify(mh)}（${clue}）`);
+      ok(chan === pt.cid, `测算页通道筛选应同步为 ${pt.cid}，实际 ${chan}（${clue}）`);
+      ok(pop.includes('必经过滤中'), `#map-pop 应呈通道浮层特征「必经过滤中」，实际「${pop.slice(0, 40)}」（${clue}）`);
+      ok(!pop.includes('区域归属') && !pop.includes('站址未采集'), `#map-pop 不得含站点浮层特征（区域归属/站址未采集），实际「${pop.slice(0, 40)}」`);
+      set(`徽标（r≈${pt.r}px）真实 tap → mustHave=[${pt.cid}]、i-chan 同步、通道浮层、无站点浮层`);
+    },
+  },
+  {
+    id: 'R-DC-03', section: '真实输入', title: '点中段线回归对照：单一路径、单次触发、无站点浮层',
+    steps: '复用 R-MAP-01 取点扫描（只收 elementFromPoint 命中 polyline 自身笔画点）→ tap → waitSolve → 断言 → 间隔观察无重复触发 → 过滤后二次取点再 tap 解除',
+    expected: '与 R-MAP-01 一致（mustHave==[cid]、i-chan 同步），外加：① 单次触发守卫（一次 tap 只过滤一次）；② 不弹站点浮层（不含「区域归属」「站址未采集」）；③ 再 tap 解除。属性补齐前后均应绿（polyline 原有 data-chan）',
+    touch: true,
+    async run(page, set) {
+      await page.goto(G, DCL);
+      await page.click('#t-map');
+      await page.waitForSelector('#map-view svg polyline[data-chan]');
+      const pick = () => page.evaluate(() => {
+        const l = document.querySelector('#map-view svg polyline[data-chan]');
+        const cid = l.getAttribute('data-chan');
+        const total = l.getTotalLength();
+        const fr = [0.5];                                   // 从中点向两侧 5% 步长交替扫描（同 R-MAP-01）
+        for (let d = 0.05; d <= 0.4; d += 0.05) fr.push(0.5 - d, 0.5 + d);
+        for (const f of fr) {
+          const p = l.getPointAtLength(total * f);
+          const s = new DOMPoint(p.x, p.y).matrixTransform(l.getScreenCTM());
+          if (s.x < 0 || s.x >= 390 || s.y < 0 || s.y >= 844) continue;
+          const hit = document.elementFromPoint(s.x, s.y);
+          if (hit && hit.closest && hit.closest(`#map-view svg polyline[data-chan="${cid}"]`) === l) return { x: s.x, y: s.y, cid, f };
+        }
+        return null;
+      });
+      const pt = await pick();
+      ok(pt, '段线扫描未找到未被标注覆盖的笔画点');
+      await page.touchscreen.tap(pt.x, pt.y);
+      await waitSolve(page);   // 2026-09-24 L2：tap → toggleChan 的 doSolve 已异步化（联动 renderMap 在回调）
+      await page.waitForTimeout(120);
+      ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([pt.cid]), `mustHave 应为 [${pt.cid}]`);
+      const chan = await page.evaluate(() => (document.getElementById('i-chan') || {}).value);
+      ok(chan === pt.cid, `测算页通道筛选应同步为 ${pt.cid}，实际 ${chan}`);
+      const pop = await page.evaluate(() => document.getElementById('map-pop').innerText);
+      ok(pop.includes('必经过滤中'), `#map-pop 应呈通道浮层特征「必经过滤中」，实际「${pop.slice(0, 40)}」`);
+      ok(!pop.includes('区域归属') && !pop.includes('站址未采集'), `#map-pop 不得含站点浮层特征（区域归属/站址未采集），实际「${pop.slice(0, 40)}」`);
+      await page.waitForTimeout(300);   // 单次触发守卫：一次 tap 不得产生二次过滤或自解除
+      ok(JSON.stringify(await page.evaluate(() => state.mustHave)) === JSON.stringify([pt.cid]), '单次触发守卫：mustHave 应保持单元素，实际被重复触发或自解除');
+      const pt2 = await pick();   // 过滤后路线图重绘，重新取点再 tap（对齐 R-MAP-01 二次取点）
+      ok(pt2, '二次 tap 前未找到可命中笔画点');
+      await page.touchscreen.tap(pt2.x, pt2.y);
+      await waitSolve(page);   // 2026-09-24 L2：第二次 tap 的 doSolve 同样异步化
+      await page.waitForTimeout(120);
+      ok((await page.evaluate(() => state.mustHave.length)) === 0, '再次 tap 应解除过滤');
+      set(`段线真实 tap ${pt.cid}（线体 ${(pt.f * 100) | 0}% 处）→ 单次触发、无站点浮层；再 tap 解除`);
+    },
+  },
 
   /* ================= 主流程 ================= */
   {
