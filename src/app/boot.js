@@ -6,6 +6,12 @@ function go(t){
   if(t==='lib') renderLib(); if(t==='map') renderMap(); if(t==='calc') renderCalc();
   window.scrollTo({top:0});
 }
+/* W1：回顶按钮显隐——滚过一屏半才出现；切页已回顶，监听 scroll 即可（passive 不阻塞滚动） */
+function syncToTop(){
+  const b=document.getElementById('to-top'); if(!b) return;
+  b.classList.toggle('show',window.scrollY>window.innerHeight*1.5);
+}
+if(typeof window.addEventListener==='function') window.addEventListener('scroll',syncToTop,{passive:true});
 document.addEventListener('change',e=>{
   const id=e.target.id;
   if(id==='i-from'||id==='i-to'){
@@ -15,7 +21,7 @@ document.addEventListener('change',e=>{
     // 电网主体、电压档与电站专属送出价都是省份相关的，换省后回到该省默认
     if(isFrom) state.srcStation=null; else { state.dstEntity=null; state.dstTier=null; }
     if(isFrom) applyFromProv(); else applyToProv(); // 再用该端的核定值覆盖受影响的项
-    state.sel=0; saveLast(); state._res=solveState(); renderCalc();
+    state.sel=0; doSolve();   // L2：与参数改动同走 doSolveAsync（加载提示 + 30ms 去抖），不再直调 solveState
     return;
   }
   if(id==='i-chan'){ state.mustHave=e.target.value?[e.target.value]:[]; state.sel=0; doSolve(); return; }
@@ -30,7 +36,7 @@ document.addEventListener('change',e=>{
     const vt=dstTariff(); state.dstBilling=vt.billing;
     // 新主体不能自动带入（深圳：结构特殊）时不写值，交给 solveState() 里的 syncDstAuto 置空 → 界面提示「缺项须手填」
     if(vt.net!=null) state.pNet=vt.net;
-    state.sel=0; state._res=solveState(); saveLast(); renderCalc();
+    state.sel=0; doSolve();   // L2：与省对切换同走 doSolveAsync（加载提示 + 30ms 去抖），不再直调 solveState
     return;
   }
   if(id==='i-dstcapmode') state.dstCapMode=e.target.value;

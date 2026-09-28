@@ -184,10 +184,18 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
-    /** 导出桥：只暴露一个 savePng(name, base64)，纯数据落地，不做任何页面控制。 */
+    /** 导出桥：纯数据落地，不做任何页面控制。
+     * saveFile(name, mime, base64) 泛化落盘（F5：测算页「导出报告」的 text/markdown 经此桥兜
+     * WebView 静默丢弃 <a download> 的底，与网架快照同一根因）；savePng 保留兼容、内部转调。
+     * MIME 参数化只影响 MediaStore 分支的登记类型；低版本分支写裸字节，登记值不参与。 */
     class Bridge {
         @JavascriptInterface
         public void savePng(String name, String base64) {
+            saveFile(name, "image/png", base64);
+        }
+
+        @JavascriptInterface
+        public void saveFile(String name, String mime, String base64) {
             try {
                 byte[] data = Base64.decode(base64, Base64.DEFAULT);
                 String where;
@@ -195,7 +203,7 @@ public class MainActivity extends Activity {
                     // Android 10+：MediaStore.Downloads 公共下载目录，应用无需存储权限
                     ContentValues cv = new ContentValues();
                     cv.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
-                    cv.put(MediaStore.MediaColumns.MIME_TYPE, "image/png");
+                    cv.put(MediaStore.MediaColumns.MIME_TYPE, mime == null ? "application/octet-stream" : mime);
                     cv.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
                     Uri uri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
                     OutputStream os = getContentResolver().openOutputStream(uri);
