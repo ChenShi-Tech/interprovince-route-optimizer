@@ -1223,7 +1223,7 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-24 07:33';
+const BUILD_TIME='2026-09-28 07:53';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
@@ -4365,8 +4365,8 @@ function topoSVG(){
       segs+=`<polyline points="${pts}" fill="none" stroke-width="${u(3.2*lblS)}" stroke-linecap="round" stroke-linejoin="round" data-chan="${sg.e.id}" style="stroke:var(--map-route);pointer-events:stroke"/>`;
       const m1=ps[Math.floor((ps.length-1)/2)], m2=ps[Math.ceil((ps.length-1)/2)];
       const mx=(m1[0]+m2[0])/2, my=(m1[1]+m2[1])/2;
-      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${u(8.5*lblS)}" style="fill:var(--map-route)"/>`
-          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="${u(10*lblS)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${i+1}</text>`;
+      segs+=`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="${u(8.5*lblS)}" style="fill:var(--map-route)" data-chan="${sg.e.id}"/>`
+          + `<text x="${mx.toFixed(1)}" y="${my.toFixed(1)}" style="fill:var(--on-fill)" font-size="${u(10*lblS)}" font-weight="600" text-anchor="middle" dominant-baseline="central" data-chan="${sg.e.id}">${i+1}</text>`;
       segCircles.push({mx,my});
       /* 段名候选位：段线比例点 × 上下侧共 8 个。防重叠真正生效后（placed 登记修复），
          仅靠中点两侧两个候选在拥挤路线（川→陕→甘→宁）上会全冲突而被省略——违反
@@ -4376,14 +4376,14 @@ function topoSVG(){
       const c05=at(0.5),c035=at(0.35),c065=at(0.65);
       const sPref=(i%2?17:-14)*lblS,sAlt=(i%2?-14:17)*lblS;
       segLabelCands.push([
-        {name:sg.e.n,x:c05[0],yBase:c05[1]+sPref},
-        {name:sg.e.n,x:c05[0],yBase:c05[1]+sAlt},
-        {name:sg.e.n,x:c035[0],yBase:c035[1]+sPref},
-        {name:sg.e.n,x:c065[0],yBase:c065[1]+sPref},
-        {name:sg.e.n,x:c035[0],yBase:c035[1]+sAlt},
-        {name:sg.e.n,x:c065[0],yBase:c065[1]+sAlt},
-        {name:sg.e.n,x:c05[0],yBase:c05[1]-30*lblS},
-        {name:sg.e.n,x:c05[0],yBase:c05[1]+33*lblS},
+        {id:sg.e.id,name:sg.e.n,x:c05[0],yBase:c05[1]+sPref},
+        {id:sg.e.id,name:sg.e.n,x:c05[0],yBase:c05[1]+sAlt},
+        {id:sg.e.id,name:sg.e.n,x:c035[0],yBase:c035[1]+sPref},
+        {id:sg.e.id,name:sg.e.n,x:c065[0],yBase:c065[1]+sPref},
+        {id:sg.e.id,name:sg.e.n,x:c035[0],yBase:c035[1]+sAlt},
+        {id:sg.e.id,name:sg.e.n,x:c065[0],yBase:c065[1]+sAlt},
+        {id:sg.e.id,name:sg.e.n,x:c05[0],yBase:c05[1]-30*lblS},
+        {id:sg.e.id,name:sg.e.n,x:c05[0],yBase:c05[1]+33*lblS},
       ]);
     });
   }
@@ -4422,7 +4422,7 @@ function topoSVG(){
   }
   /* 段名最后放置（相对省名/站名优先级最低，但 spec 要求逐段必标——按候选序取第一个不冲突位） */
   segLabelCands.forEach(cands=>{
-    const segAttrs=`font-size="${u(10*lblS)}" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="${u(3*lblS)}"`;
+    const segAttrs=`font-size="${u(10*lblS)}" font-weight="600" style="fill:var(--map-label-on);stroke:var(--map-casing)" text-anchor="middle" paint-order="stroke" stroke-width="${u(3*lblS)}" data-chan="${cands[0].id}"`;
     for(const c of cands){ if(putText(c.name,10*lblS,c.x,c.yBase,segAttrs)) return; }
   });
 
