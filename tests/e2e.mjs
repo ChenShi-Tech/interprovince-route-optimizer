@@ -79,6 +79,12 @@ const openParams = async (page) => {
   }
 };
 
+/* topoRerender 排空等待（MF-03/MF-04）：topoViewSet 缩放（map.js:718）与 topoViewReset 复位（map.js:725）
+   都走 rAF 异步重绘（topoRerender），重绘落定前读 viewBox 会竞态挂（flaky 根因，赖批复口径）。
+   topoRerenderPending 是拼接后 classic script 的顶层 let，落在全局词法环境，page.evaluate 可直读；
+   等它归零即重绘排空，再断言。 */
+const waitTopoRerender = (page) => page.waitForFunction(() => topoRerenderPending === 0, null, { timeout: 3000 });
+
 /* 扩区点击命中审计（UI-HIT）：小控件用透明 ::after 把点击区扩到 44px（src/template.html「可点区域 ≥44px」一段），
    扩出去的部分不得盖住相邻的可点控件。对 scope 内每个挂了扩区（absolute、z-index:-1 的 ::after）的可见控件：
    ① 在可见矩形外 1–2px、扩区外沿与中线取样，elementFromPoint 命中的必须是控件自己或非可点元素；
@@ -2727,6 +2733,7 @@ const tests = [
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
       await page.evaluate(() => topoViewSet({ x: 40, y: 30, w: 330, h: 215 }));
+      await waitTopoRerender(page);   // 缩放走 rAF 重绘，排空再读，否则读到重绘前旧 viewBox
       const vbZoom = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
       await page.click('#t-calc');
       await page.click('#t-map');
@@ -2736,6 +2743,7 @@ const tests = [
       await page.locator('.rc').nth(1).click();   // 选中方案变化 → 复位
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
+      await waitTopoRerender(page);   // 路线卡片触发 topoViewReset 复位（rAF 重绘），排空再读
       const vb2 = await page.evaluate(() => ({ vb: document.querySelector('#map-view svg').getAttribute('viewBox'), mv: state.mapView }));
       ok(vb2.vb !== vbZoom && vb2.mv === null, `选中方案变化后视野应复位：${vbZoom.slice(0, 20)}… → ${vb2.vb.slice(0, 20)}…`);
       set(`切 Tab 视野保持（${vbZoom.slice(0, 20)}…）；点路线卡片后复位（${vb2.vb.slice(0, 20)}…）`);
@@ -2750,6 +2758,7 @@ const tests = [
       await page.click('#t-map');
       await page.waitForSelector('#map-view svg');
       await page.evaluate(() => topoViewSet({ x: 60, y: 40, w: 300, h: 196 }));
+      await waitTopoRerender(page);   // 缩放走 rAF 重绘，排空再读/导出，否则序列化到重绘前旧 SVG
       const vb = await page.evaluate(() => document.querySelector('#map-view svg').getAttribute('viewBox'));
       const src = await page.evaluate(() => new Promise(res => {
         let got = '';
