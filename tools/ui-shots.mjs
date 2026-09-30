@@ -4,6 +4,7 @@
  *
  * 用法：
  *   node tools/ui-shots.mjs [输出目录] [--theme <名字>]    # 截一套图（默认 .runtime/ui-shots/<时间戳>/）
+ *   node tools/ui-shots.mjs [输出目录] --raw               # 不预置隐私同意键，只截隐私政策弹窗（#1 上架合规）
  *   node tools/ui-shots.mjs --compare <目录A> <目录B>      # 逐张逐像素比较，打印差异像素数；有差异退出码 1
  *
  * 截图对象是仓库里的构建产物 index.html（file:// 直开，与 APK 离线形态一致；先跑 node tools/build.mjs）。
@@ -122,6 +123,8 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === '--theme') theme = args[++i];
   else if (!args[i].startsWith('--')) outDir = args[i];
 }
+/* --raw：不预置隐私同意键，截隐私弹窗本身（见 RAW_SCREENS）；普通模式预置同意键保证旧画面零回归 */
+const raw = args.includes('--raw');
 if (args.includes('--theme') && !theme) { console.error('--theme 需要一个名字'); process.exit(2); }
 /* 主题 id → 外观偏好（与 src/app/ui/theme.js 的 resolveTheme 对应）。新增主题要加在这里：
    tools/test-design-tokens.mjs 核对这张表恰好覆盖 src/tokens.css 推导出的全部主题 */
@@ -270,6 +273,11 @@ const SCREENS = [
     },
   },
 ];
+/* --raw 模式：不预置隐私同意键，只截「隐私政策同意弹窗」本身（首启自动弹出，无需 prepare 触发）。
+   普通模式预置同意键（见下方 addInitScript），17 个画面与改造前保持同口径、可逐像素比对。 */
+const RAW_SCREENS = [
+  { name: 'privacy-dialog', target: 'viewport', async prepare(page) { await page.waitForSelector('#privacy-box [role=dialog]'); } },
+];
 /** 网架图重绘后 SVG 由 setTimeout(80ms) 注入：给旧 SVG 打标，等新 SVG 出现再继续。 */
 async function mapRedraw(page, action) {
   await page.evaluate(() => { const g = document.querySelector('#map-view svg'); if (g) g.dataset.stale = '1'; });
@@ -297,14 +305,16 @@ console.log(`浏览器：${exe || 'playwright 默认'}\n页面：${url}\n输出�
 let n = 0, errPages = 0;
 try {
   for (const size of SIZES) {
-    for (const scr of SCREENS) {
+    for (const scr of (raw ? RAW_SCREENS : SCREENS)) {
       const ctx = await browser.newContext({ viewport: size.viewport, deviceScaleFactor: size.deviceScaleFactor, colorScheme: 'light' });
-      await ctx.addInitScript((prefs) => {
+      await ctx.addInitScript(({ prefs, seedPrivacy }) => {
         try {
           localStorage.setItem('iproute.v2.guide', '1');   // 存储不可用时导览会弹出，截图会暴露出来
+          // #1 上架合规：预置「已同意」（v/at 为固定占位，与样式无关）；--raw 模式不预置、专截隐私弹窗
+          if (seedPrivacy) localStorage.setItem('iproute.v2.privacy', JSON.stringify({ v: 1, at: '2000-01-01T00:00:00.000Z' }));
           if (prefs) localStorage.setItem('iproute.v2.ui', JSON.stringify(prefs));
         } catch (e) { /* 同上 */ }
-      }, theme ? THEME_PREFS[theme] : null);
+      }, { prefs: theme ? THEME_PREFS[theme] : null, seedPrivacy: !raw });
       const page = await ctx.newPage();
       const errs = [];
       page.on('pageerror', (e) => errs.push(String(e).split('\n')[0]));

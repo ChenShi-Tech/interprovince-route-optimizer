@@ -425,6 +425,7 @@ const APP_FILES = [
   'src/app/ui/lib.js',
   'src/app/ui/map.js',
   'src/app/ui/ai.js',
+  'src/app/privacy.js',
   'src/app/boot.js',
 ];
 // APP_FILES 与 tools/test-modules.mjs 的守卫清单必须逐项一致（两份列表过去靠人工同步，

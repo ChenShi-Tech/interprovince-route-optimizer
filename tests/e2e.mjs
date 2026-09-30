@@ -37,7 +37,9 @@ async function runTest(browser, def) {
   const context = await browser.newContext({ viewport: def.viewport || { width: 390, height: 844 }, ...(def.touch ? { hasTouch: true } : {}) });
   // FR-3 新手导览预置「已读」：导览仅在安装后首启弹出，若不预置会闯进每个用例的点击路径与截图。
   // 导览自身行为由 UX-06 专项验证（清除该键后重载触发首启分支）。
-  await context.addInitScript(() => { try { localStorage.setItem('iproute.v2.guide', '1'); } catch (e) {} });
+  // #1 隐私同意预置「已同意」：隐私弹窗仅在首启弹出且遮挡底部导航，不预置会拦住网架/费率库相关用例的点击路径。
+  // 隐私弹窗自身行为由 UX-10 专项验证（干净 context 无预置加载触发首启分支）。
+  await context.addInitScript(() => { try { localStorage.setItem('iproute.v2.guide', '1'); localStorage.setItem('iproute.v2.privacy', JSON.stringify({ v: 1, at: '2000-01-01T00:00:00.000Z' })); } catch (e) {} });
   const page = await context.newPage();
   const logs = rec.logs;
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') logs.console.push(`[${m.type()}] ${m.text().slice(0, 160)}`); });
@@ -2471,8 +2473,10 @@ const tests = [
     steps: '独立干净 context（无导览预置）加载 → 验证不阻塞 → 跳过 → 重载 → 点页头「帮助」',
     expected: '首启自动弹出导览且主流程可正常操作；跳过写键、重载不再弹；帮助入口可重开导览',
     async run(page, set) {
-      // runTest 的 addInitScript 会给本 context 预置导览键，首启分支须用干净 context 验证
+      // runTest 的 addInitScript 会给本 context 预置导览键，首启分支须用干净 context 验证。
+      // #1 隐私弹窗先于导览：干净 context 里预置「已同意」，把首启弹层限定为导览本身。
       const ctx2 = await page.context().browser().newContext({ viewport: { width: 390, height: 844 } });
+      await ctx2.addInitScript(() => { try { localStorage.setItem('iproute.v2.privacy', JSON.stringify({ v: 1, at: '2000-01-01T00:00:00.000Z' })); } catch (e) {} });
       const p2 = await ctx2.newPage();
       try {
         await p2.goto(G, DCL);
@@ -2498,6 +2502,57 @@ const tests = [
       await page.click('#btn-help');
       await page.waitForSelector('#guide-box', { timeout: 2000 });
       await page.locator('#guide-box button', { hasText: '跳过导览' }).click();
+    },
+  },
+  {
+    id: 'UX-10', section: '体验修复', title: '#1 隐私同意：首启弹出/同意持久化/网架页不可达/重载不重弹',
+    steps: '独立干净 context（无隐私预置）加载 → 弹窗在场 → go("map") 被拦 → 暂不同意不写键 → 点网架 Tab 重弹且不可达 → 同意写键并补导览 → 网架可达 → 重载不弹',
+    expected: '同意前零网络请求、网架页真不可达（#v-map 恒 hidden）；同意写 {v:1,at} 键、重载不再弹；暂不同意不写任何键',
+    async run(page, set) {
+      // runTest 的 addInitScript 会给本 context 预置隐私键，首启分支须用干净 context 验证
+      const ctx2 = await page.context().browser().newContext({ viewport: { width: 390, height: 844 } });
+      const p2 = await ctx2.newPage();
+      const reqs = [];
+      // 合规口径：零「外部」请求——文档导航本身是应用载体（APK 下为 file:// 不计），只统计其后发出的一切请求
+      p2.on('request', (r) => { if (r.resourceType() !== 'document') reqs.push(r.url()); });
+      try {
+        await p2.goto(G, DCL);
+        await p2.waitForSelector('#privacy-box', { timeout: 4000 });
+        await p2.waitForTimeout(3000);   // 静置 3s：同意前零网络请求
+        ok(reqs.length === 0, `同意前静置 3s 应零网络请求（实际 ${reqs.length} 个：${reqs.slice(0, 3).join('，')}）`);
+        await p2.evaluate(() => go('map'));
+        await p2.waitForTimeout(200);
+        ok(await p2.evaluate(() => document.getElementById('v-map').hidden) === true, '同意前 go("map") 应被拦（#v-map 保持 hidden）');
+        ok(reqs.length === 0, `同意前触发 go("map") 仍应零请求（实际 ${reqs.length} 个）`);
+        await p2.locator('#privacy-box button', { hasText: '暂不同意' }).click();
+        ok(await p2.locator('#privacy-box').count() === 0, '暂不同意应关闭弹窗');
+        ok(await p2.evaluate(() => localStorage.getItem('iproute.v2.privacy')) === null, '暂不同意不应写任何键');
+        await p2.click('#t-map');   // 遮罩已关，走真实网架入口
+        await p2.waitForTimeout(200);
+        ok(await p2.evaluate(() => document.getElementById('v-map').hidden) === true, '暂不同意后点网架 Tab 仍不可达（真不可达，非隐藏样式）');
+        ok(await p2.locator('#privacy-box').count() === 1, '暂不同意后点网架 Tab 应重新弹出隐私窗');
+        await p2.locator('#privacy-box button', { hasText: '同意并继续' }).click();
+        const key = await p2.evaluate(() => JSON.parse(localStorage.getItem('iproute.v2.privacy') || 'null'));
+        ok(!!key && key.v === 1 && !!key.at, '同意应写隐私键 {v:1,at}');
+        ok(await p2.locator('#privacy-box').count() === 0, '同意后弹窗应关闭');
+        // 拍板②：同意后当次补导览（guide 键在干净 context 缺席）——先跳过导览再验证网架可达
+        await p2.waitForSelector('#guide-box', { timeout: 2000 });
+        await p2.locator('#guide-box button', { hasText: '跳过导览' }).click();
+        await p2.click('#t-map');
+        await p2.waitForSelector('#map-view svg', { timeout: 4000 });
+        ok(await p2.evaluate(() => document.getElementById('v-map').hidden) === false, '同意后网架页应可达');
+        await p2.reload({ waitUntil: 'load' });
+        await p2.waitForTimeout(800);
+        ok(await p2.locator('#privacy-box').count() === 0, '已同意重载不应再弹（结束进程重开不重弹）');
+        set(`干净 context 首启弹隐私窗；同意前 0 请求、go("map")/网架 Tab 均被拦；暂不同意不写键；同意写 {v,at}、补导览、网架可达；重载不弹`);
+      } finally {
+        await ctx2.close();
+      }
+      // 报告证据图：主 page 预置了隐私键且 addInitScript 在每次导航时重放种子，不能靠「删键+重载」——
+      // 改为删键后直接调 privacyEnsure() 触发首启弹窗（与真实首启同一渲染路径）
+      await page.goto(G, DCL);
+      await page.evaluate(() => { localStorage.removeItem('iproute.v2.privacy'); privacyEnsure(); });
+      await page.waitForSelector('#privacy-box [role=dialog]', { timeout: 2000 });
     },
   },
   {

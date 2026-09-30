@@ -419,7 +419,7 @@ function loadTMap(cb){
   s.onerror=()=>{ tmapState='failed'; tmapFlush(false); };
   if(!tag) document.head.appendChild(s);
 }
-if(isProxyEnv()) loadTMap();   // 代理环境：脚本求值即开始下载（body 末尾，不阻塞首屏）；非代理环境不请求
+if(isProxyEnv()&&privacyStatus()) loadTMap();   // 代理环境：脚本求值即开始下载（body 末尾，不阻塞首屏）；非代理环境不请求；#1：未同意隐私政策不拉起 SDK
 
 /* 内置拓扑图：纯 SVG，不依赖任何外部地图服务，离线与托管环境均可用。
    按站点经纬度做等距圆柱投影，只画节点与连线，不绘制任何行政区划边界。 */
@@ -902,6 +902,7 @@ const MAP_MODES=[['svg','拓扑图'],['qq','腾讯地图'],['td','天地图']];
    或走降级分支把刚画好的图藏起来。 */
 let mapGen=0;
 function renderMap(){
+  if(!privacyStatus()) return;   // #1 上架合规兜底：同意前网架页不可达（主闸门是 go('map')；renderMap 另有 12 处内部调用点，这里统一挡死）
   const gen=++mapGen;
   mapReady=false; map=null; polyLayer=null; mkLayer=null; lbLayer=null; tdMap=null;
   const proxyOK=isProxyEnv();

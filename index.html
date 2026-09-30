@@ -1223,11 +1223,12 @@ const DATA={"ST":{"JPSN_S":{"n":"锦屏换流站","a":"四川凉山州西昌市�
 /* 应用代码按 APP_FILES 顺序内联；源码见 src/app/ */
 /* ===== src/app/config.js ===== */
 /* 构建期注入的常量与本地存储键。由 node tools/build.mjs 替换占位符。 */
-const BUILD_TIME='2026-09-28 08:45';
+const BUILD_TIME='2026-09-30 07:53';
 const PRICE_VERSION='5f5f316cff2c0bb4';   // 价格数据指纹，与 shared/app-data.json 同源
 const LS_LIB='iproute.v2.lib', LS_LAST='iproute.v2.last', LS_MAP='iproute.v2.map';
 const LS_AI='iproute.v2.ai';   // 智能推荐的服务商 / 模型 / 密钥 / 上次输入，只存本机浏览器
 const LS_GUIDE='iproute.v2.guide';   // FR-3：新手导览完成标记（存在即不再自动弹出；仅清应用数据重置）
+const LS_PRIVACY='iproute.v2.privacy';   // #1 上架合规：隐私政策同意态（JSON {v:1,at:<ISO>}；「暂不同意」不写键）
 const LS_UI='iproute.v2.ui';   // 外观偏好 {style:'clear'|'tech', mode:'system'|'light'|'dark'}；src/template.html <head> 内联脚本里写的是同名字面串，改名须两处同步
 
 /* ===== src/app/format.js ===== */
@@ -4248,7 +4249,7 @@ function loadTMap(cb){
   s.onerror=()=>{ tmapState='failed'; tmapFlush(false); };
   if(!tag) document.head.appendChild(s);
 }
-if(isProxyEnv()) loadTMap();   // 代理环境：脚本求值即开始下载（body 末尾，不阻塞首屏）；非代理环境不请求
+if(isProxyEnv()&&privacyStatus()) loadTMap();   // 代理环境：脚本求值即开始下载（body 末尾，不阻塞首屏）；非代理环境不请求；#1：未同意隐私政策不拉起 SDK
 
 /* 内置拓扑图：纯 SVG，不依赖任何外部地图服务，离线与托管环境均可用。
    按站点经纬度做等距圆柱投影，只画节点与连线，不绘制任何行政区划边界。 */
@@ -4731,6 +4732,7 @@ const MAP_MODES=[['svg','拓扑图'],['qq','腾讯地图'],['td','天地图']];
    或走降级分支把刚画好的图藏起来。 */
 let mapGen=0;
 function renderMap(){
+  if(!privacyStatus()) return;   // #1 上架合规兜底：同意前网架页不可达（主闸门是 go('map')；renderMap 另有 12 处内部调用点，这里统一挡死）
   const gen=++mapGen;
   mapReady=false; map=null; polyLayer=null; mkLayer=null; lbLayer=null; tdMap=null;
   const proxyOK=isProxyEnv();
@@ -5373,10 +5375,72 @@ function renderAI(res){
   return out;
 }
 
+/* ===== src/app/privacy.js ===== */
+/* 隐私政策同意弹窗（上架合规 #1）。
+   硬要求：① 同意前零网络请求——本模块自身无任何网络行为，地图 SDK 的拉起由 go('map') 闸门
+   （boot.js）与代理环境启动加载（ui/map.js）两处用 privacyStatus() 把守；
+   ② 网架页入口同意前「不可达」（非隐藏）：go('map') 未同意直接返回，视图永不渲染；
+   ③ 「暂不同意」不写任何键——每次冷启动重问、网架页始终不可达（不实现「记住拒绝」）；
+   ④ 同意态存 localStorage（键 LS_PRIVACY，JSON {v,at}，v 供未来政策版本升级重签）。
+   纯函数式模块：无顶层执行；boot.js 在启动序列最前面调 privacyEnsure()。
+   样式一律 var(--令牌)（tools/test-design-tokens.mjs 守卫），DOM 动态创建（template.html 不动）。
+   遮罩点击不关闭（与 uiConfirm 相反）——同意必须显式点击「同意并继续」。
+   注意：vm 系测试脚本（tools/test-*.mjs）用内存 mock DOM 跑本模块，DOM 操作全部包在 try 里。 */
+function privacyStatus(){
+  try{
+    const raw=localStorage.getItem(LS_PRIVACY);
+    if(!raw) return null;
+    const s=JSON.parse(raw);
+    if(!s||s.v!==1||!s.at) return null;   // 版本不符（未来政策升级）按未同意处理
+    return { consented:true, version:s.v };
+  }catch(e){ return null; }
+}
+let _privOpen=false;
+function _privacyRemove(){
+  const ov=document.getElementById('privacy-box'); if(ov) ov.remove();
+  document.removeEventListener('keydown',_privacyOnKey);
+}
+function privacyDecline(){
+  _privOpen=false;
+  _privacyRemove();   // 不写任何键：下次冷启动重问，网架页保持不可达
+}
+function _privacyOnKey(e){ if(e.key==='Escape') privacyDecline(); }   // Esc 等同「暂不同意」
+function privacyConsent(){
+  try{ localStorage.setItem(LS_PRIVACY,JSON.stringify({v:1,at:new Date().toISOString()})); }catch(e){}
+  _privOpen=false;
+  _privacyRemove();
+  // 已拍板：同意后当次补导览——guide 键缺席则延时触发，保持原首启体验（boot.js 的调度已带同意条件，这里是同意前被拦下的兜底）
+  try{ if(!localStorage.getItem(LS_GUIDE)) setTimeout(guideStart,400); }catch(e){}
+}
+/* 未同意 ⇒ 渲染弹窗并返回 false；已同意 ⇒ 返回 true。
+   弹窗已开着时再次调用不叠层，直接返回 false。 */
+function privacyEnsure(){
+  if(privacyStatus()) return true;
+  if(_privOpen) return false;
+  try{
+    const ov=document.createElement('div');
+    ov.id='privacy-box';
+    ov.style.cssText='position:fixed;inset:0;z-index:4100;background:var(--scrim-dialog);display:flex;align-items:center;justify-content:center;padding:28px';
+    ov.innerHTML='<div role="dialog" aria-modal="true" aria-label="隐私政策同意" style="background:var(--card);border-radius:var(--radius-dialog);max-width:340px;width:100%;max-height:80vh;overflow:auto;padding:18px 16px 14px;box-shadow:var(--shadow-dialog)">'
+      +'<div style="font-size:14.5px;font-weight:600;color:var(--ink);margin-bottom:8px">隐私政策与用户协议</div>'
+      +'<div style="font-size:12.5px;color:var(--ink2);line-height:1.7">【隐私政策文本待定稿 —— #2 批回填】</div>'
+      +'<div style="display:flex;gap:10px;margin-top:16px">'
+      +'<button class="btn ghost" onclick="privacyDecline()" style="flex:1">暂不同意</button>'
+      +'<button class="btn" onclick="privacyConsent()" style="flex:1;font-size:14px;padding:10px">同意并继续</button>'
+      +'</div></div>';
+    ov.addEventListener('click',e=>{ if(!e.target.closest('[role="dialog"]')) return; });   // 点遮罩不关闭（与 uiConfirm 相反）
+    document.addEventListener('keydown',_privacyOnKey);
+    document.body.appendChild(ov);
+    _privOpen=true;
+  }catch(e){ _privOpen=false; }
+  return false;
+}
+
 /* ===== src/app/boot.js ===== */
 /* 视图切换、全局事件绑定与启动。 */
 /* ================= 视图 ================= */
 function go(t){
+  if(t==='map'&&!privacyStatus()){ privacyEnsure(); return; }   // #1 上架合规：同意前网架页不可达（真不可达：视图永不渲染，非隐藏/禁用）
   ['calc','map','lib'].forEach(x=>{ document.getElementById('v-'+x).hidden=(x!==t);
     document.getElementById('t-'+x).classList.toggle('on',x===t); });
   if(t==='lib') renderLib(); if(t==='map') renderMap(); if(t==='calc') renderCalc();
@@ -5444,6 +5508,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); closeFeeSheet(); } });
 if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); closeFeeSheet(true); });
 // 外观主题：data-theme 已由 <head> 内联脚本在首帧前设好，这里读偏好、同步系统栏颜色（meta theme-color / 安卓壳），并跟随系统明暗
+privacyEnsure();   // #1 上架合规：未同意先弹隐私政策（遮罩不挡测算页渲染，但网架页入口不可达、地图 SDK 不拉起）
 applyTheme();
 watchSystemTheme();
 loadStored();
@@ -5521,8 +5586,8 @@ function guideDone(){
   try{ localStorage.setItem(LS_GUIDE,'1'); }catch(e){}
   const ov=document.getElementById('guide-box'); if(ov) ov.remove();
 }
-/* 首启判定与触发：延后一拍，让首页先完成首绘再弹 */
-try{ if(!localStorage.getItem(LS_GUIDE)) setTimeout(guideStart,400); }catch(e){}
+/* 首启判定与触发：延后一拍，让首页先完成首绘再弹；未同意隐私政策时不弹导览（由 privacyConsent 同意后补） */
+try{ if(privacyStatus()&&!localStorage.getItem(LS_GUIDE)) setTimeout(guideStart,400); }catch(e){}
 </script>
 </body>
 </html>

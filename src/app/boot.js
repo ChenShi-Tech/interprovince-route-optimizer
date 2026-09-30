@@ -1,6 +1,7 @@
 /* 视图切换、全局事件绑定与启动。 */
 /* ================= 视图 ================= */
 function go(t){
+  if(t==='map'&&!privacyStatus()){ privacyEnsure(); return; }   // #1 上架合规：同意前网架页不可达（真不可达：视图永不渲染，非隐藏/禁用）
   ['calc','map','lib'].forEach(x=>{ document.getElementById('v-'+x).hidden=(x!==t);
     document.getElementById('t-'+x).classList.toggle('on',x===t); });
   if(t==='lib') renderLib(); if(t==='map') renderMap(); if(t==='calc') renderCalc();
@@ -68,6 +69,7 @@ document.addEventListener('change',e=>{
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeParams(); closeAppearance(); closeFeeSheet(); } });
 if(typeof window.addEventListener==='function') window.addEventListener('popstate',()=>{ closeParams(true); closeAppearance(true); closeFeeSheet(true); });
 // 外观主题：data-theme 已由 <head> 内联脚本在首帧前设好，这里读偏好、同步系统栏颜色（meta theme-color / 安卓壳），并跟随系统明暗
+privacyEnsure();   // #1 上架合规：未同意先弹隐私政策（遮罩不挡测算页渲染，但网架页入口不可达、地图 SDK 不拉起）
 applyTheme();
 watchSystemTheme();
 loadStored();
@@ -145,5 +147,5 @@ function guideDone(){
   try{ localStorage.setItem(LS_GUIDE,'1'); }catch(e){}
   const ov=document.getElementById('guide-box'); if(ov) ov.remove();
 }
-/* 首启判定与触发：延后一拍，让首页先完成首绘再弹 */
-try{ if(!localStorage.getItem(LS_GUIDE)) setTimeout(guideStart,400); }catch(e){}
+/* 首启判定与触发：延后一拍，让首页先完成首绘再弹；未同意隐私政策时不弹导览（由 privacyConsent 同意后补） */
+try{ if(privacyStatus()&&!localStorage.getItem(LS_GUIDE)) setTimeout(guideStart,400); }catch(e){}
