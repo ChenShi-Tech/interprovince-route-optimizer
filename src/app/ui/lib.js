@@ -189,6 +189,7 @@ function renderLib(){
   out+=`<div class="card tight"><div class="sec-title">数据管理</div>
     <div class="row2"><button class="btn ghost" onclick="exportLib()">导出 JSON</button>
     <button class="btn ghost" onclick="resetLib()">恢复检索原始值</button></div>
+    <button class="btn ghost" onclick="privacyReview()" style="margin-top:10px">隐私政策</button>
     <p class="note">构建时间 ${esc(BUILD_TIME)}　·　<b>价格数据版本 ${esc(PRICE_VERSION)}</b>　·　通道 ${CH.length} 条　·　断面 ${SEC.length} 个　·　区域电网电量电价：${Object.entries(RG).filter(([k])=>!k.startsWith('_')).map(([k,v])=>k+' '+v+' 元/kWh').join('，')}</p>
     <p class="note">Web 版与手机端共用同一份数据：构建时同时产出 <code>shared/app-data.json</code>，两端的 priceVersion 一致即表示数值同源。</p></div>`;
 
